@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Treino de raciocinio</title>
+  <link rel="stylesheet" href="/web/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <p class="eyebrow">Mindsight · pratica guiada</p>
+      <label class="quiz-picker" for="quizSelector">Questionario <select id="quizSelector"></select></label>
+      <h1>Treino de<br><em>raciocinio</em></h1>
+      <p class="intro">Marque suas respostas com calma. O resultado e o gabarito aparecem somente quando voce concluir.</p>
+      <div class="status"><span id="progress">0 de 16 respondidas</span><span id="percent">0%</span><span id="timer" aria-live="polite">24:00</span></div>
+      <div class="progress-track"><div id="progressBar"></div></div>
+    </header>
+    <form id="quiz" class="quiz" novalidate></form>
+    <div class="actions"><button id="submit" class="primary" type="submit">Conferir respostas <span>→</span></button><button id="reset" class="secondary" type="button">Resetar quiz</button></div>
+    <section id="result" class="result" hidden></section>
+  </main>
+  <script src="/web/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+"""Exceções da API"""
