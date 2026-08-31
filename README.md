@@ -1,4 +1,4 @@
-# Quiz com Python - IFuture_Study
+# Quiz com Python 
 
 Quiz com respostas ocultas até o envio final. Padrão Spring Pattern com Middleware.
 
