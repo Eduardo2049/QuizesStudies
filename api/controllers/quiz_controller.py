@@ -1,41 +1,38 @@
 """
 Controllers - Padrão Spring @RestController
-Camada de rotas HTTP
+Camada de rotas e processamento HTTP
 """
-from http.server import BaseHTTPRequestHandler
-from urllib.parse import parse_qs, urlparse
-import json
-
-from api.utils.config import WEB_DIR
 from api.services.quiz_service import QuizService, MarkdownService
 from api.repositories.quiz_repository import QuizRepository
-from api.models.dtos import SubmitAnswersDTO
+from api.middleware.http_middleware import timing_decorator, error_handler_decorator
 from api.exceptions.quiz_exceptions import (
     QuizAPIException,
     InvalidAnswersFormat,
-    InvalidJSONError,
-    RouteNotFoundError,
 )
 
 
 class QuizController:
     """Controller para rotas de quiz"""
 
-    def __init__(self):
-        self.repository = QuizRepository()
+    def __init__(self, repository: QuizRepository = None):
+        self.repository = repository or QuizRepository()
         self.service = QuizService(self.repository)
         self.markdown_service = MarkdownService(self.repository)
 
+    @timing_decorator
+    @error_handler_decorator
     def get_quizzes(self) -> dict:
-        """GET /api/quizzes - Lista todos os quizzes"""
+        """GET /api/quizzes - Lista todos os quizzes disponíveis"""
         quizzes = self.service.get_all_quizzes()
         return {
             "status": "success",
             "data": {"quizzes": quizzes}
         }
 
+    @timing_decorator
+    @error_handler_decorator
     def get_quiz(self, source_name: str = None) -> dict:
-        """GET /api/quiz - Carrega um quiz"""
+        """GET /api/quiz - Carrega um quiz com questões públicas"""
         quiz_dto = self.service.get_quiz(source_name)
         return {
             "status": "success",
@@ -55,10 +52,11 @@ class QuizController:
             }
         }
 
+    @timing_decorator
+    @error_handler_decorator
     def submit_answers(self, payload: dict) -> dict:
-        """POST /api/quiz/submit - Corrige respostas"""
-        # Validar formato
-        if "answers" not in payload:
+        """POST /api/quiz/submit - Corrige respostas e calcula score"""
+        if not isinstance(payload, dict) or "answers" not in payload:
             raise InvalidAnswersFormat()
 
         answers = payload.get("answers")
@@ -66,8 +64,6 @@ class QuizController:
             raise InvalidAnswersFormat()
 
         source_name = payload.get("source")
-
-        # Corrigir
         result_dto = self.service.submit_answers(answers, source_name)
 
         return {
@@ -82,19 +78,19 @@ class QuizController:
 
 
 class UploadController:
-    """Controller para upload de arquivos (futuro n8n)"""
+    """Controller para upload de arquivos Markdown"""
 
-    def __init__(self):
-        self.markdown_service = MarkdownService()
+    def __init__(self, repository: QuizRepository = None):
+        self.markdown_service = MarkdownService(repository or QuizRepository())
 
+    @timing_decorator
+    @error_handler_decorator
     def upload_file(self, filename: str, content: str) -> dict:
-        """POST /api/upload - Upload de novo quiz"""
-        # Validar conteúdo
+        """POST /api/upload - Upload e validação de novo quiz"""
         is_valid, error_msg = self.markdown_service.validate_markdown(content)
         if not is_valid:
             raise QuizAPIException(f"Markdown inválido: {error_msg}", 400)
 
-        # Salvar
         path = self.markdown_service.save_quiz_from_markdown(filename, content)
 
         return {

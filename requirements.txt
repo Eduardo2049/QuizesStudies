@@ -1,1 +1,2 @@
-# Sem dependencias externas: usa apenas a biblioteca padrao do Python.
+# IFuture Study - Python stdlib puro
+# Nenhuma dependência externa obrigatória para execução em produção.

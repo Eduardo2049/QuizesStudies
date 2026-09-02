@@ -31,6 +31,7 @@ def error_handler_decorator(func):
             if DEBUG:
                 print(f"❌ Erro em {func.__name__}: {str(e)}")
             raise
+        return wrapper
     return wrapper
 
 
@@ -47,7 +48,7 @@ class HTTPMiddleware:
         """
         handler.send_header("Access-Control-Allow-Origin", "*")
         handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        handler.send_header("Access-Control-Allow-Headers", "Content-Type")
+        handler.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
     @staticmethod
     def add_cache_headers(handler, cache=False):
@@ -59,7 +60,7 @@ class HTTPMiddleware:
             cache: Se deve cachear (padrão False para API)
         """
         if cache:
-            handler.send_header("Cache-Control", "max-age=3600")
+            handler.send_header("Cache-Control", "public, max-age=3600")
         else:
             handler.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
 
@@ -94,16 +95,21 @@ class HTTPMiddleware:
 
 
 class ResponseFormatter:
-    """Formata respostas consistentes"""
+    """Formata respostas consistentes com compatibilidade direta e aninhada"""
 
     @staticmethod
     def success(data=None, message="OK", status_code=200):
-        """Formata resposta de sucesso"""
-        return status_code, {
+        """Formata resposta de sucesso mantendo compatibilidade direta de propriedades"""
+        payload = {
             "status": "success",
             "message": message,
-            "data": data or {}
+            "data": data if data is not None else {}
         }
+        if isinstance(data, dict):
+            for key, val in data.items():
+                if key not in payload:
+                    payload[key] = val
+        return status_code, payload
 
     @staticmethod
     def error(message: str, error_code: str = "ERROR", status_code=400):

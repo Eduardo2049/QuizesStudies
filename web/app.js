@@ -5,6 +5,7 @@ const percent = document.querySelector('#percent');
 const progressBar = document.querySelector('#progressBar');
 const quizSelector = document.querySelector('#quizSelector');
 const timer = document.querySelector('#timer');
+const startBtn = document.querySelector('#startBtn');
 const timerDuration = 24 * 60;
 let questions = [];
 let selectedSource = '';
@@ -19,11 +20,13 @@ function resetTimer() {
   remainingSeconds = timerDuration;
   timer.textContent = '24:00';
   timer.classList.remove('expired', 'running');
+  if (startBtn) startBtn.classList.remove('hidden');
 }
 
 function startTimer() {
   if (timerInterval || remainingSeconds === 0) return;
   timer.classList.add('running');
+  if (startBtn) startBtn.classList.add('hidden');
   timerInterval = setInterval(() => {
     remainingSeconds -= 1;
     const minutes = Math.floor(remainingSeconds / 60);
@@ -47,7 +50,8 @@ async function loadQuiz(source = selectedSource) {
     signal: loadController.signal,
   });
   if (!response.ok) throw new Error(`Falha ao carregar o questionario (${response.status})`);
-  const data = await response.json();
+  const rawData = await response.json();
+  const data = rawData.data || rawData;
   if (requestId !== loadRequestId) return;
   selectedSource = data.source;
   questions = data.questions;
@@ -63,15 +67,17 @@ async function loadQuiz(source = selectedSource) {
 
 async function loadQuizList() {
   const response = await fetch('/api/quizzes', {cache: 'no-store'});
-  const data = await response.json();
-  quizSelector.innerHTML = data.quizzes.map((item) => `<option value="${item.name}">${item.label}</option>`).join('');
+  const rawData = await response.json();
+  const data = rawData.data || rawData;
+  const quizzes = data.quizzes || [];
+  quizSelector.innerHTML = quizzes.map((item) => `<option value="${item.name}">${item.label}</option>`).join('');
   quizSelector.value = selectedSource;
 }
 
 function updateProgress() {
   const answered = new FormData(quiz);
   const count = [...answered.keys()].length;
-  const value = Math.round(count / questions.length * 100);
+  const value = Math.round(count / (questions.length || 1) * 100);
   progress.textContent = `${count} de ${questions.length} respondidas`;
   percent.textContent = `${value}%`;
   progressBar.style.width = `${value}%`;
@@ -82,7 +88,8 @@ quiz.addEventListener('submit', async (event) => {
   const answers = Object.fromEntries([...new FormData(quiz)].map(([key, value]) => [key.replace('q-', ''), Number(value)]));
   if (Object.keys(answers).length < questions.length) { alert('Responda todas as questoes antes de conferir.'); return; }
   const response = await fetch('/api/quiz/submit', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({source:selectedSource, answers}) });
-  const data = await response.json();
+  const rawData = await response.json();
+  const data = rawData.data || rawData;
   clearInterval(timerInterval);
   timerInterval = undefined;
   timer.classList.remove('running');
@@ -91,8 +98,28 @@ quiz.addEventListener('submit', async (event) => {
   result.scrollIntoView({behavior:'smooth'});
 });
 
-document.querySelector('#reset').addEventListener('click', () => { quiz.reset(); resetTimer(); result.hidden = true; result.innerHTML = ''; updateProgress(); window.scrollTo({top:0, behavior:'smooth'}); });
-quiz.addEventListener('change', startTimer);
+startBtn?.addEventListener('click', () => {
+  startTimer();
+  const firstQuestion = quiz.querySelector('.question');
+  if (firstQuestion) {
+    firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+});
+
+document.querySelector('#reset').addEventListener('click', () => {
+  quiz.reset();
+  resetTimer();
+  result.hidden = true;
+  result.innerHTML = '';
+  updateProgress();
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+
+quiz.addEventListener('change', () => {
+  startTimer();
+  updateProgress();
+});
+
 quizSelector.addEventListener('change', async () => {
   resetTimer();
   result.hidden = true;
@@ -104,8 +131,6 @@ quizSelector.addEventListener('change', async () => {
     if (error.name !== 'AbortError') result.innerHTML = `<p> nao foi possivel carregar este questionario.</p>`;
   }
 });
-document.addEventListener('click', (event) => {
-  if (event.target.closest('button, select, label')) startTimer();
-});
+
 resetTimer();
 loadQuiz().then(loadQuizList);

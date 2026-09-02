@@ -8,8 +8,9 @@ API_DIR = ROOT / "api"
 WEB_DIR = ROOT / "web"
 
 # Server
-HOST = "127.0.0.1"
-PORT = int(os.getenv("QUIZ_PORT", "8000"))
+HOST = os.getenv("HOST", "0.0.0.0")
+PORT = int(os.getenv("PORT", os.getenv("QUIZ_PORT", "8000")))
 
 # Logging
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+

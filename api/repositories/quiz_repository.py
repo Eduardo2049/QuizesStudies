@@ -14,25 +14,44 @@ class QuizRepository:
     """Repository para operações com arquivos de quiz"""
 
     @staticmethod
+    def is_valid_quiz_file(path: Path) -> bool:
+        """Verifica se o arquivo é um questionário válido"""
+        if not path.is_file():
+            return False
+        if path.name.lower() in ("readme.md", "license.md", "changelog.md"):
+            return False
+        if re.match(r"^\d+\s+test(\.md)?$", path.name, re.IGNORECASE):
+            return True
+        if path.suffix.lower() == ".md":
+            try:
+                content = path.read_text(encoding="utf-8", errors="ignore")
+                return "# Gabarito" in content and "**1.**" in content
+            except Exception:
+                return False
+        return False
+
+    @staticmethod
     def find_all_sources() -> list[Path]:
         """
         Encontra todos os quizzes disponíveis.
-        Busca .md e arquivos "\\d+ test"
+        Busca .md válidos e arquivos '\\d+ test'
         
         Returns:
-            list[Path]: Lista de caminhos dos quizzes
+            list[Path]: Lista de caminhos dos quizzes ordenados
         """
-        sources = list(ROOT.glob("*.md"))
-        sources.extend(
-            path for path in ROOT.iterdir()
-            if path.is_file() and re.match(r"^\d+\s+test$", path.name, re.IGNORECASE)
-        )
-        
-        return sorted(
-            {path.resolve(): path for path in sources 
-             if path.name.lower() != "readme.md"}.values(),
-            key=lambda path: path.name.lower(),
-        )
+        sources = set()
+        if ROOT.exists():
+            for path in ROOT.iterdir():
+                if QuizRepository.is_valid_quiz_file(path):
+                    sources.add(path.resolve())
+
+        def sort_key(p: Path):
+            match = re.match(r"^(\d+)", p.name)
+            if match:
+                return (0, int(match.group(1)), p.name.lower())
+            return (1, 0, p.name.lower())
+
+        return sorted([Path(p) for p in sources], key=sort_key)
 
     @staticmethod
     def find_by_name(source_name: str) -> Path:
@@ -60,9 +79,8 @@ class QuizRepository:
         
         Prioridade:
         1. QUIZ_MARKDOWN env var
-        2. Arquivo numerado mais alto (ex: "3 test")
-        3. Primeiro .md
-        4. Padrão: "1 test"
+        2. Primeiro arquivo disponível
+        3. Padrão: "1 test"
         
         Returns:
             Path: Caminho do arquivo
@@ -74,19 +92,12 @@ class QuizRepository:
             if path.exists():
                 return path
 
-        # 2. Procurar arquivos
+        # 2. Procurar arquivos disponíveis
         sources = QuizRepository.find_all_sources()
         if sources:
-            # Priorizar numerados como "3 test", "2 test"
-            numbered = [
-                p for p in sources 
-                if re.match(r"^\d+\s+test$", p.name, re.IGNORECASE)
-            ]
-            if numbered:
-                return max(numbered, key=lambda p: int(p.name.split()[0]))
             return sources[0]
 
-        # 3. Padrão (pode não existir)
+        # 3. Padrão fallback
         return ROOT / "1 test"
 
     @staticmethod
@@ -105,7 +116,7 @@ class QuizRepository:
         """
         try:
             return path.read_text(encoding="utf-8")
-        except FileNotFoundError:
+        except Exception:
             raise FileNotFoundError(str(path))
 
     @staticmethod
