@@ -1,15 +1,62 @@
 """
-Handler HTTP Principal - Arquitetura Consolidada (Spring Pattern + Middleware)
+Handler HTTP Principal — Suporte a multipart/form-data para upload de arquivos
 """
+import io
+import json
+import re
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
-import json
 
 from api.utils.config import WEB_DIR, DEBUG
 from api.controllers.quiz_controller import QuizController, UploadController
+from api.controllers.auth_controller import AuthController
 from api.exceptions.quiz_exceptions import QuizAPIException
 from api.middleware.http_middleware import HTTPMiddleware, ResponseFormatter
-from api.utils.validators import AnswerValidator, MarkdownValidator
+from api.utils.validators import AnswerValidator
+
+# Extensões permitidas para upload
+ALLOWED_EXTENSIONS = {"txt", "pdf", "docx"}
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
+
+
+def _parse_multipart(body: bytes, boundary: str) -> tuple[str | None, bytes | None]:
+    """
+    Parser manual de multipart/form-data.
+    Compatível com Python 3.13+ (módulo cgi foi removido).
+
+    Procura pelo campo 'file' e retorna (filename, content).
+    Retorna (None, None) se o campo não for encontrado.
+    """
+    boundary_bytes = boundary.encode()
+
+    # Dividir body nos delimitadores de boundary
+    parts = body.split(b"--" + boundary_bytes)
+
+    for part in parts:
+        if b"\r\n\r\n" not in part:
+            continue
+
+        headers_raw, _, file_content = part.partition(b"\r\n\r\n")
+        headers_text = headers_raw.decode("utf-8", errors="replace")
+
+        # Verificar se é o campo 'file'
+        if 'name="file"' not in headers_text:
+            continue
+
+        # Extrair filename do Content-Disposition
+        filename_match = re.search(r'filename="([^"]+)"', headers_text)
+        if not filename_match:
+            continue
+
+        filename = filename_match.group(1).strip()
+
+        # Remover o \r\n final que o multipart adiciona
+        if file_content.endswith(b"\r\n"):
+            file_content = file_content[:-2]
+
+        return filename, file_content
+
+    return None, None
 
 
 class QuizHandler(BaseHTTPRequestHandler):
@@ -18,6 +65,7 @@ class QuizHandler(BaseHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         self.quiz_controller = QuizController()
         self.upload_controller = UploadController()
+        self.auth_controller = AuthController()
         super().__init__(*args, **kwargs)
 
     def do_OPTIONS(self):
@@ -30,6 +78,14 @@ class QuizHandler(BaseHTTPRequestHandler):
         query = parse_qs(request.query)
 
         try:
+            # 0. API: Dados do usuário autenticado
+            if request.path == "/api/auth/me":
+                token = HTTPMiddleware.get_bearer_token(self)
+                response = self.auth_controller.get_me(token)
+                status, data = ResponseFormatter.success(response["data"])
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
             # 1. API: Listar quizzes
             if request.path == "/api/quizzes":
                 response = self.quiz_controller.get_quizzes()
@@ -67,14 +123,15 @@ class QuizHandler(BaseHTTPRequestHandler):
                 static_file = (WEB_DIR / relative_path).resolve()
                 web_root = WEB_DIR.resolve()
 
-                # Prevenção de Path Traversal
                 if web_root in static_file.parents and static_file.is_file():
-                    content_type = "text/css; charset=utf-8" if static_file.suffix == ".css" else \
-                                  "application/javascript; charset=utf-8" if static_file.suffix == ".js" else \
-                                  "text/html; charset=utf-8" if static_file.suffix == ".html" else \
-                                  "image/svg+xml" if static_file.suffix == ".svg" else \
-                                  "image/png" if static_file.suffix == ".png" else \
-                                  "application/octet-stream"
+                    content_type = (
+                        "text/css; charset=utf-8" if static_file.suffix == ".css" else
+                        "application/javascript; charset=utf-8" if static_file.suffix == ".js" else
+                        "text/html; charset=utf-8" if static_file.suffix == ".html" else
+                        "image/svg+xml" if static_file.suffix == ".svg" else
+                        "image/png" if static_file.suffix == ".png" else
+                        "application/octet-stream"
+                    )
                     try:
                         content = static_file.read_bytes()
                         self.send_response(200)
@@ -85,7 +142,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                         self.end_headers()
                         self.wfile.write(content)
                     except Exception as e:
-                        status, data = ResponseFormatter.error(f"Erro ao ler arquivo: {str(e)}", "FILE_ERROR", 500)
+                        status, data = ResponseFormatter.error(f"Erro ao ler arquivo: {e}", "FILE_ERROR", 500)
                         HTTPMiddleware.send_json_response(self, status, data)
                     return
                 else:
@@ -102,7 +159,8 @@ class QuizHandler(BaseHTTPRequestHandler):
             HTTPMiddleware.send_json_response(self, status, data)
         except Exception as e:
             if DEBUG:
-                print(f"❌ Erro GET inesperado: {str(e)}")
+                import traceback
+                traceback.print_exc()
             status, data = ResponseFormatter.error("Erro interno do servidor", "INTERNAL_ERROR", 500)
             HTTPMiddleware.send_json_response(self, status, data)
 
@@ -111,21 +169,60 @@ class QuizHandler(BaseHTTPRequestHandler):
         request = urlparse(self.path)
 
         try:
-            length = int(self.headers.get("Content-Length", 0))
-            if length == 0:
-                status, data = ResponseFormatter.bad_request("Corpo da requisição vazio")
+            # ── 0. Rotas de Autenticação ───────────────────────────────────────
+            if request.path == "/api/auth/login":
+                length = int(self.headers.get("Content-Length", 0))
+                try:
+                    payload = json.loads(self.rfile.read(length)) if length > 0 else {}
+                except json.JSONDecodeError:
+                    status, data = ResponseFormatter.bad_request("JSON inválido")
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
+                response = self.auth_controller.login(payload)
+                status, data = ResponseFormatter.success(response["data"], response["message"])
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
-            try:
-                payload = json.loads(self.rfile.read(length))
-            except json.JSONDecodeError:
-                status, data = ResponseFormatter.bad_request("JSON inválido no corpo da requisição")
+            if request.path == "/api/auth/register":
+                length = int(self.headers.get("Content-Length", 0))
+                try:
+                    payload = json.loads(self.rfile.read(length)) if length > 0 else {}
+                except json.JSONDecodeError:
+                    status, data = ResponseFormatter.bad_request("JSON inválido")
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
+                response = self.auth_controller.register(payload)
+                status, data = ResponseFormatter.created(response["data"], response["message"])
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
-            # 1. Submissão de respostas
+            if request.path == "/api/auth/logout":
+                token = HTTPMiddleware.get_bearer_token(self)
+                response = self.auth_controller.logout(token)
+                status, data = ResponseFormatter.success(response["data"], response["message"])
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
+            # ── 1. Upload de arquivo (multipart/form-data) ────────────────────
+            if request.path == "/api/upload":
+                self._handle_upload()
+                return
+
+            # ── 2. Submissão de respostas (application/json) ──────────────────
             if request.path == "/api/quiz/submit":
+                length = int(self.headers.get("Content-Length", 0))
+                if length == 0:
+                    status, data = ResponseFormatter.bad_request("Corpo da requisição vazio")
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
+
+                try:
+                    payload = json.loads(self.rfile.read(length))
+                except json.JSONDecodeError:
+                    status, data = ResponseFormatter.bad_request("JSON inválido")
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
+
                 is_valid, error_msg = AnswerValidator.validate_submit_payload(payload)
                 if not is_valid:
                     status, data = ResponseFormatter.bad_request(error_msg)
@@ -137,25 +234,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
-            # 2. Upload de novo quiz
-            if request.path == "/api/upload":
-                if "filename" not in payload or "content" not in payload:
-                    status, data = ResponseFormatter.bad_request("filename e content são obrigatórios")
-                    HTTPMiddleware.send_json_response(self, status, data)
-                    return
-
-                is_valid, error_msg = MarkdownValidator.validate_markdown_content(payload["content"])
-                if not is_valid:
-                    status, data = ResponseFormatter.bad_request(f"Markdown inválido: {error_msg}")
-                    HTTPMiddleware.send_json_response(self, status, data)
-                    return
-
-                response = self.upload_controller.upload_file(payload["filename"], payload["content"])
-                status, data = ResponseFormatter.created(response["data"], response["data"].get("message"))
-                HTTPMiddleware.send_json_response(self, status, data)
-                return
-
-            # 3. Rota não encontrada
+            # ── 3. Rota não encontrada ─────────────────────────────────────────
             status, data = ResponseFormatter.not_found(f"Rota {request.path} não encontrada")
             HTTPMiddleware.send_json_response(self, status, data)
 
@@ -164,9 +243,87 @@ class QuizHandler(BaseHTTPRequestHandler):
             HTTPMiddleware.send_json_response(self, status, data)
         except Exception as e:
             if DEBUG:
-                print(f"❌ Erro POST inesperado: {str(e)}")
+                import traceback
+                traceback.print_exc()
             status, data = ResponseFormatter.error("Erro interno do servidor", "INTERNAL_ERROR", 500)
             HTTPMiddleware.send_json_response(self, status, data)
+
+    # ─── Helpers ──────────────────────────────────────────────────────────────
+
+    def _handle_upload(self):
+        """Processa upload multipart/form-data de arquivo TXT/PDF/DOCX."""
+        # 0. Validação de Autenticação (Apenas Admin)
+        token = HTTPMiddleware.get_bearer_token(self)
+        if not token:
+            status, data = ResponseFormatter.unauthorized("Autenticação necessária para enviar simulados")
+            HTTPMiddleware.send_json_response(self, status, data)
+            return
+
+        user = self.auth_controller.service.validate_token(token)
+        if not user:
+            status, data = ResponseFormatter.unauthorized("Sessão expirada ou inválida. Faça login novamente")
+            HTTPMiddleware.send_json_response(self, status, data)
+            return
+
+        if user.get("role") != "admin":
+            status, data = ResponseFormatter.forbidden("Apenas administradores podem fazer upload de novos simulados")
+            HTTPMiddleware.send_json_response(self, status, data)
+            return
+
+        content_type = self.headers.get("Content-Type", "")
+        content_length = int(self.headers.get("Content-Length", 0))
+
+        if content_length > MAX_UPLOAD_BYTES:
+            status, data = ResponseFormatter.bad_request(
+                f"Arquivo muito grande. Limite: {MAX_UPLOAD_BYTES // (1024*1024)} MB"
+            )
+            HTTPMiddleware.send_json_response(self, status, data)
+            return
+
+        if "multipart/form-data" not in content_type:
+            status, data = ResponseFormatter.bad_request(
+                "Content-Type deve ser multipart/form-data"
+            )
+            HTTPMiddleware.send_json_response(self, status, data)
+            return
+
+        body = self.rfile.read(content_length)
+
+        # Extrair boundary do Content-Type
+        boundary_match = re.search(r"boundary=([^;\s]+)", content_type)
+        if not boundary_match:
+            status, data = ResponseFormatter.bad_request("multipart boundary não encontrado")
+            HTTPMiddleware.send_json_response(self, status, data)
+            return
+
+        filename, file_content = _parse_multipart(body, boundary_match.group(1))
+
+        if filename is None or file_content is None:
+            status, data = ResponseFormatter.bad_request("Campo 'file' não encontrado no formulário")
+            HTTPMiddleware.send_json_response(self, status, data)
+            return
+
+        if not file_content:
+            status, data = ResponseFormatter.bad_request("Arquivo vazio")
+            HTTPMiddleware.send_json_response(self, status, data)
+            return
+
+        # Validar extensão
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if ext not in ALLOWED_EXTENSIONS:
+            status, data = ResponseFormatter.bad_request(
+                f"Extensão '.{ext}' não suportada. Use: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+            )
+            HTTPMiddleware.send_json_response(self, status, data)
+            return
+
+        # Delegar ao controller
+        response = self.upload_controller.upload_file(filename, file_content, ext)
+        status, data = ResponseFormatter.created(
+            response["data"],
+            response["data"].get("message")
+        )
+        HTTPMiddleware.send_json_response(self, status, data)
 
     def log_message(self, format, *args):
         """Custom logging para modo debug"""

@@ -1,132 +1,161 @@
 """
 Repositories - Padrão Spring @Repository
-Camada de acesso a dados (arquivos Markdown)
+Camada de acesso a dados via PostgreSQL
 """
-from pathlib import Path
-import re
-import os
-
-from api.utils.config import ROOT
-from api.exceptions.quiz_exceptions import QuizNotFound, FileNotFoundError
+import json
+from api.database.connection import get_cursor
+from api.exceptions.quiz_exceptions import QuizNotFound
 
 
 class QuizRepository:
-    """Repository para operações com arquivos de quiz"""
+    """Repository para operações de quiz no PostgreSQL"""
 
-    @staticmethod
-    def is_valid_quiz_file(path: Path) -> bool:
-        """Verifica se o arquivo é um questionário válido"""
-        if not path.is_file():
-            return False
-        if path.name.lower() in ("readme.md", "license.md", "changelog.md"):
-            return False
-        if re.match(r"^\d+\s+test(\.md)?$", path.name, re.IGNORECASE):
-            return True
-        if path.suffix.lower() == ".md":
-            try:
-                content = path.read_text(encoding="utf-8", errors="ignore")
-                return "# Gabarito" in content and "**1.**" in content
-            except Exception:
-                return False
-        return False
+    # ─── Leitura ──────────────────────────────────────────────────────────────
 
-    @staticmethod
-    def find_all_sources() -> list[Path]:
+    def find_all_sources(self) -> list[dict]:
         """
-        Encontra todos os quizzes disponíveis.
-        Busca .md válidos e arquivos '\\d+ test'
-        
+        Lista todos os quizzes cadastrados.
+
         Returns:
-            list[Path]: Lista de caminhos dos quizzes ordenados
+            list[dict]: [{id, name, label, file_type, ai_generated, created_at}]
         """
-        sources = set()
-        if ROOT.exists():
-            for path in ROOT.iterdir():
-                if QuizRepository.is_valid_quiz_file(path):
-                    sources.add(path.resolve())
+        with get_cursor() as cur:
+            cur.execute("""
+                SELECT id, name, label, file_type, ai_generated, created_at
+                FROM quizzes
+                ORDER BY created_at ASC
+            """)
+            return [dict(row) for row in cur.fetchall()]
 
-        def sort_key(p: Path):
-            match = re.match(r"^(\d+)", p.name)
-            if match:
-                return (0, int(match.group(1)), p.name.lower())
-            return (1, 0, p.name.lower())
-
-        return sorted([Path(p) for p in sources], key=sort_key)
-
-    @staticmethod
-    def find_by_name(source_name: str) -> Path:
+    def find_by_name(self, name: str) -> dict:
         """
-        Encontra um quiz pelo nome.
-        
-        Args:
-            source_name (str): Nome do arquivo
-            
-        Returns:
-            Path: Caminho do arquivo
-            
+        Encontra um quiz pelo campo `name`.
+
         Raises:
-            QuizNotFound: Se não encontrar
+            QuizNotFound: Se não existir
         """
-        for path in QuizRepository.find_all_sources():
-            if path.name == source_name:
-                return path
-        raise QuizNotFound(source_name)
+        with get_cursor() as cur:
+            cur.execute("SELECT * FROM quizzes WHERE name = %s", (name,))
+            row = cur.fetchone()
+        if not row:
+            raise QuizNotFound(name)
+        return dict(row)
 
-    @staticmethod
-    def find_default() -> Path:
+    def find_default(self) -> dict:
         """
-        Encontra o quiz padrão a usar.
-        
-        Prioridade:
-        1. QUIZ_MARKDOWN env var
-        2. Primeiro arquivo disponível
-        3. Padrão: "1 test"
-        
-        Returns:
-            Path: Caminho do arquivo
-        """
-        # 1. Variável de ambiente
-        configured = os.getenv("QUIZ_MARKDOWN")
-        if configured:
-            path = Path(configured)
-            if path.exists():
-                return path
+        Retorna o primeiro quiz cadastrado (mais antigo).
 
-        # 2. Procurar arquivos disponíveis
-        sources = QuizRepository.find_all_sources()
-        if sources:
-            return sources[0]
-
-        # 3. Padrão fallback
-        return ROOT / "1 test"
-
-    @staticmethod
-    def read_file(path: Path) -> str:
-        """
-        Lê arquivo Markdown.
-        
-        Args:
-            path (Path): Caminho do arquivo
-            
-        Returns:
-            str: Conteúdo do arquivo
-            
         Raises:
-            FileNotFoundError: Se arquivo não existe
+            QuizNotFound: Se não houver nenhum quiz
         """
-        try:
-            return path.read_text(encoding="utf-8")
-        except Exception:
-            raise FileNotFoundError(str(path))
+        with get_cursor() as cur:
+            cur.execute("SELECT * FROM quizzes ORDER BY created_at ASC LIMIT 1")
+            row = cur.fetchone()
+        if not row:
+            raise QuizNotFound("Nenhum quiz cadastrado")
+        return dict(row)
 
-    @staticmethod
-    def save_file(path: Path, content: str) -> None:
+    def find_questions(self, quiz_id: int) -> list[dict]:
         """
-        Salva arquivo Markdown.
-        
+        Retorna todas as questões de um quiz, ordenadas por question_number.
+
+        Returns:
+            list[dict]: [{id, quiz_id, question_number, section, context,
+                          question, options (list), answer, explanation}]
+        """
+        with get_cursor() as cur:
+            cur.execute("""
+                SELECT id, quiz_id, question_number, section, context,
+                       question, options, answer, explanation
+                FROM questions
+                WHERE quiz_id = %s
+                ORDER BY question_number ASC
+            """, (quiz_id,))
+            rows = cur.fetchall()
+
+        result = []
+        for row in rows:
+            q = dict(row)
+            # options vem como JSONB — psycopg2 já deserializa automaticamente
+            if isinstance(q["options"], str):
+                q["options"] = json.loads(q["options"])
+            result.append(q)
+        return result
+
+    def name_exists(self, name: str) -> bool:
+        """Verifica se já existe um quiz com esse nome."""
+        with get_cursor() as cur:
+            cur.execute("SELECT 1 FROM quizzes WHERE name = %s", (name,))
+            return cur.fetchone() is not None
+
+    # ─── Escrita ──────────────────────────────────────────────────────────────
+
+    def save_quiz(
+        self,
+        name: str,
+        label: str,
+        questions: list[dict],
+        original_filename: str = None,
+        file_type: str = "txt",
+        ai_generated: bool = False,
+    ) -> dict:
+        """
+        Persiste um quiz e suas questões no banco.
+
         Args:
-            path (Path): Caminho do arquivo
-            content (str): Conteúdo a salvar
+            name: Identificador único (ex: 'meu-quiz-2024')
+            label: Nome de exibição
+            questions: Lista de dicts com {id/question_number, section, context,
+                        question, options, answer, explanation}
+            original_filename: Nome original do arquivo enviado
+            file_type: 'txt', 'pdf', 'docx' ou 'md'
+            ai_generated: True se o gabarito foi gerado por IA
+
+        Returns:
+            dict: Quiz salvo com id
         """
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        with get_cursor() as cur:
+            # Inserir ou atualizar quiz
+            cur.execute("""
+                INSERT INTO quizzes (name, label, original_filename, file_type, ai_generated)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (name) DO UPDATE SET
+                    label = EXCLUDED.label,
+                    original_filename = EXCLUDED.original_filename,
+                    file_type = EXCLUDED.file_type,
+                    ai_generated = EXCLUDED.ai_generated
+                RETURNING id, name, label, file_type, ai_generated, created_at
+            """, (name, label, original_filename, file_type, ai_generated))
+            quiz = dict(cur.fetchone())
+            quiz_id = quiz["id"]
+
+            # Remover questões antigas (em caso de re-upload)
+            cur.execute("DELETE FROM questions WHERE quiz_id = %s", (quiz_id,))
+
+            # Inserir questões
+            for q in questions:
+                qnum = q.get("question_number") or q.get("id", 0)
+                options_json = json.dumps(q.get("options", []), ensure_ascii=False)
+                cur.execute("""
+                    INSERT INTO questions
+                        (quiz_id, question_number, section, context, question,
+                         options, answer, explanation)
+                    VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s, %s)
+                """, (
+                    quiz_id,
+                    qnum,
+                    q.get("section", "Geral"),
+                    q.get("context", ""),
+                    q["question"],
+                    options_json,
+                    q.get("answer"),
+                    q.get("explanation", ""),
+                ))
+
+        return quiz
+
+    def delete_quiz(self, quiz_id: int) -> bool:
+        """Remove um quiz e suas questões (CASCADE)."""
+        with get_cursor() as cur:
+            cur.execute("DELETE FROM quizzes WHERE id = %s RETURNING id", (quiz_id,))
+            return cur.fetchone() is not None

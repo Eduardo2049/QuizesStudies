@@ -1,2 +1,2 @@
-"""API do Quiz - Módulo principal"""
-__version__ = "1.0.0"
+"""API do Quiz — IFuture Study"""
+__version__ = "2.0.0"

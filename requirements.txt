@@ -1,2 +1,13 @@
-# IFuture Study - Python stdlib puro
-# Nenhuma dependência externa obrigatória para execução em produção.
+# IFuture Study - Dependências Python
+
+# Banco de dados PostgreSQL
+psycopg2-binary>=2.9.9
+
+# Variáveis de ambiente
+python-dotenv>=1.0.0
+
+# Extração de texto de PDF
+pdfplumber>=0.11.0
+
+# Extração de texto de DOCX
+python-docx>=1.1.0

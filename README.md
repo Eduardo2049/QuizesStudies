@@ -1,140 +1,204 @@
-# IFuture Study — Treino de Raciocínio & Mindsight
+# IFuture Study
 
-Plataforma interativa para prática guiada e avaliação de raciocínio lógico, sequências numéricas, dedução proposicional e interpretação de dados com gabarito inteligente e temporizador.
+Plataforma de simulados e treino de raciocínio lógico. Faça upload de provas em **PDF**, **DOCX** ou **TXT** e receba quizzes interativos com gabarito automático via IA.
 
 ---
 
-## 🚀 Como Executar Localmente
+## Requisitos
 
-O projeto utiliza **exclusivamente a biblioteca padrão do Python** (zero dependências externas obrigatórias).
+- Python 3.11+
+- PostgreSQL 14+
 
-### 1. Iniciar o Servidor
+---
+
+## Configuração
+
+```bash
+# 1. Instalar dependências
+pip install -r requirements.txt
+
+# 2. Criar arquivo de variáveis de ambiente
+cp .env.example .env
+```
+
+Edite o `.env`:
+
+| Variável | Obrigatória | Descrição |
+|---|---|---|
+| `DATABASE_URL` | ✅ | `postgresql://user:password@host:5432/dbname` |
+| `ADMIN_USERNAME` | Não | Usuário do administrador inicial (padrão: `admin`) |
+| `ADMIN_PASSWORD` | Não | Senha do administrador inicial (padrão: `admin_study_2026`) |
+| `ALLOWED_ORIGINS` | Não | Origens CORS permitidas (padrão: `*`) |
+| `CLOUDFLARE_TUNNEL_TOKEN` | Para Tunnel | Token do Cloudflare Zero Trust para expor via túnel HTTPS |
+| `OPENROUTER_API_KEY` | Para IA | Chave do [OpenRouter](https://openrouter.ai) para geração de gabarito |
+| `OPENROUTER_MODEL` | Não | Modelo padrão: `openai/gpt-4o-mini` |
+| `PORT` | Não | Porta do servidor (padrão: `8000`) |
+| `DEBUG` | Não | Logs detalhados (padrão: `false`) |
+
+---
+
+## Executar
+
+### Opção A — Docker Compose (recomendado)
+
+Sobe o PostgreSQL e a aplicação com um único comando:
+
+```bash
+docker compose up -d
+```
+
+Para subir também o **Cloudflare Tunnel** (expondo com HTTPS e proteção DDoS na Cloudflare):
+```bash
+docker compose --profile tunnel up -d
+```
+
+### Opção B — Servidor local
+
 ```bash
 python quiz_api.py
 ```
-*Ou usando o módulo:*
-```bash
-python -m api.main
-```
 
-### 2. Acessar a Aplicação
-Abra no seu navegador:
-```
-http://localhost:8000
-```
+O servidor inicia em `http://localhost:8000` (ou próxima porta livre) e executa as migrations automaticamente na primeira vez.
 
 ---
 
-## 🧪 Como Rodar os Testes
+## Autenticação e Segurança
 
-Execute a suíte de testes unitários com o executor integrado da biblioteca padrão:
-
-```bash
-python -m unittest discover tests
-```
-
----
-
-## ☁️ Instruções de Deploy
-
-A aplicação está configurada para deploy simplificado em diversas plataformas:
-
-### 1. Vercel
-- **Configuração**: Roteamento gerenciado via `vercel.json` e Serverless Function em `api/index.py`.
-- **Deploy**: Basta conectar seu repositório no dashboard da Vercel ou rodar `vercel` via CLI.
-
-### 2. Render / Railway / Heroku
-- **Configuração**: Utiliza o arquivo `Procfile` (`web: python quiz_api.py`).
-- O servidor detecta automaticamente as variáveis de ambiente `PORT` e `HOST` (`0.0.0.0`).
-
-### 3. Docker / Containers
-```bash
-# Construir a imagem
-docker build -t ifuture-study .
-
-# Executar o container
-docker run -d -p 8000:8000 --name ifuture-quiz ifuture-study
-```
+- **Acesso Público**: Estudantes podem navegar livremente, realizar simulados, selecionar provas e conferir pontuações.
+- **Acesso Restrito (Admin)**: O upload de novos simulados e acionamento da IA é restrito a administradores autenticados via Bearer Token.
+- **Credenciais Padrão Iniciais**:
+  - Usuário: `admin`
+  - Senha: `admin_study_2026` (altere no `.env` para produção)
 
 ---
 
-## 🏗️ Arquitetura do Projeto (Spring Pattern)
+## Cloudflare Tunnel (Proxy Reverso Seguro)
 
-O backend segue a arquitetura em camadas inspirada no ecossistema Spring:
-
-```
-IFuture_Study/
-├── api/
-│   ├── controllers/      # Camada de controle de rotas (@RestController)
-│   │   └── quiz_controller.py
-│   ├── exceptions/       # Exceções personalizadas (@ExceptionHandler)
-│   │   └── quiz_exceptions.py
-│   ├── handlers/         # Handler HTTP principal
-│   │   └── quiz_handler.py
-│   ├── middleware/       # CORS, headers de cache e ResponseFormatter
-│   │   └── http_middleware.py
-│   ├── models/           # DTOs (Data Transfer Objects)
-│   │   └── dtos.py
-│   ├── repositories/     # Acesso e descoberta de questionários (@Repository)
-│   │   └── quiz_repository.py
-│   ├── services/         # Regras de negócio e correção (@Service)
-│   │   └── quiz_service.py
-│   ├── utils/            # Parsers, validadores e configurações
-│   │   ├── config.py
-│   │   ├── markdown_parser.py
-│   │   ├── quiz_logic.py
-│   │   └── validators.py
-│   ├── index.py          # Entrypoint para Vercel Serverless
-│   └── main.py           # Ponto de inicialização do servidor HTTP
-├── tests/
-│   └── test_validators.py # Suíte de testes (unittest)
-├── web/
-│   ├── app.js            # Lógica client-side (tema, timer, progresso, filtros)
-│   ├── index.html        # Estrutura HTML5 acessível e semântica
-│   └── styles.css        # Design System moderno (Dark/Light)
-├── 1 test                # Questionário 1 (Treino Mindsight)
-├── 2 test                # Questionário 2 (Com Pegadinhas)
-├── 3 test                # Questionário 3 (Desafios Rápidos)
-├── Dockerfile            # Containerização
-├── Procfile              # Deploy Render/Heroku/Railway
-├── quiz_api.py           # Entry point rápido da aplicação
-└── vercel.json           # Configuração de rotas Vercel
-```
+Para disponibilizar sua aplicação com domínio próprio, HTTPS automático e proteção contra DDoS sem abrir portas no roteador:
+1. Crie um túnel no [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/) (Networks > Tunnels).
+2. Aponte o serviço interno do túnel para `http://app:8000`.
+3. Cole o token gerado na variável `CLOUDFLARE_TUNNEL_TOKEN` do seu arquivo `.env`.
+4. Inicie o serviço com:
+   ```bash
+   docker compose --profile tunnel up -d
+   ```
 
 ---
 
-## 📡 Endpoints da API
+## Como adicionar quizzes
 
-| Método | Rota | Descrição |
-|---|---|---|
-| `GET` | `/` | Serve a interface web (`index.html`) |
-| `GET` | `/web/*` | Serve os arquivos estáticos (`styles.css`, `app.js`) |
-| `GET` | `/api/quizzes` | Retorna a lista de questionários disponíveis |
-| `GET` | `/api/quiz?source=1 test` | Retorna as questões do questionário (sem gabarito) |
-| `POST` | `/api/quiz/submit` | Envia respostas para correção e retorna score detalhado |
-| `POST` | `/api/upload` | Envia novo questionário em Markdown (validação automática) |
+Clique no botão **"+ Adicionar Quiz"** na interface e envie um arquivo:
 
----
+- **`.txt`** — texto puro com questões numeradas
+- **`.pdf`** — documento PDF (extração automática de texto)
+- **`.docx`** — documento Word
 
-## 📝 Como Adicionar Novos Questionários
+Se o arquivo **não contiver gabarito**, ele é gerado automaticamente via `OPENROUTER_API_KEY`. Cada questão pode ter de 2 a N alternativas.
 
-Basta criar um arquivo com nome `X test` ou `nome.quiz.md` na raiz do projeto seguindo a estrutura:
+### Formato de questões aceito
 
-```markdown
-# Título do Questionário
-
-## Bloco 1 — Nome da Seção
-
-**1.** Enunciado da primeira questão?
+```
+**1.** Enunciado da questão?
 a) Opção A  b) Opção B  c) Opção C  d) Opção D
 
-**2.** Enunciado da segunda questão?
+**2.** Outra questão com alternativas em linhas separadas?
 a) Opção A
 b) Opção B
 c) Opção C
-d) Opção D
 
 # Gabarito
-1. b) Opção B → Explicação detalhada da resposta.
-2. a) Opção A → Explicação detalhada da resposta.
+1. b) Opção B → Explicação da resposta.
+2. a) Opção A → Explicação da resposta.
+```
+
+---
+
+## Endpoints da API
+
+| Método | Rota | Autenticação | Descrição |
+|---|---|---|---|
+| `GET` | `/` | Pública | Interface web |
+| `GET` | `/api/quizzes` | Pública | Lista quizzes disponíveis |
+| `GET` | `/api/quiz?source=<name>` | Pública | Questões de um quiz (sem gabarito) |
+| `POST` | `/api/quiz/submit` | Pública | Submete respostas e retorna score |
+| `POST` | `/api/auth/login` | Pública | Login (retorna Bearer Token) |
+| `POST` | `/api/auth/register` | Pública | Cadastro de estudante |
+| `GET` | `/api/auth/me` | Bearer Token | Dados do usuário autenticado |
+| `POST` | `/api/auth/logout` | Bearer Token | Encerramento de sessão |
+| `POST` | `/api/upload` | **Admin** | Upload de arquivo (multipart/form-data) |
+
+---
+
+## Arquitetura
+
+```
+Quizes_Study/
+├── api/
+│   ├── database/
+│   │   ├── connection.py      # Context managers para PostgreSQL
+│   │   └── migrations.py      # Schema (executa na inicialização)
+│   ├── controllers/
+│   │   └── quiz_controller.py # Camada de rotas
+│   ├── exceptions/
+│   │   └── quiz_exceptions.py # Exceções de domínio
+│   ├── handlers/
+│   │   └── quiz_handler.py    # Handler HTTP (GET/POST/OPTIONS)
+│   ├── middleware/
+│   │   └── http_middleware.py # CORS, cache, ResponseFormatter
+│   ├── models/
+│   │   └── dtos.py            # Data Transfer Objects
+│   ├── repositories/
+│   │   └── quiz_repository.py # Acesso ao PostgreSQL
+│   ├── services/
+│   │   ├── ai_service.py      # Geração de gabarito via OpenRouter
+│   │   ├── quiz_service.py    # Lógica de negócio
+│   │   └── upload_service.py  # Orquestração de upload
+│   ├── utils/
+│   │   ├── config.py          # Variáveis de ambiente
+│   │   ├── file_parser.py     # Extração de texto (TXT/PDF/DOCX) e parse de questões
+│   │   ├── quiz_logic.py      # Correção de respostas
+│   │   └── validators.py      # Validação de payloads HTTP
+│   ├── index.py               # Entrypoint Vercel (serverless)
+│   └── main.py                # Inicialização do servidor
+├── web/
+│   ├── app.js                 # Lógica client-side
+│   ├── index.html             # Interface HTML
+│   └── styles.css             # Design system
+├── .env.example               # Template de variáveis de ambiente
+├── docker-compose.yml         # PostgreSQL + app
+├── Dockerfile
+├── Procfile
+├── quiz_api.py                # Entry point
+└── requirements.txt
+```
+
+---
+
+## Schema do Banco
+
+```sql
+-- Quizzes cadastrados
+CREATE TABLE quizzes (
+    id               SERIAL PRIMARY KEY,
+    name             VARCHAR(255) UNIQUE NOT NULL,  -- slug identificador
+    label            VARCHAR(255) NOT NULL,          -- nome de exibição
+    original_filename VARCHAR(255),
+    file_type        VARCHAR(10),                    -- 'txt' | 'pdf' | 'docx'
+    has_answer_key   BOOLEAN DEFAULT TRUE,
+    ai_generated     BOOLEAN DEFAULT FALSE,
+    created_at       TIMESTAMP DEFAULT NOW()
+);
+
+-- Questões (options em JSONB suporta 2 a N alternativas)
+CREATE TABLE questions (
+    id              SERIAL PRIMARY KEY,
+    quiz_id         INTEGER REFERENCES quizzes(id) ON DELETE CASCADE,
+    question_number INTEGER NOT NULL,
+    section         VARCHAR(255) DEFAULT 'Geral',
+    context         TEXT DEFAULT '',
+    question        TEXT NOT NULL,
+    options         JSONB NOT NULL,   -- ["Opção A", "Opção B", ...]
+    answer          INTEGER,          -- índice base-0 (0=A, 1=B, ...)
+    explanation     TEXT DEFAULT ''
+);
 ```

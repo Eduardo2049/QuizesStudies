@@ -2,7 +2,8 @@
 Controllers - Padrão Spring @RestController
 Camada de rotas e processamento HTTP
 """
-from api.services.quiz_service import QuizService, MarkdownService
+from api.services.quiz_service import QuizService
+from api.services.upload_service import UploadService
 from api.repositories.quiz_repository import QuizRepository
 from api.middleware.http_middleware import timing_decorator, error_handler_decorator
 from api.exceptions.quiz_exceptions import (
@@ -17,7 +18,6 @@ class QuizController:
     def __init__(self, repository: QuizRepository = None):
         self.repository = repository or QuizRepository()
         self.service = QuizService(self.repository)
-        self.markdown_service = MarkdownService(self.repository)
 
     @timing_decorator
     @error_handler_decorator
@@ -78,25 +78,17 @@ class QuizController:
 
 
 class UploadController:
-    """Controller para upload de arquivos Markdown"""
+    """Controller para upload de arquivos (TXT, PDF, DOCX)"""
 
     def __init__(self, repository: QuizRepository = None):
-        self.markdown_service = MarkdownService(repository or QuizRepository())
+        self.upload_service = UploadService(repository or QuizRepository())
 
     @timing_decorator
     @error_handler_decorator
-    def upload_file(self, filename: str, content: str) -> dict:
-        """POST /api/upload - Upload e validação de novo quiz"""
-        is_valid, error_msg = self.markdown_service.validate_markdown(content)
-        if not is_valid:
-            raise QuizAPIException(f"Markdown inválido: {error_msg}", 400)
-
-        path = self.markdown_service.save_quiz_from_markdown(filename, content)
-
+    def upload_file(self, filename: str, content: bytes, file_type: str) -> dict:
+        """POST /api/upload - Processa arquivo e cria quiz no banco"""
+        result = self.upload_service.process_upload(filename, content, file_type)
         return {
             "status": "success",
-            "data": {
-                "filename": path.name,
-                "message": f"Quiz '{filename}' criado com sucesso!"
-            }
+            "data": result,
         }
