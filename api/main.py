@@ -32,3 +32,11 @@ def start_server():
 
 if __name__ == "__main__":
     start_server()
+
+# Compatibilidade com a Vercel caso inspecione api/main.py
+class handler(QuizHandler):
+    pass
+
+app = handler
+application = handler
+

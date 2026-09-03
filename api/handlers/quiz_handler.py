@@ -72,9 +72,14 @@ class QuizHandler(BaseHTTPRequestHandler):
         """Handle CORS preflight requests"""
         HTTPMiddleware.handle_preflight(self)
 
+    def _get_request_url(self):
+        """Obtém o path da requisição, compatível com rewrites e proxies da Vercel."""
+        raw_path = self.headers.get("x-forwarded-uri") or self.headers.get("x-matched-path") or self.path
+        return urlparse(raw_path)
+
     def do_GET(self):
         """Handle GET requests"""
-        request = urlparse(self.path)
+        request = self._get_request_url()
         query = parse_qs(request.query)
 
         try:
@@ -166,7 +171,7 @@ class QuizHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         """Handle POST requests"""
-        request = urlparse(self.path)
+        request = self._get_request_url()
 
         try:
             # ── 0. Rotas de Autenticação ───────────────────────────────────────

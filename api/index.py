@@ -11,6 +11,11 @@ try:
 except Exception as e:
     print(f"[vercel] Aviso ao executar migrations na inicialização: {e}")
 
-# Vercel espera 'handler' ou 'app'
-handler = QuizHandler
+# Vercel espera 'handler', 'app' ou 'application'
+class handler(QuizHandler):
+    pass
+
+app = handler
+application = handler
+
 
