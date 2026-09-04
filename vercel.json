@@ -2,6 +2,10 @@
   "version": 2,
   "rewrites": [
     { "source": "/web/(.*)", "destination": "/web/$1" },
+    { "source": "/login", "destination": "/web/login.html" },
+    { "source": "/register", "destination": "/web/register.html" },
+    { "source": "/api/(.*)", "destination": "/api/index.py" },
+    { "source": "/", "destination": "/web/index.html" },
     { "source": "/(.*)", "destination": "/api/index.py" }
   ]
 }

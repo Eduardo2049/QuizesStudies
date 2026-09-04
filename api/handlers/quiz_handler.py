@@ -59,6 +59,22 @@ def _parse_multipart(body: bytes, boundary: str) -> tuple[str | None, bytes | No
     return None, None
 
 
+_migrations_initialized = False
+
+
+def _ensure_migrations():
+    """Garante que as tabelas do banco foram criadas, útil no ambiente Serverless da Vercel."""
+    global _migrations_initialized
+    if not _migrations_initialized:
+        try:
+            from api.database.migrations import run_migrations
+            run_migrations()
+            _migrations_initialized = True
+        except Exception as e:
+            if DEBUG:
+                print(f"[db] Erro ao garantir migrations no handler: {e}")
+
+
 class QuizHandler(BaseHTTPRequestHandler):
     """Handler HTTP principal com padrão Controller + Middleware"""
 
@@ -74,13 +90,25 @@ class QuizHandler(BaseHTTPRequestHandler):
 
     def _get_request_url(self):
         """Obtém o path da requisição, compatível com rewrites e proxies da Vercel."""
-        raw_path = self.headers.get("x-forwarded-uri") or self.headers.get("x-matched-path") or self.path
+        raw_path = (
+            self.headers.get("x-invoke-path")
+            or self.headers.get("x-forwarded-uri")
+            or self.headers.get("x-matched-path")
+            or self.headers.get("x-original-url")
+            or self.headers.get("x-rewrite-url")
+            or self.path
+        )
+        if raw_path in ("/api/index.py", "/api/index", "/api/index.py/", "/api/"):
+            raw_path = "/"
         return urlparse(raw_path)
 
     def do_GET(self):
         """Handle GET requests"""
         request = self._get_request_url()
         query = parse_qs(request.query)
+
+        if request.path.startswith("/api/"):
+            _ensure_migrations()
 
         try:
             # 0. API: Dados do usuário autenticado
@@ -107,7 +135,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                 return
 
             # 3. Servir HTML principal
-            if request.path in ("/", "/index.html"):
+            if request.path in ("/", "/index.html", "/api/index.py", "/api/index"):
                 index_file = WEB_DIR / "index.html"
                 if index_file.is_file():
                     content = index_file.read_bytes()
@@ -207,6 +235,9 @@ class QuizHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         """Handle POST requests"""
         request = self._get_request_url()
+
+        if request.path.startswith("/api/"):
+            _ensure_migrations()
 
         try:
             # ── 0. Rotas de Autenticação ───────────────────────────────────────

@@ -21,13 +21,13 @@ PORT = int(os.getenv("PORT", os.getenv("QUIZ_PORT", "8000")))
 # Logging
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
-# Banco de dados PostgreSQL (suporta DATABASE_URL e POSTGRES_URL da Vercel)
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    os.getenv(
-        "POSTGRES_URL",
-        os.getenv("POSTGRES_PRISMA_URL", "postgresql://postgres:postgres@localhost:5433/quiz_study")
-    )
+# Banco de dados PostgreSQL (suporta DATABASE_URL, POSTGRES_URL e DATABASE_URL_UNPOOLED da Vercel/Neon)
+DATABASE_URL = (
+    os.getenv("DATABASE_URL")
+    or os.getenv("POSTGRES_URL")
+    or os.getenv("DATABASE_URL_UNPOOLED")
+    or os.getenv("POSTGRES_PRISMA_URL")
+    or "postgresql://postgres:postgres@localhost:5433/quiz_study"
 )
 
 # OpenRouter (IA para geração de gabarito)

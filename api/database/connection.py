@@ -8,9 +8,30 @@ from contextlib import contextmanager
 from api.utils.config import DATABASE_URL, DEBUG
 
 
+def _get_database_url() -> str:
+    """Normaliza o formato da URL do banco e assegura SSL para conexões remotas."""
+    url = (DATABASE_URL or "").strip()
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    
+    # Adiciona sslmode=require automaticamente para bancos em nuvem se não estiver presente
+    if url and "localhost" not in url and "127.0.0.1" not in url:
+        if "sslmode=" not in url:
+            sep = "&" if "?" in url else "?"
+            url = f"{url}{sep}sslmode=require"
+    
+    return url
+
+
 def _connect_db():
+    clean_url = _get_database_url()
     try:
-        return psycopg2.connect(DATABASE_URL, options="-c client_encoding=UTF8")
+        conn = psycopg2.connect(clean_url)
+        try:
+            conn.set_client_encoding('UTF8')
+        except Exception:
+            pass
+        return conn
     except UnicodeDecodeError as e:
         msg = e.object.decode("cp1252", errors="replace") if hasattr(e, "object") else str(e)
         raise ConnectionError(f"Erro ao conectar ao PostgreSQL: {msg.strip()}") from None
