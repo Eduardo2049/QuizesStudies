@@ -71,7 +71,9 @@
           localStorage.removeItem('ifuture_token');
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        localStorage.removeItem('ifuture_token');
+      });
     }
 
     // ─── Submissão do Formulário de Cadastro ──────────────────────────────
