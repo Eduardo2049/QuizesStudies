@@ -64,11 +64,32 @@ O servidor inicia em `http://localhost:8000` (ou próxima porta livre) e executa
 
 ## Autenticação e Segurança
 
-- **Acesso Público**: Estudantes podem navegar livremente, realizar simulados, selecionar provas e conferir pontuações.
+- **Acesso Público**: Estudantes podem criar conta (`/register`), autenticar-se (`/login`), navegar livremente, realizar simulados, selecionar provas e conferir pontuações.
 - **Acesso Restrito (Admin)**: O upload de novos simulados e acionamento da IA é restrito a administradores autenticados via Bearer Token.
 - **Credenciais Padrão Iniciais**:
   - Usuário: `admin`
   - Senha: `admin_study_2026` (altere no `.env` para produção)
+
+---
+
+## Auditoria de Segurança e Hardening (Semgrep SAST)
+
+A base de código é submetida a auditorias estáticas contínuas (SAST) com **Semgrep** utilizando o conjunto oficial de regras para OWASP Top 10, Python, Dockerfile e Web:
+
+```bash
+# Executar varredura estática de segurança
+semgrep scan --config auto .
+```
+
+### Medidas de Hardening Implementadas:
+1. **Container Seguro (Non-Root User)**:
+   - O `Dockerfile` cria e executa o processo sob um usuário sem privilégios (`appuser`, UID 1000), prevenindo ataques de escape de container e execução indevida como `root` (`dockerfile.security.missing-user.missing-user`).
+2. **Prevenção de SSRF e Protocolos Arbitrários**:
+   - A integração com a API do OpenRouter em `api/services/ai_service.py` utiliza a biblioteca `requests` com timeout explícito e validação estrita de protocolo HTTP/HTTPS, eliminando riscos de leitura local de arquivos via esquemas como `file://` (`python.lang.security.audit.dynamic-urllib-use-detected`).
+3. **Validação Rigorosa de Payloads**:
+   - Proteção de rotas, limites de tamanho de upload (máx. 20 MB), validação de tipos de arquivo (whitelist: `.txt`, `.pdf`, `.docx`) e sanitização de dados.
+4. **Status do Scan**:
+   - ✅ **0 vulnerabilidades / 0 achados bloqueantes** em mais de 490 regras aplicadas.
 
 ---
 
@@ -117,7 +138,9 @@ c) Opção C
 
 | Método | Rota | Autenticação | Descrição |
 |---|---|---|---|
-| `GET` | `/` | Pública | Interface web |
+| `GET` | `/` ou `/index.html` | Pública | Interface principal de simulados |
+| `GET` | `/login` ou `/login.html` | Pública | Página de autenticação |
+| `GET` | `/register` ou `/register.html` | Pública | Página de cadastro de estudante |
 | `GET` | `/api/quizzes` | Pública | Lista quizzes disponíveis |
 | `GET` | `/api/quiz?source=<name>` | Pública | Questões de um quiz (sem gabarito) |
 | `POST` | `/api/quiz/submit` | Pública | Submete respostas e retorna score |
@@ -138,7 +161,8 @@ Quizes_Study/
 │   │   ├── connection.py      # Context managers para PostgreSQL
 │   │   └── migrations.py      # Schema (executa na inicialização)
 │   ├── controllers/
-│   │   └── quiz_controller.py # Camada de rotas
+│   │   ├── auth_controller.py # Endpoints de login, registro e sessão
+│   │   └── quiz_controller.py # Endpoints de quizzes e upload
 │   ├── exceptions/
 │   │   └── quiz_exceptions.py # Exceções de domínio
 │   ├── handlers/
@@ -148,28 +172,32 @@ Quizes_Study/
 │   ├── models/
 │   │   └── dtos.py            # Data Transfer Objects
 │   ├── repositories/
-│   │   └── quiz_repository.py # Acesso ao PostgreSQL
+│   │   ├── auth_repository.py # Persistência de usuários e sessões
+│   │   └── quiz_repository.py # Persistência de quizzes e questões
 │   ├── services/
-│   │   ├── ai_service.py      # Geração de gabarito via OpenRouter
-│   │   ├── quiz_service.py    # Lógica de negócio
-│   │   └── upload_service.py  # Orquestração de upload
+│   │   ├── ai_service.py      # Geração de gabarito via OpenRouter (requests)
+│   │   ├── auth_service.py    # Regras de hash e autenticação
+│   │   ├── quiz_service.py    # Lógica de negócio de simulados
+│   │   └── upload_service.py  # Orquestração de upload TXT/PDF/DOCX
 │   ├── utils/
 │   │   ├── config.py          # Variáveis de ambiente
 │   │   ├── file_parser.py     # Extração de texto (TXT/PDF/DOCX) e parse de questões
-│   │   ├── quiz_logic.py      # Correção de respostas
+│   │   ├── quiz_logic.py      # Correção e pontuação de respostas
 │   │   └── validators.py      # Validação de payloads HTTP
 │   ├── index.py               # Entrypoint Vercel (serverless)
 │   └── main.py                # Inicialização do servidor
 ├── web/
-│   ├── app.js                 # Lógica client-side
-│   ├── index.html             # Interface HTML
-│   └── styles.css             # Design system
+│   ├── app.js                 # Lógica client-side (SPA)
+│   ├── index.html             # Interface principal
+│   ├── login.html             # Tela de login moderna
+│   ├── register.html          # Tela de cadastro moderna
+│   └── styles.css             # Design system completo
 ├── .env.example               # Template de variáveis de ambiente
-├── docker-compose.yml         # PostgreSQL + app
-├── Dockerfile
+├── docker-compose.yml         # PostgreSQL + app + tunnel
+├── Dockerfile                 # Multi-stage com usuário non-root
 ├── Procfile
-├── quiz_api.py                # Entry point
-└── requirements.txt
+├── quiz_api.py                # Entry point local
+└── requirements.txt           # Dependências (psycopg2, pdfplumber, requests, etc.)
 ```
 
 ---

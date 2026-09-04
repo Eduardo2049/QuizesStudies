@@ -21,6 +21,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Código da aplicação
 COPY . .
 
+# Usuário não-root para execução segura do container
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 CMD ["python", "quiz_api.py"]

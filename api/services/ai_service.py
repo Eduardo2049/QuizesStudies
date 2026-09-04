@@ -3,8 +3,7 @@ Serviço de IA via OpenRouter.
 Gera gabarito automaticamente para quizzes sem resposta definida.
 """
 import json
-import urllib.request
-import urllib.error
+import requests
 from api.utils.config import OPENROUTER_API_KEY, OPENROUTER_MODEL, OPENROUTER_BASE_URL, DEBUG
 
 
@@ -66,41 +65,37 @@ def generate_answer_key(questions: list[dict]) -> list[dict]:
 
     prompt = _build_prompt(questions)
 
-    payload = json.dumps({
+    payload = {
         "model": OPENROUTER_MODEL,
         "messages": [
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.1,  # Baixa temperatura para respostas determinísticas
         "response_format": {"type": "json_object"},
-    }).encode("utf-8")
+    }
 
     headers = {
-        "Content-Type": "application/json",
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "HTTP-Referer": "https://ifuture-study.app",
         "X-Title": "IFuture Study",
     }
 
     url = f"{OPENROUTER_BASE_URL}/chat/completions"
-    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
 
     try:
-        with urllib.request.urlopen(req, timeout=60) as response:
-            raw = response.read().decode("utf-8")
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8", errors="replace")
-        raise AIServiceError(
-            f"OpenRouter retornou erro {e.code}: {error_body}"
-        )
-    except urllib.error.URLError as e:
-        raise AIServiceError(f"Falha ao conectar ao OpenRouter: {e.reason}")
-
-    try:
-        data = json.loads(raw)
+        resp = requests.post(url, json=payload, headers=headers, timeout=60)
+        raw = resp.text
+        if not resp.ok:
+            raise AIServiceError(
+                f"OpenRouter retornou erro {resp.status_code}: {raw}"
+            )
+        data = resp.json()
         content = data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, json.JSONDecodeError) as e:
-        raise AIServiceError(f"Resposta inesperada da API: {raw[:500]}")
+    except requests.exceptions.RequestException as e:
+        raise AIServiceError(f"Falha ao conectar ao OpenRouter: {e}")
+    except (KeyError, IndexError, json.JSONDecodeError, ValueError) as e:
+        raw_snippet = raw[:500] if "raw" in locals() else str(e)
+        raise AIServiceError(f"Resposta inesperada da API: {raw_snippet}")
 
     if DEBUG:
         print(f"🤖 OpenRouter ({OPENROUTER_MODEL}) respondeu:\n{content[:300]}")

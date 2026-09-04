@@ -11,3 +11,6 @@ pdfplumber>=0.11.0
 
 # Extração de texto de DOCX
 python-docx>=1.1.0
+
+# Cliente HTTP para integrações externas (OpenRouter AI)
+requests>=2.31.0
