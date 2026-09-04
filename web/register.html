@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cadastrar — Quiz Study</title>
+  <meta name="description" content="Crie sua conta no Quiz Study para realizar simulados interativos e acompanhar seu desempenho.">
+  <link rel="stylesheet" href="/web/styles.css?v=2">
+</head>
+<body class="login-body">
+  <div class="login-wrapper">
+    <div class="login-card">
+      <header class="login-header">
+        <p class="eyebrow">Quiz Study · crie sua conta</p>
+        <h1 class="login-title">Cadastro de<br><em>Estudante</em></h1>
+        <p class="login-subtitle">Crie seu perfil gratuitamente para responder simulados e acompanhar seu progresso.</p>
+      </header>
+
+      <!-- Alternador de Telas: Login / Cadastro -->
+      <nav class="login-tabs" aria-label="Navegação entre login e cadastro">
+        <a href="/login" class="tab-btn">Entrar</a>
+        <a href="/register" class="tab-btn active" aria-current="page">Cadastrar</a>
+      </nav>
+
+      <!-- Formulário de Cadastro -->
+      <form id="pageRegisterForm" class="auth-form-card" novalidate>
+        <div class="form-group">
+          <label for="regUsername">Usuário</label>
+          <input type="text" id="regUsername" name="username" placeholder="Escolha um nome de usuário" required autocomplete="username" autofocus>
+        </div>
+
+        <div class="form-group">
+          <label for="regEmail">E-mail</label>
+          <input type="email" id="regEmail" name="email" placeholder="seuemail@exemplo.com" required autocomplete="email">
+        </div>
+
+        <div class="form-group">
+          <label for="regPassword">Senha</label>
+          <input type="password" id="regPassword" name="password" placeholder="Mínimo de 6 caracteres" required autocomplete="new-password">
+        </div>
+
+        <div id="registerFeedback" class="form-feedback" hidden></div>
+
+        <button id="btnRegisterSubmit" class="primary auth-submit-btn" type="submit">
+          <span>Criar Conta</span>
+          <span class="btn-arrow">→</span>
+        </button>
+      </form>
+
+      <footer class="login-footer">
+        <p class="login-footer-hint">
+          Já possui uma conta? <a href="/login" class="auth-link">Entre aqui</a>
+        </p>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    // ─── Verificação com Bearer Token ─────────────────────────────────────
+    const token = localStorage.getItem('ifuture_token');
+
+    if (token) {
+      fetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${token}` },
+        cache: 'no-store'
+      })
+      .then(res => {
+        if (res.ok) {
+          window.location.replace('/');
+        } else {
+          localStorage.removeItem('ifuture_token');
+        }
+      })
+      .catch(() => {});
+    }
+
+    // ─── Submissão do Formulário de Cadastro ──────────────────────────────
+    const registerForm = document.getElementById('pageRegisterForm');
+    const registerFeedback = document.getElementById('registerFeedback');
+    const submitBtn = document.getElementById('btnRegisterSubmit');
+
+    function showFeedback(message, isSuccess = false) {
+      registerFeedback.textContent = message;
+      registerFeedback.className = `form-feedback ${isSuccess ? 'feedback-success' : 'feedback-error'}`;
+      registerFeedback.hidden = false;
+    }
+
+    function clearFeedback() {
+      registerFeedback.hidden = true;
+      registerFeedback.textContent = '';
+    }
+
+    registerForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearFeedback();
+
+      const username = document.getElementById('regUsername').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      const password = document.getElementById('regPassword').value;
+
+      if (!username || !email || !password) {
+        showFeedback('Por favor, preencha todos os campos.');
+        return;
+      }
+
+      if (password.length < 6) {
+        showFeedback('A senha deve ter no mínimo 6 caracteres.');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.classList.add('btn-loading');
+      submitBtn.querySelector('span').textContent = 'Criando cadastro…';
+
+      try {
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, email, password })
+        });
+
+        const rawData = await response.json();
+        const data = rawData.data || rawData;
+
+        if (!response.ok) {
+          showFeedback(data.message || data.error || 'Erro ao criar conta.');
+          return;
+        }
+
+        // Tenta autenticar automaticamente com a nova conta
+        showFeedback('✓ Conta criada! Conectando…', true);
+
+        try {
+          const loginRes = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+
+          const loginRaw = await loginRes.json();
+          const loginData = loginRaw.data || loginRaw;
+
+          if (loginRes.ok && loginData.token) {
+            localStorage.setItem('ifuture_token', loginData.token);
+            setTimeout(() => {
+              window.location.replace('/');
+            }, 500);
+            return;
+          }
+        } catch (_) {}
+
+        // Fallback: redireciona para a página de login
+        showFeedback('✓ Conta criada com sucesso! Redirecionando para login…', true);
+        setTimeout(() => {
+          window.location.replace('/login');
+        }, 800);
+
+      } catch (err) {
+        showFeedback('Não foi possível conectar ao servidor. Verifique a conexão.');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('btn-loading');
+        submitBtn.querySelector('span').textContent = 'Criar Conta';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -115,10 +115,45 @@ class QuizHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Type", "text/html; charset=utf-8")
                     self.send_header("Content-Length", str(len(content)))
                     HTTPMiddleware.add_cors_headers(self)
+                    HTTPMiddleware.add_cache_headers(self, cache=False)
                     self.end_headers()
                     self.wfile.write(content)
                 else:
                     status, data = ResponseFormatter.not_found("index.html não encontrado")
+                    HTTPMiddleware.send_json_response(self, status, data)
+                return
+
+            # 3.1 Servir HTML de Login
+            if request.path in ("/login", "/login.html"):
+                login_file = WEB_DIR / "login.html"
+                if login_file.is_file():
+                    content = login_file.read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(content)))
+                    HTTPMiddleware.add_cors_headers(self)
+                    HTTPMiddleware.add_cache_headers(self, cache=False)
+                    self.end_headers()
+                    self.wfile.write(content)
+                else:
+                    status, data = ResponseFormatter.not_found("login.html não encontrado")
+                    HTTPMiddleware.send_json_response(self, status, data)
+                return
+
+            # 3.2 Servir HTML de Cadastro
+            if request.path in ("/register", "/register.html"):
+                register_file = WEB_DIR / "register.html"
+                if register_file.is_file():
+                    content = register_file.read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(content)))
+                    HTTPMiddleware.add_cors_headers(self)
+                    HTTPMiddleware.add_cache_headers(self, cache=False)
+                    self.end_headers()
+                    self.wfile.write(content)
+                else:
+                    status, data = ResponseFormatter.not_found("register.html não encontrado")
                     HTTPMiddleware.send_json_response(self, status, data)
                 return
 
@@ -143,7 +178,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                         self.send_header("Content-Type", content_type)
                         self.send_header("Content-Length", str(len(content)))
                         HTTPMiddleware.add_cors_headers(self)
-                        HTTPMiddleware.add_cache_headers(self, cache=True)
+                        HTTPMiddleware.add_cache_headers(self, cache=False)
                         self.end_headers()
                         self.wfile.write(content)
                     except Exception as e:

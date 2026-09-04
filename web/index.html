@@ -3,14 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>IFuture Study — Treino de Raciocínio</title>
+  <title>Quiz Study — Treino de Raciocínio</title>
   <meta name="description" content="Plataforma de simulados e treino de raciocínio lógico. Faça upload de provas em PDF, DOCX ou TXT e treine com gabarito automático.">
-  <link rel="stylesheet" href="/web/styles.css">
+  <link rel="stylesheet" href="/web/styles.css?v=2">
+  <script>
+    // Verificação síncrona imediata antes da renderização do body
+    (function () {
+      var token = localStorage.getItem('ifuture_token');
+      if (!token) {
+        window.location.replace('/login');
+      }
+    })();
+  </script>
 </head>
 <body>
   <main class="shell">
     <header class="hero">
-      <p class="eyebrow">IFuture Study · prática guiada</p>
+      <p class="eyebrow">Quiz Study · prática guiada</p>
 
       <div class="hero-top">
         <label class="quiz-picker" for="quizSelector">
@@ -21,9 +30,6 @@
             <span class="btn-add-icon">＋</span> Adicionar Quiz
           </button>
           <div id="authControls" class="auth-controls">
-            <button id="loginBtn" class="btn-auth-login" type="button" title="Entrar na conta">
-              <span class="btn-auth-icon">👤</span> Entrar
-            </button>
             <div id="userProfile" class="user-profile-badge" hidden>
               <span class="user-role-badge" id="userRoleBadge">Admin</span>
               <span class="user-name" id="userName">admin</span>
@@ -93,35 +99,8 @@
     </div>
   </div>
 
-  <!-- ── Modal de Login ──────────────────────────────────────────────── -->
-  <div id="loginModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="loginModalTitle">
-    <div class="modal modal-login">
-      <button class="modal-close" id="closeLoginModal" aria-label="Fechar">&times;</button>
-      <h2 id="loginModalTitle" class="modal-title">Acesso Restrito</h2>
-      <p class="modal-subtitle">Entre com suas credenciais de <strong>administrador</strong> para cadastrar novas provas ou gerenciar simulados.</p>
 
-      <form id="loginForm" class="auth-form" novalidate>
-        <div class="form-group">
-          <label for="loginUsername">Usuário</label>
-          <input type="text" id="loginUsername" name="username" placeholder="Digite seu usuário (ex: admin)" required autocomplete="username">
-        </div>
 
-        <div class="form-group">
-          <label for="loginPassword">Senha</label>
-          <input type="password" id="loginPassword" name="password" placeholder="Digite sua senha" required autocomplete="current-password">
-        </div>
-
-        <div id="loginError" class="upload-error" hidden></div>
-        <div id="loginSuccess" class="upload-success" hidden></div>
-
-        <div class="modal-actions">
-          <button id="cancelLogin" class="secondary" type="button">Cancelar</button>
-          <button id="submitLogin" class="primary" type="submit">Entrar</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <script src="/web/app.js"></script>
+  <script src="/web/app.js?v=2"></script>
 </body>
 </html>

@@ -430,13 +430,19 @@ button {
   font: 600 13px Manrope, sans-serif;
 }
 .user-role-badge {
-  background: #e6f4ea;
-  color: #137333;
   font: 700 10px 'DM Mono', monospace;
   padding: 2px 8px;
   border-radius: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+.role-admin {
+  background: rgba(239, 104, 74, 0.18);
+  color: #c94022;
+}
+.role-student {
+  background: rgba(23, 107, 103, 0.18);
+  color: var(--teal-dark);
 }
 .user-name {
   color: var(--ink);
@@ -490,6 +496,176 @@ button {
   box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.15);
 }
 
+/* ─── Dedicated Login Page ────────────────────────────────────────────────── */
+.login-body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 15% 15%, rgba(239, 104, 74, 0.12) 0, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(23, 107, 103, 0.15) 0, transparent 45%),
+    linear-gradient(135deg, #f4f0e8, #e7efeb);
+  padding: 24px;
+}
+
+.login-wrapper {
+  width: 100%;
+  max-width: 480px;
+  margin: auto;
+}
+
+.login-card {
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--line);
+  padding: 42px 36px 36px;
+  box-shadow: 0 16px 40px rgba(24, 35, 38, 0.08);
+}
+
+.login-header {
+  margin-bottom: 24px;
+}
+
+.login-title {
+  font-size: clamp(28px, 4vw, 36px);
+  line-height: 1.1;
+  margin: 12px 0 10px;
+  letter-spacing: -0.5px;
+}
+
+.login-title em {
+  color: var(--teal);
+  font-style: normal;
+}
+
+.login-subtitle {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.login-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--line);
+  margin-bottom: 24px;
+  gap: 16px;
+}
+
+.tab-btn {
+  display: inline-block;
+  text-decoration: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  padding: 10px 4px;
+  font: 700 13px 'DM Mono', monospace;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.5px;
+}
+
+.tab-btn:hover {
+  color: var(--ink);
+}
+
+.tab-btn.active {
+  color: var(--coral);
+  border-bottom-color: var(--coral);
+}
+
+.auth-form-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.form-feedback {
+  padding: 12px 14px;
+  font-size: 13px;
+  border-radius: 2px;
+  line-height: 1.4;
+}
+
+.feedback-error {
+  background: #fdf2f2;
+  color: var(--error);
+  border: 1px solid #f8d7da;
+}
+
+.feedback-success {
+  background: #f0fdf4;
+  color: var(--success);
+  border: 1px solid #bbf7d0;
+}
+
+.auth-submit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  padding: 15px;
+  font-size: 15px;
+  margin-top: 6px;
+  transition: transform 0.15s ease, opacity 0.2s ease;
+}
+
+.auth-submit-btn:hover {
+  opacity: 0.94;
+  transform: translateY(-1px);
+}
+
+.auth-submit-btn:active {
+  transform: translateY(0);
+}
+
+.btn-arrow {
+  font-size: 18px;
+  transition: transform 0.2s ease;
+}
+
+.auth-submit-btn:hover .btn-arrow {
+  transform: translateX(4px);
+}
+
+.btn-loading {
+  opacity: 0.75;
+  cursor: wait;
+}
+
+.login-footer {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.login-footer-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.auth-link {
+  color: var(--coral);
+  font-weight: 700;
+  text-decoration: none;
+  transition: opacity 0.2s ease, text-decoration 0.2s ease;
+}
+
+.auth-link:hover {
+  text-decoration: underline;
+  opacity: 0.9;
+}
+
 /* ─── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 620px) {
   .shell { padding: 35px 15px 60px; }
@@ -502,4 +678,6 @@ button {
   .modal-actions { flex-direction: column; }
   .hero-top { flex-direction: column; align-items: flex-start; gap: 14px; }
   .hero-top-buttons { width: 100%; justify-content: space-between; }
+  .login-card { padding: 32px 20px 28px; }
 }
+

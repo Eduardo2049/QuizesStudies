@@ -319,13 +319,11 @@ function clearAuthToken() {
 }
 
 function updateAuthUI() {
-  const loginBtn = document.querySelector('#loginBtn');
   const userProfile = document.querySelector('#userProfile');
   const userName = document.querySelector('#userName');
   const userRoleBadge = document.querySelector('#userRoleBadge');
 
   if (currentUser) {
-    if (loginBtn) loginBtn.hidden = true;
     if (userProfile) userProfile.hidden = false;
     if (userName) userName.textContent = currentUser.username;
     if (userRoleBadge) {
@@ -333,7 +331,6 @@ function updateAuthUI() {
       userRoleBadge.className = `user-role-badge role-${currentUser.role}`;
     }
   } else {
-    if (loginBtn) loginBtn.hidden = false;
     if (userProfile) userProfile.hidden = true;
   }
 }
@@ -343,7 +340,8 @@ async function checkAuth() {
   if (!token) {
     currentUser = null;
     updateAuthUI();
-    return;
+    window.location.replace('/login');
+    return false;
   }
 
   try {
@@ -354,104 +352,34 @@ async function checkAuth() {
     if (res.ok) {
       const raw = await res.json();
       currentUser = raw.data?.user || raw.user;
+      updateAuthUI();
+      return true;
     } else {
       clearAuthToken();
+      window.location.replace('/login');
+      return false;
     }
-  } catch (_) {
-    // Falha silenciosa de rede
+  } catch (err) {
+    console.warn('Erro ao validar sessão:', err);
+    clearAuthToken();
+    window.location.replace('/login');
+    return false;
   }
-  updateAuthUI();
 }
 
-// ─── Modal de Login ─────────────────────────────────────────────────────────
-const loginModal = document.querySelector('#loginModal');
-const loginForm = document.querySelector('#loginForm');
-const loginError = document.querySelector('#loginError');
-const loginSuccess = document.querySelector('#loginSuccess');
-let pendingUploadAction = false;
-
-function openLoginModal(forUpload = false) {
-  pendingUploadAction = forUpload;
-  loginError.hidden = true;
-  loginSuccess.hidden = true;
-  loginForm.reset();
-  loginModal.hidden = false;
-  document.querySelector('#loginUsername').focus();
-}
-
-function closeLoginModal() {
-  loginModal.hidden = true;
-  pendingUploadAction = false;
-}
-
-loginForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const username = document.querySelector('#loginUsername').value.trim();
-  const password = document.querySelector('#loginPassword').value;
-
-  if (!username || !password) {
-    loginError.textContent = 'Informe usuário e senha.';
-    loginError.hidden = false;
-    return;
-  }
-
-  loginError.hidden = true;
-  loginSuccess.hidden = true;
-  const submitBtn = document.querySelector('#submitLogin');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Entrando…';
-
-  try {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    const raw = await res.json();
-    const data = raw.data || raw;
-
-    if (!res.ok) {
-      loginError.textContent = data.message || data.error || 'Credenciais inválidas.';
-      loginError.hidden = false;
-      return;
-    }
-
-    setAuthToken(data.token);
-    currentUser = data.user;
-    updateAuthUI();
-
-    loginSuccess.textContent = `✓ Bem-vindo, ${currentUser.username}!`;
-    loginSuccess.hidden = false;
-
-    setTimeout(() => {
-      closeLoginModal();
-      if (pendingUploadAction && currentUser.role === 'admin') {
-        openModal();
-      }
-    }, 900);
-  } catch (_) {
-    loginError.textContent = 'Erro ao conectar ao servidor.';
-    loginError.hidden = false;
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Entrar';
-  }
-});
-
-document.querySelector('#loginBtn')?.addEventListener('click', () => openLoginModal(false));
-document.querySelector('#closeLoginModal')?.addEventListener('click', closeLoginModal);
-document.querySelector('#cancelLogin')?.addEventListener('click', closeLoginModal);
-loginModal?.addEventListener('click', (e) => { if (e.target === loginModal) closeLoginModal(); });
-
+// ─── Logout ─────────────────────────────────────────────────────────────────
 document.querySelector('#logoutBtn')?.addEventListener('click', async () => {
   const token = getAuthToken();
   if (token) {
-    fetch('/api/auth/logout', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    }).catch(() => {});
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    } catch (_) {}
   }
   clearAuthToken();
+  window.location.replace('/login');
 });
 
 // ─── Upload de Arquivos (Protegido para Admin) ──────────────────────────────
@@ -461,7 +389,7 @@ async function doUpload() {
   const token = getAuthToken();
   if (!token) {
     closeModal();
-    openLoginModal(true);
+    window.location.replace('/login');
     return;
   }
 
@@ -519,7 +447,7 @@ async function doUpload() {
 // Eventos do modal de upload
 document.querySelector('#addQuizBtn').addEventListener('click', () => {
   if (!currentUser) {
-    openLoginModal(true);
+    window.location.replace('/login');
   } else if (currentUser.role !== 'admin') {
     alert('Apenas administradores podem adicionar novos simulados.');
   } else {
@@ -537,7 +465,6 @@ uploadModal.addEventListener('click', (e) => { if (e.target === uploadModal) clo
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!uploadModal.hidden) closeModal();
-    if (!loginModal.hidden) closeLoginModal();
   }
 });
 
@@ -572,7 +499,8 @@ fileInput.addEventListener('change', () => {
 resetTimer();
 
 async function init() {
-  await checkAuth();
+  const isAuthed = await checkAuth();
+  if (!isAuthed) return;
   try {
     await loadQuiz();
     await loadQuizList();
