@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cadastrar — Quiz Study</title>
+  <title id="pageTitle">Cadastrar — Quiz Study</title>
   <meta name="description" content="Crie sua conta no Quiz Study para realizar simulados interativos e acompanhar seu desempenho.">
   <link rel="stylesheet" href="/web/styles.css?v=2">
 </head>
@@ -11,18 +11,38 @@
   <div class="login-wrapper">
     <div class="login-card">
       <header class="login-header">
-        <p class="eyebrow">Quiz Study · crie sua conta</p>
-        <h1 class="login-title">Cadastro de<br><em>Estudante</em></h1>
-        <p class="login-subtitle">Crie seu perfil gratuitamente para responder simulados e acompanhar seu progresso.</p>
+        <p class="eyebrow" id="headerEyebrow">Quiz Study · crie sua conta</p>
+        <h1 class="login-title" id="headerTitle">Cadastro de<br><em>Estudante</em></h1>
+        <p class="login-subtitle" id="headerSubtitle">Crie seu perfil gratuitamente para responder simulados e acompanhar seu progresso.</p>
       </header>
 
       <!-- Alternador de Telas: Login / Cadastro -->
       <nav class="login-tabs" aria-label="Navegação entre login e cadastro">
-        <a href="/login" class="tab-btn">Entrar</a>
-        <a href="/register" class="tab-btn active" aria-current="page">Cadastrar</a>
+        <a href="/login" id="tabLogin" class="tab-btn">Entrar</a>
+        <a href="/register" id="tabRegister" class="tab-btn active" aria-current="page">Cadastrar</a>
       </nav>
 
-      <!-- Formulário de Cadastro -->
+      <!-- Formulário de Login (Oculto inicialmente na rota /register) -->
+      <form id="pageLoginForm" class="auth-form-card" hidden novalidate>
+        <div class="form-group">
+          <label for="loginUsername">Usuário</label>
+          <input type="text" id="loginUsername" name="username" placeholder="Digite seu usuário" required autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label for="loginPassword">Senha</label>
+          <input type="password" id="loginPassword" name="password" placeholder="Digite sua senha" required autocomplete="current-password">
+        </div>
+
+        <div id="loginFeedback" class="form-feedback" hidden></div>
+
+        <button id="btnLoginSubmit" class="primary auth-submit-btn" type="submit">
+          <span>Acessar Simulados</span>
+          <span class="btn-arrow">→</span>
+        </button>
+      </form>
+
+      <!-- Formulário de Cadastro (Ativo inicialmente na rota /register) -->
       <form id="pageRegisterForm" class="auth-form-card" novalidate>
         <div class="form-group">
           <label for="regUsername">Usuário</label>
@@ -48,8 +68,8 @@
       </form>
 
       <footer class="login-footer">
-        <p class="login-footer-hint">
-          Já possui uma conta? <a href="/login" class="auth-link">Entre aqui</a>
+        <p class="login-footer-hint" id="footerHint">
+          Já possui uma conta? <a href="/login" id="linkToggle" class="auth-link">Entre aqui</a>
         </p>
       </footer>
     </div>
@@ -76,43 +96,176 @@
       });
     }
 
-    // ─── Submissão do Formulário de Cadastro ──────────────────────────────
-    const registerForm = document.getElementById('pageRegisterForm');
+    // ─── Transição Instantânea sem Reload (SPA Navigation) ───────────────
+    const pageTitle = document.getElementById('pageTitle');
+    const headerEyebrow = document.getElementById('headerEyebrow');
+    const headerTitle = document.getElementById('headerTitle');
+    const headerSubtitle = document.getElementById('headerSubtitle');
+    const tabLogin = document.getElementById('tabLogin');
+    const tabRegister = document.getElementById('tabRegister');
+    const pageLoginForm = document.getElementById('pageLoginForm');
+    const pageRegisterForm = document.getElementById('pageRegisterForm');
+    const footerHint = document.getElementById('footerHint');
+    const loginFeedback = document.getElementById('loginFeedback');
     const registerFeedback = document.getElementById('registerFeedback');
-    const submitBtn = document.getElementById('btnRegisterSubmit');
+    const submitLoginBtn = document.getElementById('btnLoginSubmit');
+    const submitRegisterBtn = document.getElementById('btnRegisterSubmit');
 
-    function showFeedback(message, isSuccess = false) {
-      registerFeedback.textContent = message;
-      registerFeedback.className = `form-feedback ${isSuccess ? 'feedback-success' : 'feedback-error'}`;
-      registerFeedback.hidden = false;
-    }
-
-    function clearFeedback() {
+    function setMode(mode, pushState = true) {
+      loginFeedback.hidden = true;
+      loginFeedback.textContent = '';
       registerFeedback.hidden = true;
       registerFeedback.textContent = '';
+
+      if (mode === 'register') {
+        pageTitle.textContent = 'Cadastrar — Quiz Study';
+        headerEyebrow.textContent = 'Quiz Study · crie sua conta';
+        headerTitle.innerHTML = 'Cadastro de<br><em>Estudante</em>';
+        headerSubtitle.textContent = 'Crie seu perfil gratuitamente para responder simulados e acompanhar seu progresso.';
+        tabRegister.classList.add('active');
+        tabRegister.setAttribute('aria-current', 'page');
+        tabLogin.classList.remove('active');
+        tabLogin.removeAttribute('aria-current');
+        pageLoginForm.hidden = true;
+        pageRegisterForm.hidden = false;
+        footerHint.innerHTML = 'Já possui uma conta? <a href="/login" id="linkToggle" class="auth-link">Entre aqui</a>';
+        if (pushState && window.location.pathname !== '/register') {
+          history.pushState({ mode: 'register' }, '', '/register');
+        }
+        document.getElementById('regUsername')?.focus();
+      } else {
+        pageTitle.textContent = 'Entrar — Quiz Study';
+        headerEyebrow.textContent = 'Quiz Study · acesso à plataforma';
+        headerTitle.innerHTML = 'Boas-vindas ao<br><em>Quiz Study</em>';
+        headerSubtitle.textContent = 'Entre com sua conta para acessar os simulados e acompanhar seu desempenho.';
+        tabLogin.classList.add('active');
+        tabLogin.setAttribute('aria-current', 'page');
+        tabRegister.classList.remove('active');
+        tabRegister.removeAttribute('aria-current');
+        pageRegisterForm.hidden = true;
+        pageLoginForm.hidden = false;
+        footerHint.innerHTML = 'Não possui uma conta? <a href="/register" id="linkToggle" class="auth-link">Cadastre-se aqui</a>';
+        if (pushState && window.location.pathname !== '/login') {
+          history.pushState({ mode: 'login' }, '', '/login');
+        }
+        document.getElementById('loginUsername')?.focus();
+      }
     }
 
-    registerForm.addEventListener('submit', async (e) => {
+    // Navegação pelas abas sem recarregar a página (0ms de atraso, sem reload)
+    tabLogin.addEventListener('click', (e) => {
       e.preventDefault();
-      clearFeedback();
+      setMode('login');
+    });
+
+    tabRegister.addEventListener('click', (e) => {
+      e.preventDefault();
+      setMode('register');
+    });
+
+    // Delegação de evento no rodapé para alternar modo sem recarregar a página
+    footerHint.addEventListener('click', (e) => {
+      const link = e.target.closest('a');
+      if (link) {
+        e.preventDefault();
+        const currentMode = pageRegisterForm.hidden ? 'login' : 'register';
+        setMode(currentMode === 'login' ? 'register' : 'login');
+      }
+    });
+
+    // Suporte aos botões voltar/avançar do navegador
+    window.addEventListener('popstate', () => {
+      const isRegister = window.location.pathname === '/register';
+      setMode(isRegister ? 'register' : 'login', false);
+    });
+
+    // ─── Submissão do Formulário de Login ─────────────────────────────────
+    pageLoginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      loginFeedback.hidden = true;
+      loginFeedback.textContent = '';
+
+      const username = document.getElementById('loginUsername').value.trim();
+      const password = document.getElementById('loginPassword').value;
+
+      if (!username || !password) {
+        loginFeedback.textContent = 'Por favor, preencha o usuário e a senha.';
+        loginFeedback.className = 'form-feedback feedback-error';
+        loginFeedback.hidden = false;
+        return;
+      }
+
+      submitLoginBtn.disabled = true;
+      submitLoginBtn.classList.add('btn-loading');
+      submitLoginBtn.querySelector('span').textContent = 'Validando credenciais…';
+
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const rawData = await response.json();
+        const data = rawData.data || rawData;
+
+        if (!response.ok) {
+          loginFeedback.textContent = data.message || data.error || 'Usuário ou senha incorretos.';
+          loginFeedback.className = 'form-feedback feedback-error';
+          loginFeedback.hidden = false;
+          return;
+        }
+
+        if (data.token) {
+          localStorage.setItem('ifuture_token', data.token);
+        }
+
+        loginFeedback.textContent = '✓ Acesso liberado! Redirecionando…';
+        loginFeedback.className = 'form-feedback feedback-success';
+        loginFeedback.hidden = false;
+
+        setTimeout(() => {
+          window.location.replace('/');
+        }, 500);
+
+      } catch (err) {
+        loginFeedback.textContent = 'Não foi possível conectar ao servidor. Verifique a conexão.';
+        loginFeedback.className = 'form-feedback feedback-error';
+        loginFeedback.hidden = false;
+      } finally {
+        submitLoginBtn.disabled = false;
+        submitLoginBtn.classList.remove('btn-loading');
+        submitLoginBtn.querySelector('span').textContent = 'Acessar Simulados';
+      }
+    });
+
+    // ─── Submissão do Formulário de Cadastro ──────────────────────────────
+    pageRegisterForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      registerFeedback.hidden = true;
+      registerFeedback.textContent = '';
 
       const username = document.getElementById('regUsername').value.trim();
       const email = document.getElementById('regEmail').value.trim();
       const password = document.getElementById('regPassword').value;
 
       if (!username || !email || !password) {
-        showFeedback('Por favor, preencha todos os campos.');
+        registerFeedback.textContent = 'Por favor, preencha todos os campos.';
+        registerFeedback.className = 'form-feedback feedback-error';
+        registerFeedback.hidden = false;
         return;
       }
 
       if (password.length < 6) {
-        showFeedback('A senha deve ter no mínimo 6 caracteres.');
+        registerFeedback.textContent = 'A senha deve ter no mínimo 6 caracteres.';
+        registerFeedback.className = 'form-feedback feedback-error';
+        registerFeedback.hidden = false;
         return;
       }
 
-      submitBtn.disabled = true;
-      submitBtn.classList.add('btn-loading');
-      submitBtn.querySelector('span').textContent = 'Criando cadastro…';
+      submitRegisterBtn.disabled = true;
+      submitRegisterBtn.classList.add('btn-loading');
+      submitRegisterBtn.querySelector('span').textContent = 'Criando cadastro…';
 
       try {
         const response = await fetch('/api/auth/register', {
@@ -125,12 +278,15 @@
         const data = rawData.data || rawData;
 
         if (!response.ok) {
-          showFeedback(data.message || data.error || 'Erro ao criar conta.');
+          registerFeedback.textContent = data.message || data.error || 'Erro ao criar conta.';
+          registerFeedback.className = 'form-feedback feedback-error';
+          registerFeedback.hidden = false;
           return;
         }
 
-        // Tenta autenticar automaticamente com a nova conta
-        showFeedback('✓ Conta criada! Conectando…', true);
+        registerFeedback.textContent = '✓ Conta criada! Conectando…';
+        registerFeedback.className = 'form-feedback feedback-success';
+        registerFeedback.hidden = false;
 
         try {
           const loginRes = await fetch('/api/auth/login', {
@@ -151,20 +307,26 @@
           }
         } catch (_) {}
 
-        // Fallback: redireciona para a página de login
-        showFeedback('✓ Conta criada com sucesso! Redirecionando para login…', true);
-        setTimeout(() => {
-          window.location.replace('/login');
-        }, 800);
+        setMode('login');
+        loginFeedback.textContent = '✓ Conta criada com sucesso! Faça login para continuar.';
+        loginFeedback.className = 'form-feedback feedback-success';
+        loginFeedback.hidden = false;
 
       } catch (err) {
-        showFeedback('Não foi possível conectar ao servidor. Verifique a conexão.');
+        registerFeedback.textContent = 'Não foi possível conectar ao servidor. Verifique a conexão.';
+        registerFeedback.className = 'form-feedback feedback-error';
+        registerFeedback.hidden = false;
       } finally {
-        submitBtn.disabled = false;
-        submitBtn.classList.remove('btn-loading');
-        submitBtn.querySelector('span').textContent = 'Criar Conta';
+        submitRegisterBtn.disabled = false;
+        submitRegisterBtn.classList.remove('btn-loading');
+        submitRegisterBtn.querySelector('span').textContent = 'Criar Conta';
       }
     });
+
+    // Inicializa baseado na rota atual da URL se for /login
+    if (window.location.pathname === '/login') {
+      setMode('login', false);
+    }
   </script>
 </body>
 </html>

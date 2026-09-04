@@ -580,10 +580,27 @@ button {
   border-bottom-color: var(--coral);
 }
 
+@keyframes authFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .auth-form-card {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  animation: authFadeIn 0.18s ease-out;
+}
+
+[hidden],
+.auth-form-card[hidden] {
+  display: none !important;
 }
 
 .form-feedback {
