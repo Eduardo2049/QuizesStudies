@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS quizzes (
     file_type        VARCHAR(10) DEFAULT 'txt',  -- 'txt', 'pdf', 'docx', 'md'
     has_answer_key   BOOLEAN DEFAULT TRUE,
     ai_generated     BOOLEAN DEFAULT FALSE,       -- gabarito foi gerado por IA?
+    created_by       INTEGER,
+    is_public        BOOLEAN NOT NULL DEFAULT FALSE,
     created_at       TIMESTAMP DEFAULT NOW()
 );
 
@@ -53,6 +55,9 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+
+ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT TRUE;
 """
 
 

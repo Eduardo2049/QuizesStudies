@@ -42,15 +42,17 @@ def _allow_auth_request(handler, limit: int = AUTH_RATE_LIMIT) -> bool:
         return True
 
 
-def _parse_multipart(body: bytes, boundary: str) -> tuple[str | None, bytes | None]:
+def _parse_multipart(body: bytes, boundary: str) -> tuple[str | None, bytes | None, dict[str, str]]:
     """
     Parser manual de multipart/form-data.
     Compatível com Python 3.13+ (módulo cgi foi removido).
 
-    Procura pelo campo 'file' e retorna (filename, content).
-    Retorna (None, None) se o campo não for encontrado.
+    Procura pelo campo 'file' e retorna (filename, content, fields).
     """
     boundary_bytes = boundary.encode()
+    fields = {}
+    filename = None
+    file_content = None
 
     # Dividir body nos delimitadores de boundary
     parts = body.split(b"--" + boundary_bytes)
@@ -59,14 +61,18 @@ def _parse_multipart(body: bytes, boundary: str) -> tuple[str | None, bytes | No
         if b"\r\n\r\n" not in part:
             continue
 
-        headers_raw, _, file_content = part.partition(b"\r\n\r\n")
+        headers_raw, _, part_content = part.partition(b"\r\n\r\n")
         headers_text = headers_raw.decode("utf-8", errors="replace")
 
-        # Verificar se é o campo 'file'
-        if 'name="file"' not in headers_text:
+        field_match = re.search(r'name="([^"]+)"', headers_text)
+        if not field_match:
+            continue
+        field_name = field_match.group(1)
+
+        if field_name != "file":
+            fields[field_name] = part_content.rstrip(b"\r\n").decode("utf-8", errors="replace")
             continue
 
-        # Extrair filename do Content-Disposition
         filename_match = re.search(r'filename="([^"]+)"', headers_text)
         if not filename_match:
             continue
@@ -74,12 +80,11 @@ def _parse_multipart(body: bytes, boundary: str) -> tuple[str | None, bytes | No
         filename = filename_match.group(1).strip()
 
         # Remover o \r\n final que o multipart adiciona
-        if file_content.endswith(b"\r\n"):
-            file_content = file_content[:-2]
+        if part_content.endswith(b"\r\n"):
+            part_content = part_content[:-2]
+        file_content = part_content
 
-        return filename, file_content
-
-    return None, None
+    return filename, file_content, fields
 
 
 _migrations_initialized = False
@@ -158,15 +163,17 @@ class QuizHandler(BaseHTTPRequestHandler):
 
             # 1. API: Listar quizzes
             if request.path == "/api/quizzes":
-                response = self.quiz_controller.get_quizzes()
+                user = self._require_authenticated_user()
+                response = self.quiz_controller.get_quizzes(user["id"])
                 status, data = ResponseFormatter.success(response["data"])
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
             # 2. API: Carregar um quiz
             if request.path == "/api/quiz":
+                user = self._require_authenticated_user()
                 source_name = query.get("source", [None])[0]
-                response = self.quiz_controller.get_quiz(source_name)
+                response = self.quiz_controller.get_quiz(source_name, user["id"])
                 status, data = ResponseFormatter.success(response["data"])
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
@@ -356,11 +363,7 @@ class QuizHandler(BaseHTTPRequestHandler):
 
             # ── 2. Submissão de respostas (application/json) ──────────────────
             if request.path == "/api/quiz/submit":
-                token = HTTPMiddleware.get_auth_token(self)
-                if not token or not self.auth_controller.service.validate_token(token):
-                    status, data = ResponseFormatter.unauthorized("Autenticação necessária para enviar respostas")
-                    HTTPMiddleware.send_json_response(self, status, data)
-                    return
+                user = self._require_authenticated_user()
                 if not _allow_auth_request(self, limit=30):
                     status, data = ResponseFormatter.error(
                         "Muitas submissões. Tente novamente mais tarde.",
@@ -392,7 +395,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                     HTTPMiddleware.send_json_response(self, status, data)
                     return
 
-                response = self.quiz_controller.submit_answers(payload)
+                response = self.quiz_controller.submit_answers(payload, user["id"])
                 status, data = ResponseFormatter.success(response["data"])
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
@@ -415,23 +418,7 @@ class QuizHandler(BaseHTTPRequestHandler):
 
     def _handle_upload(self):
         """Processa upload multipart/form-data de arquivo TXT/PDF/DOCX."""
-        # 0. Validação de Autenticação (Apenas Admin)
-        token = HTTPMiddleware.get_auth_token(self)
-        if not token:
-            status, data = ResponseFormatter.unauthorized("Autenticação necessária para enviar simulados")
-            HTTPMiddleware.send_json_response(self, status, data)
-            return
-
-        user = self.auth_controller.service.validate_token(token)
-        if not user:
-            status, data = ResponseFormatter.unauthorized("Sessão expirada ou inválida. Faça login novamente")
-            HTTPMiddleware.send_json_response(self, status, data)
-            return
-
-        if user.get("role") != "admin":
-            status, data = ResponseFormatter.forbidden("Apenas administradores podem fazer upload de novos simulados")
-            HTTPMiddleware.send_json_response(self, status, data)
-            return
+        user = self._require_authenticated_user()
 
         content_type = self.headers.get("Content-Type", "")
         content_length = int(self.headers.get("Content-Length", 0))
@@ -459,7 +446,7 @@ class QuizHandler(BaseHTTPRequestHandler):
             HTTPMiddleware.send_json_response(self, status, data)
             return
 
-        filename, file_content = _parse_multipart(body, boundary_match.group(1))
+        filename, file_content, fields = _parse_multipart(body, boundary_match.group(1))
 
         if filename is None or file_content is None:
             status, data = ResponseFormatter.bad_request("Campo 'file' não encontrado no formulário")
@@ -481,12 +468,23 @@ class QuizHandler(BaseHTTPRequestHandler):
             return
 
         # Delegar ao controller
-        response = self.upload_controller.upload_file(filename, file_content, ext)
+        requested_public = fields.get("is_public", "false").lower() == "true"
+        is_public = requested_public and user.get("role") == "admin"
+        response = self.upload_controller.upload_file(
+            filename, file_content, ext, user["id"], is_public
+        )
         status, data = ResponseFormatter.created(
             response["data"],
             response["data"].get("message")
         )
         HTTPMiddleware.send_json_response(self, status, data)
+
+    def _require_authenticated_user(self):
+        token = HTTPMiddleware.get_auth_token(self)
+        user = self.auth_controller.service.validate_token(token)
+        if not user:
+            raise QuizAPIException("Autenticação necessária", 401)
+        return user
 
     def log_message(self, format, *args):
         """Custom logging para modo debug"""

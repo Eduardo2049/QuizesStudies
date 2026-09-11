@@ -14,14 +14,14 @@ class QuizService:
     def __init__(self, repository: QuizRepository = None):
         self.repository = repository or QuizRepository()
 
-    def get_all_quizzes(self) -> list[dict]:
+    def get_all_quizzes(self, user_id: int) -> list[dict]:
         """
         Retorna lista de todos os quizzes disponíveis.
 
         Returns:
             list[dict]: [{name, label, file_type, ai_generated}]
         """
-        sources = self.repository.find_all_sources()
+        sources = self.repository.find_all_sources(user_id)
         return [
             {
                 "name": row["name"],
@@ -32,7 +32,7 @@ class QuizService:
             for row in sources
         ]
 
-    def get_quiz(self, source_name: str = None) -> QuizDTO:
+    def get_quiz(self, source_name: str = None, user_id: int = None) -> QuizDTO:
         """
         Carrega um quiz com suas questões (sem respostas expostas ao cliente).
 
@@ -46,9 +46,9 @@ class QuizService:
             QuizNotFound: Se quiz não encontrado
         """
         if source_name:
-            quiz_row = self.repository.find_by_name(source_name)
+            quiz_row = self.repository.find_by_name(source_name, user_id)
         else:
-            quiz_row = self.repository.find_default()
+            quiz_row = self.repository.find_default(user_id)
 
         questions_data = self.repository.find_questions(quiz_row["id"])
 
@@ -69,7 +69,12 @@ class QuizService:
             questions=question_dtos,
         )
 
-    def submit_answers(self, answers: dict, source_name: str = None) -> GradeResultDTO:
+    def submit_answers(
+        self,
+        answers: dict,
+        source_name: str = None,
+        user_id: int = None,
+    ) -> GradeResultDTO:
         """
         Corrige respostas e retorna score detalhado.
 
@@ -81,9 +86,9 @@ class QuizService:
             GradeResultDTO com score, total, percentage e results
         """
         if source_name:
-            quiz_row = self.repository.find_by_name(source_name)
+            quiz_row = self.repository.find_by_name(source_name, user_id)
         else:
-            quiz_row = self.repository.find_default()
+            quiz_row = self.repository.find_default(user_id)
 
         questions_data = self.repository.find_questions(quiz_row["id"])
 

@@ -12,7 +12,7 @@ class QuizRepository:
 
     # ─── Leitura ──────────────────────────────────────────────────────────────
 
-    def find_all_sources(self) -> list[dict]:
+    def find_all_sources(self, user_id: int) -> list[dict]:
         """
         Lista todos os quizzes cadastrados.
 
@@ -21,13 +21,15 @@ class QuizRepository:
         """
         with get_cursor() as cur:
             cur.execute("""
-                SELECT id, name, label, file_type, ai_generated, created_at
+                SELECT id, name, label, file_type, ai_generated, created_at,
+                       created_by, is_public
                 FROM quizzes
+                WHERE is_public = TRUE OR created_by = %s
                 ORDER BY created_at ASC
-            """)
+            """, (user_id,))
             return [dict(row) for row in cur.fetchall()]
 
-    def find_by_name(self, name: str) -> dict:
+    def find_by_name(self, name: str, user_id: int = None) -> dict:
         """
         Encontra um quiz pelo campo `name`.
 
@@ -35,13 +37,16 @@ class QuizRepository:
             QuizNotFound: Se não existir
         """
         with get_cursor() as cur:
-            cur.execute("SELECT * FROM quizzes WHERE name = %s", (name,))
+            cur.execute("""
+                SELECT * FROM quizzes
+                WHERE name = %s AND (is_public = TRUE OR created_by = %s)
+            """, (name, user_id))
             row = cur.fetchone()
         if not row:
             raise QuizNotFound(name)
         return dict(row)
 
-    def find_default(self) -> dict:
+    def find_default(self, user_id: int) -> dict:
         """
         Retorna o primeiro quiz cadastrado (mais antigo).
 
@@ -49,7 +54,11 @@ class QuizRepository:
             QuizNotFound: Se não houver nenhum quiz
         """
         with get_cursor() as cur:
-            cur.execute("SELECT * FROM quizzes ORDER BY created_at ASC LIMIT 1")
+            cur.execute("""
+                SELECT * FROM quizzes
+                WHERE is_public = TRUE OR created_by = %s
+                ORDER BY created_at ASC LIMIT 1
+            """, (user_id,))
             row = cur.fetchone()
         if not row:
             raise QuizNotFound("Nenhum quiz cadastrado")
@@ -98,6 +107,8 @@ class QuizRepository:
         original_filename: str = None,
         file_type: str = "txt",
         ai_generated: bool = False,
+        created_by: int = None,
+        is_public: bool = False,
     ) -> dict:
         """
         Persiste um quiz e suas questões no banco.
@@ -117,15 +128,18 @@ class QuizRepository:
         with get_cursor() as cur:
             # Inserir ou atualizar quiz
             cur.execute("""
-                INSERT INTO quizzes (name, label, original_filename, file_type, ai_generated)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO quizzes
+                    (name, label, original_filename, file_type, ai_generated, created_by, is_public)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (name) DO UPDATE SET
                     label = EXCLUDED.label,
                     original_filename = EXCLUDED.original_filename,
                     file_type = EXCLUDED.file_type,
-                    ai_generated = EXCLUDED.ai_generated
-                RETURNING id, name, label, file_type, ai_generated, created_at
-            """, (name, label, original_filename, file_type, ai_generated))
+                    ai_generated = EXCLUDED.ai_generated,
+                    created_by = EXCLUDED.created_by,
+                    is_public = EXCLUDED.is_public
+                RETURNING id, name, label, file_type, ai_generated, created_at, created_by, is_public
+            """, (name, label, original_filename, file_type, ai_generated, created_by, is_public))
             quiz = dict(cur.fetchone())
             quiz_id = quiz["id"]
 

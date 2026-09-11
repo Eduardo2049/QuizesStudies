@@ -43,6 +43,8 @@ class UploadService:
         filename: str,
         content: bytes,
         file_type: str,
+        created_by: int,
+        is_public: bool,
     ) -> dict:
         """
         Processa upload de arquivo e cria quiz no banco.
@@ -136,6 +138,8 @@ class UploadService:
             original_filename=filename,
             file_type=file_type.lstrip("."),
             ai_generated=ai_generated,
+            created_by=created_by,
+            is_public=is_public,
         )
 
         return {

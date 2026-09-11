@@ -368,7 +368,7 @@ document.querySelector('#logoutBtn')?.addEventListener('click', async () => {
   window.location.replace('/login');
 });
 
-// ─── Upload de Arquivos (Protegido para Admin) ──────────────────────────────
+// ─── Upload de Arquivos (Protegido para usuários autenticados) ─────────────
 async function doUpload() {
   if (!selectedFile) return;
 
@@ -380,6 +380,7 @@ async function doUpload() {
 
   const formData = new FormData();
   formData.append('file', selectedFile, selectedFile.name);
+  formData.append('is_public', document.querySelector('#isPublicQuiz')?.checked ? 'true' : 'false');
 
   try {
     uploadStatusText.textContent = 'Processando… (pode levar alguns segundos se usar IA)';
@@ -392,7 +393,7 @@ async function doUpload() {
 
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
-        showUploadError(data.message || 'Apenas administradores podem fazer upload.');
+        showUploadError(data.message || 'Faça login para enviar um quiz.');
       } else {
         showUploadError(data.message || data.error || 'Erro ao processar o arquivo.');
       }
@@ -426,8 +427,6 @@ async function doUpload() {
 document.querySelector('#addQuizBtn').addEventListener('click', () => {
   if (!currentUser) {
     window.location.replace('/login');
-  } else if (currentUser.role !== 'admin') {
-    alert('Apenas administradores podem adicionar novos simulados.');
   } else {
     openModal();
   }

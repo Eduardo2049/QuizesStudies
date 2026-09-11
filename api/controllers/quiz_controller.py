@@ -21,9 +21,9 @@ class QuizController:
 
     @timing_decorator
     @error_handler_decorator
-    def get_quizzes(self) -> dict:
+    def get_quizzes(self, user_id: int) -> dict:
         """GET /api/quizzes - Lista todos os quizzes disponíveis"""
-        quizzes = self.service.get_all_quizzes()
+        quizzes = self.service.get_all_quizzes(user_id)
         return {
             "status": "success",
             "data": {"quizzes": quizzes}
@@ -31,9 +31,9 @@ class QuizController:
 
     @timing_decorator
     @error_handler_decorator
-    def get_quiz(self, source_name: str = None) -> dict:
+    def get_quiz(self, source_name: str = None, user_id: int = None) -> dict:
         """GET /api/quiz - Carrega um quiz com questões públicas"""
-        quiz_dto = self.service.get_quiz(source_name)
+        quiz_dto = self.service.get_quiz(source_name, user_id)
         return {
             "status": "success",
             "data": {
@@ -54,7 +54,7 @@ class QuizController:
 
     @timing_decorator
     @error_handler_decorator
-    def submit_answers(self, payload: dict) -> dict:
+    def submit_answers(self, payload: dict, user_id: int = None) -> dict:
         """POST /api/quiz/submit - Corrige respostas e calcula score"""
         if not isinstance(payload, dict) or "answers" not in payload:
             raise InvalidAnswersFormat()
@@ -64,7 +64,7 @@ class QuizController:
             raise InvalidAnswersFormat()
 
         source_name = payload.get("source")
-        result_dto = self.service.submit_answers(answers, source_name)
+        result_dto = self.service.submit_answers(answers, source_name, user_id)
 
         return {
             "status": "success",
@@ -85,9 +85,11 @@ class UploadController:
 
     @timing_decorator
     @error_handler_decorator
-    def upload_file(self, filename: str, content: bytes, file_type: str) -> dict:
+    def upload_file(self, filename: str, content: bytes, file_type: str, created_by: int, is_public: bool) -> dict:
         """POST /api/upload - Processa arquivo e cria quiz no banco"""
-        result = self.upload_service.process_upload(filename, content, file_type)
+        result = self.upload_service.process_upload(
+            filename, content, file_type, created_by, is_public
+        )
         return {
             "status": "success",
             "data": result,
