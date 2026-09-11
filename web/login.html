@@ -81,7 +81,7 @@
 
   <script>
     // ─── Verificação da sessão HttpOnly ──────────────────────────────────
-    fetch('/api/auth/me', { cache: 'no-store' })
+    fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' })
       .then(res => { if (res.ok) window.location.replace('/'); })
       .catch(() => {});
 
@@ -191,6 +191,7 @@
         const response = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
           body: JSON.stringify({ username, password })
         });
 
@@ -279,6 +280,7 @@
           const loginRes = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ username, password })
           });
 

@@ -114,11 +114,11 @@ class QuizHandler(BaseHTTPRequestHandler):
     def _get_request_url(self):
         """Obtém o path da requisição, compatível com rewrites e proxies da Vercel."""
         raw_path = (
-            self.headers.get("x-invoke-path")
-            or self.headers.get("x-forwarded-uri")
+            self.headers.get("x-forwarded-uri")
             or self.headers.get("x-matched-path")
             or self.headers.get("x-original-url")
             or self.headers.get("x-rewrite-url")
+            or self.headers.get("x-invoke-path")
             or self.path
         )
         if raw_path in ("/api/index.py", "/api/index", "/api/index.py/", "/api/"):

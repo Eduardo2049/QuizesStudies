@@ -339,7 +339,8 @@ function updateAuthUI() {
 async function checkAuth() {
   try {
     const res = await fetch('/api/auth/me', {
-      cache: 'no-store'
+      cache: 'no-store',
+      credentials: 'same-origin'
     });
     if (res.ok) {
       const raw = await res.json();
