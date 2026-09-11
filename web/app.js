@@ -16,6 +16,18 @@ let loadController;
 let remainingSeconds = timerDuration;
 let timerInterval;
 
+function isGuestMode() {
+  return localStorage.getItem('quiz_guest_mode') === 'true';
+}
+
+function getGuestQuiz() {
+  try {
+    return JSON.parse(localStorage.getItem('quiz_guest_data') || 'null');
+  } catch (_) {
+    return null;
+  }
+}
+
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (character) => ({
     '&': '&amp;',
@@ -56,6 +68,18 @@ function startTimer() {
 
 // ─── Carregamento de Quiz ─────────────────────────────────────────────────────
 async function loadQuiz(source = selectedSource) {
+  if (isGuestMode()) {
+    const localQuiz = getGuestQuiz();
+    if (!localQuiz) {
+      quiz.innerHTML = '<p class="empty-state">Envie um quiz para começar.</p>';
+      return;
+    }
+    selectedSource = localQuiz.name;
+    questions = localQuiz.questions || [];
+    renderQuestions();
+    return;
+  }
+
   const requestId = ++loadRequestId;
   loadController?.abort();
   loadController = new AbortController();
@@ -76,6 +100,10 @@ async function loadQuiz(source = selectedSource) {
     return;
   }
 
+  renderQuestions();
+}
+
+function renderQuestions() {
   quiz.innerHTML = questions.map((item, index) => `
     <article class="question">
       <p class="section">${escapeHtml(item.section)}</p>
@@ -98,6 +126,14 @@ async function loadQuiz(source = selectedSource) {
 }
 
 async function loadQuizList() {
+  if (isGuestMode()) {
+    const localQuiz = getGuestQuiz();
+    quizSelector.innerHTML = localQuiz
+      ? `<option value="${escapeHtml(localQuiz.name)}">${escapeHtml(localQuiz.label)} (local)</option>`
+      : '<option value="">— Nenhum quiz local —</option>';
+    return;
+  }
+
   const response = await fetch('/api/quizzes', { cache: 'no-store' });
   const rawData = await response.json();
   const data = rawData.data || rawData;
@@ -155,22 +191,43 @@ async function handleSubmitQuiz(event) {
   }
 
   try {
-    const token = getAuthToken();
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    let data;
+    if (isGuestMode()) {
+      const results = questions.map((item) => {
+        const selected = answers[String(item.id)];
+        return {
+          id: item.id,
+          selected: Number.isFinite(selected) ? selected : null,
+          correct: item.answer,
+          isCorrect: selected === item.answer,
+          explanation: item.explanation || '',
+        };
+      });
+      const score = results.filter((item) => item.isCorrect).length;
+      data = {
+        score,
+        total: results.length,
+        percentage: results.length ? Math.round(score / results.length * 100) : 0,
+        results,
+      };
+    } else {
+      const token = getAuthToken();
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const response = await fetch('/api/quiz/submit', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ source: selectedSource, answers }),
-    });
+      const response = await fetch('/api/quiz/submit', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ source: selectedSource, answers }),
+      });
 
-    if (!response.ok) {
-      throw new Error(`Servidor retornou status ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Servidor retornou status ${response.status}`);
+      }
+
+      const rawData = await response.json();
+      data = rawData.data || rawData;
     }
-
-    const rawData = await response.json();
-    const data = rawData.data || rawData;
 
     clearInterval(timerInterval);
     timerInterval = undefined;
@@ -323,6 +380,7 @@ function updateAuthUI() {
   const userProfile = document.querySelector('#userProfile');
   const userName = document.querySelector('#userName');
   const userRoleBadge = document.querySelector('#userRoleBadge');
+  const uploadVisibilityOption = document.querySelector('#uploadVisibilityOption');
 
   if (currentUser) {
     if (userProfile) userProfile.hidden = false;
@@ -331,12 +389,22 @@ function updateAuthUI() {
       userRoleBadge.textContent = currentUser.role;
       userRoleBadge.className = `user-role-badge role-${currentUser.role}`;
     }
+    if (uploadVisibilityOption) {
+      uploadVisibilityOption.hidden = currentUser.role !== 'admin';
+    }
   } else {
     if (userProfile) userProfile.hidden = true;
+    if (uploadVisibilityOption) uploadVisibilityOption.hidden = true;
   }
 }
 
 async function checkAuth() {
+  if (isGuestMode()) {
+    currentUser = { id: null, username: 'Convidado', role: 'guest' };
+    updateAuthUI();
+    return true;
+  }
+
   try {
     const res = await fetch('/api/auth/me', {
       cache: 'no-store',
@@ -362,6 +430,12 @@ async function checkAuth() {
 
 // ─── Logout ─────────────────────────────────────────────────────────────────
 document.querySelector('#logoutBtn')?.addEventListener('click', async () => {
+  if (isGuestMode()) {
+    localStorage.removeItem('quiz_guest_mode');
+    localStorage.removeItem('quiz_guest_data');
+    window.location.replace('/login');
+    return;
+  }
   const token = getAuthToken();
   try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (_) {}
   clearAuthToken();
@@ -384,7 +458,7 @@ async function doUpload() {
 
   try {
     uploadStatusText.textContent = 'Processando… (pode levar alguns segundos se usar IA)';
-    const response = await fetch('/api/upload', {
+    const response = await fetch(`/api/upload${isGuestMode() ? '?guest=1' : ''}`, {
       method: 'POST',
       body: formData
     });
@@ -400,6 +474,10 @@ async function doUpload() {
       uploadStatus.hidden = true;
       confirmUploadBtn.disabled = false;
       return;
+    }
+
+    if (isGuestMode()) {
+      localStorage.setItem('quiz_guest_data', JSON.stringify(data));
     }
 
     uploadStatus.hidden = true;

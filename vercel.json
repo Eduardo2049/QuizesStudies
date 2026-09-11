@@ -3,6 +3,7 @@
   "rewrites": [
     { "source": "/login", "destination": "/web/login.html" },
     { "source": "/register", "destination": "/web/register.html" },
+    { "source": "/guest", "destination": "/web/index.html" },
     { "source": "/", "destination": "/web/index.html" },
     { "source": "/api/(.*)", "destination": "/api/index.py?__path=/api/$1" }
   ]

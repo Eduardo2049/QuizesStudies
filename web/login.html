@@ -46,6 +46,10 @@
         </button>
       </form>
 
+      <button id="btnGuestAccess" class="secondary auth-submit-btn" type="button">
+        Continuar como convidado
+      </button>
+
       <!-- Formulário de Cadastro -->
       <form id="pageRegisterForm" class="auth-form-card" hidden novalidate>
         <div class="form-group">
@@ -167,6 +171,10 @@
     // ─── Submissão do Formulário de Login ─────────────────────────────────
     const loginFeedback = document.getElementById('loginFeedback');
     const submitLoginBtn = document.getElementById('btnLoginSubmit');
+    document.getElementById('btnGuestAccess')?.addEventListener('click', () => {
+      localStorage.setItem('quiz_guest_mode', 'true');
+      window.location.replace('/guest');
+    });
 
     pageLoginForm.addEventListener('submit', async (e) => {
       e.preventDefault();

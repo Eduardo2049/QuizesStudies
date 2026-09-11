@@ -179,8 +179,8 @@ class QuizHandler(BaseHTTPRequestHandler):
                 return
 
             # 3. Servir HTML principal
-            if request.path in ("/", "/index.html", "/api/index.py", "/api/index"):
-                if not HTTPMiddleware.get_auth_token(self):
+            if request.path in ("/", "/guest", "/index.html", "/api/index.py", "/api/index"):
+                if request.path != "/guest" and not HTTPMiddleware.get_auth_token(self):
                     self.send_response(302)
                     self.send_header("Location", "/login")
                     HTTPMiddleware.add_cache_headers(self, cache=False)
@@ -290,6 +290,7 @@ class QuizHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         """Handle POST requests"""
         request = self._get_request_url()
+        query = parse_qs(request.query)
 
         if request.path.startswith("/api/"):
             _ensure_migrations()
@@ -358,7 +359,7 @@ class QuizHandler(BaseHTTPRequestHandler):
 
             # ── 1. Upload de arquivo (multipart/form-data) ────────────────────
             if request.path == "/api/upload":
-                self._handle_upload()
+                self._handle_upload(query.get("guest", ["0"])[0] == "1")
                 return
 
             # ── 2. Submissão de respostas (application/json) ──────────────────
@@ -416,9 +417,9 @@ class QuizHandler(BaseHTTPRequestHandler):
 
     # ─── Helpers ──────────────────────────────────────────────────────────────
 
-    def _handle_upload(self):
+    def _handle_upload(self, guest: bool = False):
         """Processa upload multipart/form-data de arquivo TXT/PDF/DOCX."""
-        user = self._require_authenticated_user()
+        user = None if guest else self._require_authenticated_user()
 
         content_type = self.headers.get("Content-Type", "")
         content_length = int(self.headers.get("Content-Length", 0))
@@ -469,9 +470,14 @@ class QuizHandler(BaseHTTPRequestHandler):
 
         # Delegar ao controller
         requested_public = fields.get("is_public", "false").lower() == "true"
-        is_public = requested_public and user.get("role") == "admin"
+        is_public = requested_public and user and user.get("role") == "admin"
         response = self.upload_controller.upload_file(
-            filename, file_content, ext, user["id"], is_public
+            filename,
+            file_content,
+            ext,
+            user["id"] if user else None,
+            bool(is_public),
+            persist=not guest,
         )
         status, data = ResponseFormatter.created(
             response["data"],

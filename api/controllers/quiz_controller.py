@@ -85,10 +85,18 @@ class UploadController:
 
     @timing_decorator
     @error_handler_decorator
-    def upload_file(self, filename: str, content: bytes, file_type: str, created_by: int, is_public: bool) -> dict:
+    def upload_file(
+        self,
+        filename: str,
+        content: bytes,
+        file_type: str,
+        created_by: int,
+        is_public: bool,
+        persist: bool = True,
+    ) -> dict:
         """POST /api/upload - Processa arquivo e cria quiz no banco"""
         result = self.upload_service.process_upload(
-            filename, content, file_type, created_by, is_public
+            filename, content, file_type, created_by, is_public, persist
         )
         return {
             "status": "success",

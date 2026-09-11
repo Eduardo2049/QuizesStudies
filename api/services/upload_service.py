@@ -45,6 +45,7 @@ class UploadService:
         file_type: str,
         created_by: int,
         is_public: bool,
+        persist: bool = True,
     ) -> dict:
         """
         Processa upload de arquivo e cria quiz no banco.
@@ -114,10 +115,22 @@ class UploadService:
                 422
             )
 
-        # 5. Preparar para salvar
+        # 5. Preparar o resultado sem persistir quando for um convidado
         stem = re.sub(r"\.[^.]+$", "", filename)  # remover extensão
         label = stem.replace("_", " ").replace("-", " ").title()
         name = _slugify(stem)
+
+        if not persist:
+            return {
+                "quiz_id": None,
+                "name": name,
+                "label": label,
+                "question_count": len(questions),
+                "ai_generated": ai_generated,
+                "local_only": True,
+                "questions": questions,
+                "message": f"Quiz '{label}' carregado somente neste dispositivo",
+            }
 
         # Garantir nome único
         base_name = name
