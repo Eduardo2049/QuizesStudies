@@ -121,6 +121,20 @@ class QuizHandler(BaseHTTPRequestHandler):
             or self.headers.get("x-invoke-path")
             or self.path
         )
+        parsed_path = urlparse(raw_path)
+        forwarded_path = parse_qs(parsed_path.query).get("__path", [None])[0]
+        if forwarded_path:
+            raw_path = forwarded_path
+            if parsed_path.query:
+                remaining_query = parse_qs(parsed_path.query)
+                remaining_query.pop("__path", None)
+                query_string = "&".join(
+                    f"{key}={value}"
+                    for key, values in remaining_query.items()
+                    for value in values
+                )
+                if query_string:
+                    raw_path = f"{raw_path}?{query_string}"
         if raw_path in ("/api/index.py", "/api/index", "/api/index.py/", "/api/"):
             raw_path = "/"
         return urlparse(raw_path)
