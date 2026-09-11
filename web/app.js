@@ -211,13 +211,12 @@ async function handleSubmitQuiz(event) {
         results,
       };
     } else {
-      const token = getAuthToken();
       const headers = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const response = await fetch('/api/quiz/submit', {
         method: 'POST',
         headers,
+        credentials: 'same-origin',
         body: JSON.stringify({ source: selectedSource, answers }),
       });
 
@@ -436,8 +435,12 @@ document.querySelector('#logoutBtn')?.addEventListener('click', async () => {
     window.location.replace('/login');
     return;
   }
-  const token = getAuthToken();
-  try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (_) {}
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'same-origin'
+    });
+  } catch (_) {}
   clearAuthToken();
   window.location.replace('/login');
 });
