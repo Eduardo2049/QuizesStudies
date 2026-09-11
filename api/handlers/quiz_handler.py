@@ -4,10 +4,13 @@ Handler HTTP Principal — Suporte a multipart/form-data para upload de arquivos
 import io
 import json
 import re
+import time
+from collections import defaultdict, deque
+from threading import Lock
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
-from api.utils.config import WEB_DIR, DEBUG
+from api.utils.config import WEB_DIR, DEBUG, COOKIE_SECURE
 from api.controllers.quiz_controller import QuizController, UploadController
 from api.controllers.auth_controller import AuthController
 from api.exceptions.quiz_exceptions import QuizAPIException
@@ -17,6 +20,26 @@ from api.utils.validators import AnswerValidator
 # Extensões permitidas para upload
 ALLOWED_EXTENSIONS = {"txt", "pdf", "docx"}
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
+MAX_JSON_BYTES = 256 * 1024
+AUTH_RATE_WINDOW_SECONDS = 15 * 60
+AUTH_RATE_LIMIT = 10
+_auth_requests = defaultdict(deque)
+_auth_requests_lock = Lock()
+
+
+def _allow_auth_request(handler, limit: int = AUTH_RATE_LIMIT) -> bool:
+    """Applies a small per-process limit to login and registration attempts."""
+    client_ip = getattr(handler, "client_address", ("unknown",))[0]
+    now = time.monotonic()
+    cutoff = now - AUTH_RATE_WINDOW_SECONDS
+    with _auth_requests_lock:
+        requests = _auth_requests[(handler.path, client_ip)]
+        while requests and requests[0] <= cutoff:
+            requests.popleft()
+        if len(requests) >= limit:
+            return False
+        requests.append(now)
+        return True
 
 
 def _parse_multipart(body: bytes, boundary: str) -> tuple[str | None, bytes | None]:
@@ -113,7 +136,7 @@ class QuizHandler(BaseHTTPRequestHandler):
         try:
             # 0. API: Dados do usuário autenticado
             if request.path == "/api/auth/me":
-                token = HTTPMiddleware.get_bearer_token(self)
+                token = HTTPMiddleware.get_auth_token(self)
                 response = self.auth_controller.get_me(token)
                 status, data = ResponseFormatter.success(response["data"])
                 HTTPMiddleware.send_json_response(self, status, data)
@@ -136,6 +159,13 @@ class QuizHandler(BaseHTTPRequestHandler):
 
             # 3. Servir HTML principal
             if request.path in ("/", "/index.html", "/api/index.py", "/api/index"):
+                if not HTTPMiddleware.get_auth_token(self):
+                    self.send_response(302)
+                    self.send_header("Location", "/login")
+                    HTTPMiddleware.add_cache_headers(self, cache=False)
+                    self.end_headers()
+                    return
+
                 index_file = WEB_DIR / "index.html"
                 if index_file.is_file():
                     content = index_file.read_bytes()
@@ -143,6 +173,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Type", "text/html; charset=utf-8")
                     self.send_header("Content-Length", str(len(content)))
                     HTTPMiddleware.add_cors_headers(self)
+                    HTTPMiddleware.add_security_headers(self)
                     HTTPMiddleware.add_cache_headers(self, cache=False)
                     self.end_headers()
                     self.wfile.write(content)
@@ -160,6 +191,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Type", "text/html; charset=utf-8")
                     self.send_header("Content-Length", str(len(content)))
                     HTTPMiddleware.add_cors_headers(self)
+                    HTTPMiddleware.add_security_headers(self)
                     HTTPMiddleware.add_cache_headers(self, cache=False)
                     self.end_headers()
                     self.wfile.write(content)
@@ -177,6 +209,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Type", "text/html; charset=utf-8")
                     self.send_header("Content-Length", str(len(content)))
                     HTTPMiddleware.add_cors_headers(self)
+                    HTTPMiddleware.add_security_headers(self)
                     HTTPMiddleware.add_cache_headers(self, cache=False)
                     self.end_headers()
                     self.wfile.write(content)
@@ -206,6 +239,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                         self.send_header("Content-Type", content_type)
                         self.send_header("Content-Length", str(len(content)))
                         HTTPMiddleware.add_cors_headers(self)
+                        HTTPMiddleware.add_security_headers(self)
                         HTTPMiddleware.add_cache_headers(self, cache=False)
                         self.end_headers()
                         self.wfile.write(content)
@@ -242,7 +276,19 @@ class QuizHandler(BaseHTTPRequestHandler):
         try:
             # ── 0. Rotas de Autenticação ───────────────────────────────────────
             if request.path == "/api/auth/login":
+                if not _allow_auth_request(self):
+                    status, data = ResponseFormatter.error(
+                        "Muitas tentativas. Tente novamente mais tarde.",
+                        "RATE_LIMITED",
+                        429,
+                    )
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
                 length = int(self.headers.get("Content-Length", 0))
+                if length > MAX_JSON_BYTES:
+                    status, data = ResponseFormatter.bad_request("Corpo da requisição muito grande")
+                    HTTPMiddleware.send_json_response(self, 413, data)
+                    return
                 try:
                     payload = json.loads(self.rfile.read(length)) if length > 0 else {}
                 except json.JSONDecodeError:
@@ -250,12 +296,26 @@ class QuizHandler(BaseHTTPRequestHandler):
                     HTTPMiddleware.send_json_response(self, status, data)
                     return
                 response = self.auth_controller.login(payload)
+                token = response["data"].get("token")
                 status, data = ResponseFormatter.success(response["data"], response["message"])
-                HTTPMiddleware.send_json_response(self, status, data)
+                cookie = HTTPMiddleware.session_cookie(token, COOKIE_SECURE, 7 * 24 * 60 * 60)
+                HTTPMiddleware.send_json_response(self, status, data, set_cookie=cookie)
                 return
 
             if request.path == "/api/auth/register":
+                if not _allow_auth_request(self):
+                    status, data = ResponseFormatter.error(
+                        "Muitas tentativas. Tente novamente mais tarde.",
+                        "RATE_LIMITED",
+                        429,
+                    )
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
                 length = int(self.headers.get("Content-Length", 0))
+                if length > MAX_JSON_BYTES:
+                    status, data = ResponseFormatter.bad_request("Corpo da requisição muito grande")
+                    HTTPMiddleware.send_json_response(self, 413, data)
+                    return
                 try:
                     payload = json.loads(self.rfile.read(length)) if length > 0 else {}
                 except json.JSONDecodeError:
@@ -268,10 +328,11 @@ class QuizHandler(BaseHTTPRequestHandler):
                 return
 
             if request.path == "/api/auth/logout":
-                token = HTTPMiddleware.get_bearer_token(self)
+                token = HTTPMiddleware.get_auth_token(self)
                 response = self.auth_controller.logout(token)
                 status, data = ResponseFormatter.success(response["data"], response["message"])
-                HTTPMiddleware.send_json_response(self, status, data)
+                clear_cookie = HTTPMiddleware.session_cookie(None, COOKIE_SECURE, 0)
+                HTTPMiddleware.send_json_response(self, status, data, set_cookie=clear_cookie)
                 return
 
             # ── 1. Upload de arquivo (multipart/form-data) ────────────────────
@@ -281,7 +342,24 @@ class QuizHandler(BaseHTTPRequestHandler):
 
             # ── 2. Submissão de respostas (application/json) ──────────────────
             if request.path == "/api/quiz/submit":
+                token = HTTPMiddleware.get_auth_token(self)
+                if not token or not self.auth_controller.service.validate_token(token):
+                    status, data = ResponseFormatter.unauthorized("Autenticação necessária para enviar respostas")
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
+                if not _allow_auth_request(self, limit=30):
+                    status, data = ResponseFormatter.error(
+                        "Muitas submissões. Tente novamente mais tarde.",
+                        "RATE_LIMITED",
+                        429,
+                    )
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
                 length = int(self.headers.get("Content-Length", 0))
+                if length > MAX_JSON_BYTES:
+                    status, data = ResponseFormatter.bad_request("Corpo da requisição muito grande")
+                    HTTPMiddleware.send_json_response(self, 413, data)
+                    return
                 if length == 0:
                     status, data = ResponseFormatter.bad_request("Corpo da requisição vazio")
                     HTTPMiddleware.send_json_response(self, status, data)
@@ -324,7 +402,7 @@ class QuizHandler(BaseHTTPRequestHandler):
     def _handle_upload(self):
         """Processa upload multipart/form-data de arquivo TXT/PDF/DOCX."""
         # 0. Validação de Autenticação (Apenas Admin)
-        token = HTTPMiddleware.get_bearer_token(self)
+        token = HTTPMiddleware.get_auth_token(self)
         if not token:
             status, data = ResponseFormatter.unauthorized("Autenticação necessária para enviar simulados")
             HTTPMiddleware.send_json_response(self, status, data)

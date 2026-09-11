@@ -42,6 +42,8 @@ class AuthService:
     def seed_admin_if_needed(self):
         """Cria o usuário administrador inicial se não houver usuários cadastrados."""
         try:
+            if not ADMIN_PASSWORD:
+                raise RuntimeError("ADMIN_PASSWORD não configurada")
             if self.repo.count_users() == 0:
                 pwd_hash, salt = hash_password(ADMIN_PASSWORD)
                 admin = self.repo.create_user(
@@ -68,6 +70,8 @@ class AuthService:
 
         if not verify_password(password, user["salt"], user["password_hash"]):
             raise QuizAPIException("Credenciais inválidas", 401)
+
+        self.repo.cleanup_expired_sessions()
 
         # Gerar token seguro de sessão (48 bytes URL-safe = 64 caracteres)
         token = secrets.token_urlsafe(48)

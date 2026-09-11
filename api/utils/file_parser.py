@@ -9,6 +9,10 @@ import re
 import io
 from typing import Optional
 
+MAX_PDF_PAGES = 100
+MAX_DOCX_PARAGRAPHS = 10_000
+MAX_EXTRACTED_CHARS = 1_000_000
+
 
 # ─── Extração de texto bruto por formato ─────────────────────────────────────
 
@@ -29,10 +33,14 @@ def parse_pdf(content: bytes) -> str:
 
     text_parts = []
     with pdfplumber.open(io.BytesIO(content)) as pdf:
-        for page in pdf.pages:
+        for page_number, page in enumerate(pdf.pages, start=1):
+            if page_number > MAX_PDF_PAGES:
+                raise ValueError(f"PDF excede o limite de {MAX_PDF_PAGES} páginas")
             page_text = page.extract_text()
             if page_text:
                 text_parts.append(page_text)
+                if sum(len(part) for part in text_parts) > MAX_EXTRACTED_CHARS:
+                    raise ValueError("Texto extraído excede o limite permitido")
     return "\n".join(text_parts)
 
 
@@ -44,6 +52,8 @@ def parse_docx(content: bytes) -> str:
         raise ImportError("python-docx não instalado. Execute: pip install python-docx")
 
     doc = Document(io.BytesIO(content))
+    if len(doc.paragraphs) > MAX_DOCX_PARAGRAPHS:
+        raise ValueError(f"DOCX excede o limite de {MAX_DOCX_PARAGRAPHS} parágrafos")
     paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
     return "\n".join(paragraphs)
 

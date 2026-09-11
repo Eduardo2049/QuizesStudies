@@ -33,6 +33,8 @@ def _slugify(text: str) -> str:
 class UploadService:
     """Service para processamento e ingesta de novos quizzes"""
 
+    MAX_QUESTIONS = 500
+
     def __init__(self, repository: QuizRepository = None):
         self.repo = repository or QuizRepository()
 
@@ -67,8 +69,16 @@ class UploadService:
         if not text.strip():
             raise QuizAPIException("O arquivo está vazio ou não contém texto extraível", 400)
 
+        if len(text) > 1_000_000:
+            raise QuizAPIException("Texto extraído excede o limite permitido", 413)
+
         # 2. Parse das questões
         questions = parse_questions_from_text(text)
+
+        if len(questions) > self.MAX_QUESTIONS:
+            raise QuizAPIException(
+                f"O arquivo excede o limite de {self.MAX_QUESTIONS} questões", 413
+            )
 
         is_valid, error_msg = validate_questions(questions)
         if not is_valid:

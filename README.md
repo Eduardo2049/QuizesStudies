@@ -1,4 +1,4 @@
-# IFuture Study
+# Quizes Study
 
 Plataforma de simulados e treino de raciocínio lógico. Faça upload de provas em **PDF**, **DOCX** ou **TXT** e receba quizzes interativos com gabarito automático via IA.
 
@@ -26,9 +26,11 @@ Edite o `.env`:
 | Variável | Obrigatória | Descrição |
 |---|---|---|
 | `DATABASE_URL` | ✅ | `postgresql://user:password@host:5432/dbname` |
+| `POSTGRES_PASSWORD` | ✅ Docker | Senha forte do PostgreSQL local |
 | `ADMIN_USERNAME` | Não | Usuário do administrador inicial (padrão: `admin`) |
-| `ADMIN_PASSWORD` | Não | Senha do administrador inicial (padrão: `admin_study_2026`) |
-| `ALLOWED_ORIGINS` | Não | Origens CORS permitidas (padrão: `*`) |
+| `ADMIN_PASSWORD` | ✅ | Senha forte do administrador inicial |
+| `ALLOWED_ORIGINS` | Não | Lista separada por vírgulas de origens CORS permitidas |
+| `COOKIE_SECURE` | Não | Padrão `true`; use `false` apenas no desenvolvimento HTTP |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Para Tunnel | Token do Cloudflare Zero Trust para expor via túnel HTTPS |
 | `OPENROUTER_API_KEY` | Para IA | Chave do [OpenRouter](https://openrouter.ai) para geração de gabarito |
 | `OPENROUTER_MODEL` | Não | Modelo padrão: `openai/gpt-4o-mini` |
@@ -68,7 +70,7 @@ O servidor inicia em `http://localhost:8000` (ou próxima porta livre) e executa
 - **Acesso Restrito (Admin)**: O upload de novos simulados e acionamento da IA é restrito a administradores autenticados via Bearer Token.
 - **Credenciais Padrão Iniciais**:
   - Usuário: `admin`
-  - Senha: `admin_study_2026` (altere no `.env` para produção)
+   - Senha: definida obrigatoriamente por `ADMIN_PASSWORD` no ambiente
 
 ---
 

@@ -121,9 +121,14 @@ def generate_answer_key(questions: list[dict]) -> list[dict]:
     result = []
     for item in parsed:
         try:
+            question_id = int(item["question_id"])
+            answer = int(item["answer"])
+            question = next((q for q in questions if q["id"] == question_id), None)
+            if question is None or answer < 0 or answer >= len(question.get("options", [])):
+                continue
             result.append({
-                "question_id": int(item["question_id"]),
-                "answer": int(item["answer"]),
+                "question_id": question_id,
+                "answer": answer,
                 "explanation": str(item.get("explanation", "")).strip(),
             })
         except (KeyError, TypeError, ValueError):

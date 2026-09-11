@@ -16,6 +16,16 @@ let loadController;
 let remainingSeconds = timerDuration;
 let timerInterval;
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[character]));
+}
+
 // ─── Timer ────────────────────────────────────────────────────────────────────
 function resetTimer() {
   clearInterval(timerInterval);
@@ -68,18 +78,18 @@ async function loadQuiz(source = selectedSource) {
 
   quiz.innerHTML = questions.map((item, index) => `
     <article class="question">
-      <p class="section">${item.section}</p>
+      <p class="section">${escapeHtml(item.section)}</p>
       ${item.context && (index === 0 || questions[index - 1].context !== item.context)
-        ? `<p class="context">${item.context}</p>` : ''}
+        ? `<p class="context">${escapeHtml(item.context)}</p>` : ''}
       <div class="question-head">
-        <span class="number">${String(item.id).padStart(2, '0')}</span>
-        <h2>${item.question}</h2>
+        <span class="number">${escapeHtml(String(item.id).padStart(2, '0'))}</span>
+        <h2>${escapeHtml(item.question)}</h2>
       </div>
       <div class="options">
         ${item.options.map((option, i) => `
           <label class="option">
             <input type="radio" name="q-${item.id}" value="${i}">
-            <span>${String.fromCharCode(65 + i)}) ${option}</span>
+            <span>${String.fromCharCode(65 + i)}) ${escapeHtml(option)}</span>
           </label>
         `).join('')}
       </div>
@@ -100,7 +110,7 @@ async function loadQuizList() {
 
   quizSelector.innerHTML = quizzes.map((item) =>
     `<option value="${item.name}">
-      ${item.label}${item.ai_generated ? ' 🤖' : ''}
+      ${escapeHtml(item.label)}${item.ai_generated ? ' 🤖' : ''}
     </option>`
   ).join('');
   quizSelector.value = selectedSource;
@@ -167,20 +177,20 @@ async function handleSubmitQuiz(event) {
     timer.classList.remove('running');
     result.hidden = false;
     result.innerHTML = `
-      <h2>${data.score}/${data.total} acertos · ${data.percentage}%</h2>
+      <h2>${escapeHtml(data.score)}/${escapeHtml(data.total)} acertos · ${escapeHtml(data.percentage)}%</h2>
       <p>Revise suas respostas abaixo. Use "Resetar quiz" para tentar novamente.</p>
       ${data.results.map((item) => `
         <div class="review">
           <strong class="${item.isCorrect ? 'right' : 'wrong'}">
-            ${item.isCorrect ? '✓ Correta' : '✗ Errada'} · Questão ${item.id}
+            ${item.isCorrect ? '✓ Correta' : '✗ Errada'} · Questão ${escapeHtml(item.id)}
           </strong>
           <span>${item.isCorrect
             ? 'Você marcou a alternativa certa.'
             : (item.selected !== null && item.selected !== undefined
-                ? `Você marcou a alternativa ${String.fromCharCode(65 + item.selected)}; a correta era ${String.fromCharCode(65 + item.correct)}.`
+                ? `Você marcou a alternativa ${escapeHtml(String.fromCharCode(65 + item.selected))}; a correta era ${escapeHtml(String.fromCharCode(65 + item.correct))}.`
                 : `Não respondida; a alternativa correta era ${String.fromCharCode(65 + item.correct)}.`)
           }</span>
-          ${item.explanation ? `<br><small>${item.explanation}</small>` : ''}
+          ${item.explanation ? `<br><small>${escapeHtml(item.explanation)}</small>` : ''}
         </div>
       `).join('')}`;
     result.scrollIntoView({ behavior: 'smooth' });
@@ -304,16 +314,7 @@ function showUploadError(msg) {
 // ─── Autenticação & Sessão ──────────────────────────────────────────────────
 let currentUser = null;
 
-function getAuthToken() {
-  return localStorage.getItem('ifuture_token');
-}
-
-function setAuthToken(token) {
-  localStorage.setItem('ifuture_token', token);
-}
-
 function clearAuthToken() {
-  localStorage.removeItem('ifuture_token');
   currentUser = null;
   updateAuthUI();
 }
@@ -336,17 +337,8 @@ function updateAuthUI() {
 }
 
 async function checkAuth() {
-  const token = getAuthToken();
-  if (!token) {
-    currentUser = null;
-    updateAuthUI();
-    window.location.replace('/login');
-    return false;
-  }
-
   try {
     const res = await fetch('/api/auth/me', {
-      headers: { 'Authorization': `Bearer ${token}` },
       cache: 'no-store'
     });
     if (res.ok) {
@@ -370,14 +362,7 @@ async function checkAuth() {
 // ─── Logout ─────────────────────────────────────────────────────────────────
 document.querySelector('#logoutBtn')?.addEventListener('click', async () => {
   const token = getAuthToken();
-  if (token) {
-    try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-    } catch (_) {}
-  }
+  try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (_) {}
   clearAuthToken();
   window.location.replace('/login');
 });
@@ -385,13 +370,6 @@ document.querySelector('#logoutBtn')?.addEventListener('click', async () => {
 // ─── Upload de Arquivos (Protegido para Admin) ──────────────────────────────
 async function doUpload() {
   if (!selectedFile) return;
-
-  const token = getAuthToken();
-  if (!token) {
-    closeModal();
-    window.location.replace('/login');
-    return;
-  }
 
   uploadStatus.hidden = false;
   uploadStatusText.textContent = 'Enviando arquivo…';
@@ -406,7 +384,6 @@ async function doUpload() {
     uploadStatusText.textContent = 'Processando… (pode levar alguns segundos se usar IA)';
     const response = await fetch('/api/upload', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
       body: formData
     });
     const raw = await response.json();

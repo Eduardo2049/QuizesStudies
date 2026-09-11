@@ -27,7 +27,6 @@ DATABASE_URL = (
     or os.getenv("POSTGRES_URL")
     or os.getenv("DATABASE_URL_UNPOOLED")
     or os.getenv("POSTGRES_PRISMA_URL")
-    or "postgresql://postgres:postgres@localhost:5433/quiz_study"
 )
 
 # OpenRouter (IA para geração de gabarito)
@@ -37,10 +36,13 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # Autenticação e Segurança
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin_study_2026")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 ALLOWED_ORIGINS = [
-    origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",") if origin.strip()
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "").split(",")
+    if origin.strip() and origin.strip() != "*"
 ]
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
 
 # Cloudflare Tunnel
 CLOUDFLARE_TUNNEL_TOKEN = os.getenv("CLOUDFLARE_TUNNEL_TOKEN", "")

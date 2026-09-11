@@ -46,7 +46,9 @@ def run_test():
         print("[PASS] 1. Login com senha errada rejeitado (401)")
 
         # 2. Login com admin correto
-        st, data = do_req("/api/auth/login", {"username": "admin", "password": "admin_study_2026"})
+        admin_password = os.environ.get("ADMIN_PASSWORD")
+        assert admin_password, "ADMIN_PASSWORD deve estar configurada para o teste"
+        st, data = do_req("/api/auth/login", {"username": "admin", "password": admin_password})
         assert st == 200, f"Esperado 200, obtido {st}"
         admin_token = data["data"]["token"]
         assert admin_token, "Token não retornado"

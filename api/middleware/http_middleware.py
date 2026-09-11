@@ -1,6 +1,7 @@
 """Middleware HTTP: CORS, cache, formatação de respostas e decorators utilitários"""
 import json
 import time
+from http.cookies import SimpleCookie
 from functools import wraps
 from api.utils.config import DEBUG, ALLOWED_ORIGINS
 
@@ -36,16 +37,20 @@ class HTTPMiddleware:
     @staticmethod
     def add_cors_headers(handler) -> None:
         origin = handler.headers.get("Origin", "")
-        if "*" in ALLOWED_ORIGINS or not ALLOWED_ORIGINS:
-            allow_origin = "*"
-        elif origin in ALLOWED_ORIGINS:
-            allow_origin = origin
-        else:
-            allow_origin = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*"
+        if origin and origin in ALLOWED_ORIGINS:
+            handler.send_header("Access-Control-Allow-Origin", origin)
+            handler.send_header("Access-Control-Allow-Credentials", "true")
+            handler.send_header("Vary", "Origin")
+            handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE")
+            handler.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 
-        handler.send_header("Access-Control-Allow-Origin", allow_origin)
-        handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE")
-        handler.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+    @staticmethod
+    def add_security_headers(handler) -> None:
+        handler.send_header("X-Content-Type-Options", "nosniff")
+        handler.send_header("X-Frame-Options", "DENY")
+        handler.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        handler.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        handler.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
 
     @staticmethod
     def add_cache_headers(handler, cache: bool = False) -> None:
@@ -59,6 +64,24 @@ class HTTPMiddleware:
         if auth_header.startswith("Bearer "):
             return auth_header[7:].strip()
         return None
+
+    @staticmethod
+    def get_auth_token(handler) -> str | None:
+        """Reads the legacy Bearer token or the HttpOnly session cookie."""
+        bearer_token = HTTPMiddleware.get_bearer_token(handler)
+        if bearer_token:
+            return bearer_token
+        cookies = SimpleCookie()
+        cookies.load(handler.headers.get("Cookie", ""))
+        session_cookie = cookies.get("ifuture_session")
+        return session_cookie.value if session_cookie else None
+
+    @staticmethod
+    def session_cookie(token: str | None, secure: bool, max_age: int) -> str:
+        attributes = ["Path=/", "HttpOnly", "SameSite=Lax", f"Max-Age={max_age}"]
+        if secure:
+            attributes.append("Secure")
+        return f"ifuture_session={token or ''}; " + "; ".join(attributes)
 
     @staticmethod
     def get_client_ip(handler) -> str:
@@ -77,20 +100,42 @@ class HTTPMiddleware:
         return getattr(handler, "client_address", ("unknown",))[0]
 
     @staticmethod
-    def send_json_response(handler, status: int, data: dict) -> None:
+    def send_json_response(
+        handler,
+        status: int,
+        data: dict,
+        set_cookie: str | None = None,
+        clear_cookie: bool = False
+    ) -> None:
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+
         handler.send_response(status)
         handler.send_header("Content-Type", "application/json; charset=utf-8")
         handler.send_header("Content-Length", str(len(body)))
+
+        if set_cookie:
+            handler.send_header("Set-Cookie", set_cookie)
+        elif clear_cookie:
+            handler.send_header(
+                "Set-Cookie",
+                HTTPMiddleware.session_cookie(None, False, 0)
+            )
+
         HTTPMiddleware.add_cors_headers(handler)
+        HTTPMiddleware.add_security_headers(handler)
         HTTPMiddleware.add_cache_headers(handler, cache=False)
         handler.end_headers()
-        handler.wfile.write(body)
+
+        try:
+            handler.wfile.write(body)
+        except (BrokenPipeError, ConnectionAbortedError):
+            return
 
     @staticmethod
     def handle_preflight(handler) -> None:
         handler.send_response(204)
         HTTPMiddleware.add_cors_headers(handler)
+        HTTPMiddleware.add_security_headers(handler)
         handler.end_headers()
 
 
