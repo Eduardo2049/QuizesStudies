@@ -269,7 +269,127 @@ button {
   color: var(--muted);
   font-size: 14px;
   line-height: 1.55;
-  margin: 0 0 24px;
+  margin: 0 0 20px;
+}
+
+/* ─── Modal Tabs ─────────────────────────────────────────────────────────── */
+.modal-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid var(--line);
+  margin-bottom: 20px;
+}
+
+.modal-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  font: 700 13px 'DM Mono', monospace;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.3px;
+  border-radius: 4px 4px 0 0;
+}
+
+.modal-tab-btn:hover {
+  color: var(--ink);
+  background: rgba(23, 107, 103, 0.04);
+}
+
+.modal-tab-btn.active {
+  color: var(--teal-dark);
+  border-bottom-color: var(--teal);
+  background: rgba(23, 107, 103, 0.08);
+}
+
+.modal-panel {
+  display: block;
+}
+
+.modal-panel[hidden] {
+  display: none !important;
+}
+
+.modal-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.modal-form-group label {
+  font: 700 12px 'DM Mono', monospace;
+  text-transform: uppercase;
+  color: var(--ink);
+  letter-spacing: 0.5px;
+}
+
+.modal-form-group .required {
+  color: var(--coral);
+}
+
+.modal-form-group input,
+.modal-form-group select,
+.modal-form-group textarea {
+  width: 100%;
+  padding: 11px 14px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: 500 14px Manrope, sans-serif;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+
+.modal-form-group input:focus,
+.modal-form-group select:focus,
+.modal-form-group textarea:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(23, 107, 103, 0.12);
+}
+
+.modal-form-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.modal-form-row .form-group {
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modal-form-row .form-group label {
+  font: 700 12px 'DM Mono', monospace;
+  text-transform: uppercase;
+  color: var(--ink);
+  letter-spacing: 0.5px;
+}
+
+.modal-form-row .form-group select {
+  width: 100%;
+  padding: 11px 14px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: 500 14px Manrope, sans-serif;
+  color: var(--ink);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.flex-1 {
+  flex: 1;
 }
 
 /* ─── Drop Zone ──────────────────────────────────────────────────────────── */
@@ -443,6 +563,10 @@ button {
 .role-student {
   background: rgba(23, 107, 103, 0.18);
   color: var(--teal-dark);
+}
+.role-guest {
+  background: rgba(100, 116, 139, 0.18);
+  color: #475569;
 }
 .user-name {
   color: var(--ink);
@@ -681,6 +805,225 @@ button {
 .auth-link:hover {
   text-decoration: underline;
   opacity: 0.9;
+}
+
+/* ─── Result Modal ─────────────────────────────────────────────────────────── */
+.modal--results {
+  max-width: 680px;
+  width: 100%;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  padding: 32px 36px 24px;
+  box-sizing: border-box;
+}
+
+.results-header {
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 18px;
+  margin-bottom: 16px;
+}
+
+.results-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font: 700 12px 'DM Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  background: rgba(23, 107, 103, 0.1);
+  color: var(--teal-dark);
+}
+
+.results-badge.excellent {
+  background: rgba(16, 185, 129, 0.15);
+  color: #065f46;
+}
+
+.results-badge.good {
+  background: rgba(23, 107, 103, 0.15);
+  color: var(--teal-dark);
+}
+
+.results-badge.practice {
+  background: rgba(239, 104, 74, 0.15);
+  color: #9a3412;
+}
+
+.results-title {
+  font-size: 24px;
+  margin: 0 0 6px;
+}
+
+.results-score-wrap {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.results-score {
+  font: 800 32px 'DM Mono', monospace;
+  color: var(--ink);
+}
+
+.results-percent {
+  font: 700 18px 'DM Mono', monospace;
+  color: var(--teal);
+}
+
+.results-summary-text {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+/* ─── Scrollable Questions List ─────────────────────────────────────────── */
+.results-list {
+  overflow-y: auto;
+  max-height: calc(88vh - 240px);
+  padding-right: 8px;
+  margin-right: -4px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.results-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.results-list::-webkit-scrollbar-thumb {
+  background: rgba(10, 18, 20, 0.2);
+  border-radius: 4px;
+}
+
+.result-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--muted);
+  padding: 16px 18px;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.result-card:hover {
+  box-shadow: 0 4px 12px rgba(10, 18, 20, 0.05);
+}
+
+.result-card.is-correct {
+  border-left-color: #10b981;
+  background: #fcfdfc;
+}
+
+.result-card.is-wrong {
+  border-left-color: #ef4444;
+  background: #fffcfb;
+}
+
+.result-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.result-card-tag {
+  font: 700 12px 'DM Mono', monospace;
+  padding: 3px 8px;
+  border-radius: 3px;
+}
+
+.result-card.is-correct .result-card-tag {
+  background: rgba(16, 185, 129, 0.12);
+  color: #065f46;
+}
+
+.result-card.is-wrong .result-card-tag {
+  background: rgba(239, 68, 68, 0.12);
+  color: #991b1b;
+}
+
+.result-card-qnumber {
+  font: 600 12px 'DM Mono', monospace;
+  color: var(--muted);
+}
+
+.result-card-question {
+  font: 600 14px Manrope, sans-serif;
+  color: var(--ink);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.result-card-answers {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: rgba(10, 18, 20, 0.03);
+  padding: 8px 12px;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.result-user-answer {
+  color: var(--muted);
+}
+
+.result-user-answer strong {
+  color: var(--ink);
+}
+
+.result-card.is-wrong .result-user-answer strong {
+  color: #b91c1c;
+}
+
+.result-correct-answer {
+  color: #065f46;
+  font-weight: 600;
+}
+
+.result-card-explanation {
+  background: rgba(23, 107, 103, 0.05);
+  border-left: 3px solid var(--teal);
+  padding: 8px 12px;
+  border-radius: 0 4px 4px 0;
+  font-size: 13px;
+  color: #2c4440;
+  line-height: 1.5;
+}
+
+.result-card-explanation strong {
+  color: var(--teal-dark);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.results-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.btn-redo span {
+  font-size: 18px;
+  margin-right: 6px;
+  margin-left: 0;
 }
 
 /* ─── Responsive ─────────────────────────────────────────────────────────── */

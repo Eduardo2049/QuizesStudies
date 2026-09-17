@@ -41,6 +41,22 @@ class UserRepository:
             """, (username, email, password_hash, salt, role))
             return dict(cur.fetchone())
 
+    def update_password_and_role(self, user_id: int, password_hash: str, salt: str, role: str = None) -> None:
+        """Atualiza a senha e opcionalmente o papel (role) do usuário."""
+        with get_cursor() as cur:
+            if role:
+                cur.execute("""
+                    UPDATE users
+                    SET password_hash = %s, salt = %s, role = %s
+                    WHERE id = %s
+                """, (password_hash, salt, role, user_id))
+            else:
+                cur.execute("""
+                    UPDATE users
+                    SET password_hash = %s, salt = %s
+                    WHERE id = %s
+                """, (password_hash, salt, user_id))
+
     # ─── Sessões ──────────────────────────────────────────────────────────────
 
     def create_session(self, token: str, user_id: int, duration_days: int = 7) -> dict:
@@ -73,4 +89,10 @@ class UserRepository:
     def cleanup_expired_sessions(self) -> int:
         with get_cursor() as cur:
             cur.execute("DELETE FROM sessions WHERE expires_at <= NOW()")
+            return cur.rowcount
+
+    def clear_all_sessions(self) -> int:
+        """Remove todas as sessões ativas do banco (usado ao resetar a aplicação)."""
+        with get_cursor() as cur:
+            cur.execute("DELETE FROM sessions")
             return cur.rowcount

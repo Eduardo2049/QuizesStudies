@@ -3,7 +3,7 @@ import json
 import time
 from http.cookies import SimpleCookie
 from functools import wraps
-from api.utils.config import DEBUG, ALLOWED_ORIGINS
+from api.utils.config import DEBUG, ALLOWED_ORIGINS, COOKIE_SECURE
 
 
 def timing_decorator(func):
@@ -118,7 +118,7 @@ class HTTPMiddleware:
         elif clear_cookie:
             handler.send_header(
                 "Set-Cookie",
-                HTTPMiddleware.session_cookie(None, False, 0)
+                HTTPMiddleware.session_cookie(None, COOKIE_SECURE, 0)
             )
 
         HTTPMiddleware.add_cors_headers(handler)

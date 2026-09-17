@@ -14,7 +14,7 @@ class QuizService:
     def __init__(self, repository: QuizRepository = None):
         self.repository = repository or QuizRepository()
 
-    def get_all_quizzes(self, user_id: int) -> list[dict]:
+    def get_all_quizzes(self, user_id: int = None) -> list[dict]:
         """
         Retorna lista de todos os quizzes disponíveis.
 

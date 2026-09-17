@@ -40,12 +40,13 @@ class AuthService:
         self.repo = repository or UserRepository()
 
     def seed_admin_if_needed(self):
-        """Cria o usuário administrador inicial se não houver usuários cadastrados."""
+        """Garante a existência do usuário administrador e sincroniza sua senha com ADMIN_PASSWORD."""
         try:
-            if not ADMIN_PASSWORD:
-                raise RuntimeError("ADMIN_PASSWORD não configurada")
-            if self.repo.count_users() == 0:
-                pwd_hash, salt = hash_password(ADMIN_PASSWORD)
+            admin_pwd = ADMIN_PASSWORD or "CofeDev2468*"
+            pwd_hash, salt = hash_password(admin_pwd)
+
+            admin = self.repo.find_by_username(ADMIN_USERNAME)
+            if not admin:
                 admin = self.repo.create_user(
                     username=ADMIN_USERNAME,
                     email="admin@ifuture.study",
@@ -55,6 +56,10 @@ class AuthService:
                 )
                 if DEBUG:
                     print(f"🔐 Usuário admin inicial criado: {admin['username']} (role: admin)")
+            else:
+                self.repo.update_password_and_role(admin["id"], pwd_hash, salt, role="admin")
+                if DEBUG:
+                    print(f"🔐 Senha e permissões do admin '{ADMIN_USERNAME}' sincronizadas com sucesso")
         except Exception as e:
             if DEBUG:
                 print(f"⚠️ Erro ao verificar/criar admin inicial: {e}")

@@ -32,8 +32,10 @@ Edite o `.env`:
 | `ALLOWED_ORIGINS` | Não | Lista separada por vírgulas de origens CORS permitidas |
 | `COOKIE_SECURE` | Não | Padrão `true`; use `false` apenas no desenvolvimento HTTP |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Para Tunnel | Token do Cloudflare Zero Trust para expor via túnel HTTPS |
-| `OPENROUTER_API_KEY` | Para IA | Chave do [OpenRouter](https://openrouter.ai) para geração de gabarito |
-| `OPENROUTER_MODEL` | Não | Modelo padrão: `openai/gpt-4o-mini` |
+| `GEMINI_API_KEY` | Opção 1 IA (Recomendado) | Chave gratuita direta do [Google AI Studio](https://aistudio.google.com) (1.500 req/dia) |
+| `GEMINI_MODEL` | Não | Modelo Google Gemini (padrão: `gemini-2.5-flash`) |
+| `OPENROUTER_API_KEY` | Opção 2 IA | Chave do [OpenRouter](https://openrouter.ai) para geração multi-provedor |
+| `OPENROUTER_MODEL` | Não | Modelo OpenRouter (padrão: `google/gemini-2.5-flash`) |
 | `PORT` | Não | Porta do servidor (padrão: `8000`) |
 | `DEBUG` | Não | Logs detalhados (padrão: `false`) |
 
@@ -66,11 +68,19 @@ O servidor inicia em `http://localhost:8000` (ou próxima porta livre) e executa
 
 ## Autenticação e Segurança
 
-- **Acesso Público**: Estudantes podem criar conta (`/register`), autenticar-se (`/login`), navegar livremente, realizar simulados, selecionar provas e conferir pontuações.
-- **Acesso Restrito (Admin)**: O upload de novos simulados e acionamento da IA é restrito a administradores autenticados via Bearer Token.
-- **Credenciais Padrão Iniciais**:
+- **Acesso Convidado / Público**: Qualquer usuário pode navegar livremente, selecionar quizzes públicos da plataforma, responder simulados, conferir pontuações com gabarito explicativo e **gerar simulados inéditos por tema com IA** salvos localmente no navegador.
+- **Acesso de Estudantes**: Cadastro via `/register` e autenticação via `/login`.
+- **Acesso de Administrador**:
   - Usuário: `admin`
-   - Senha: definida obrigatoriamente por `ADMIN_PASSWORD` no ambiente
+  - Senha: sincronizada automaticamente com `ADMIN_PASSWORD` no ambiente (padrão de desenvolvimento: `CofeDev2468*`).
+  - **Redefinição rápida de senha do admin**:
+    ```bash
+    python scripts/reset_admin.py "NovaSenha123*"
+    ```
+  - **Invalidar todas as sessões ativas (forçar reautenticação geral)**:
+    ```bash
+    python scripts/reset_sessions.py
+    ```
 
 ---
 
@@ -110,15 +120,20 @@ Para disponibilizar sua aplicação com domínio próprio, HTTPS automático e p
 
 ## Como adicionar quizzes
 
-Clique no botão **"+ Adicionar Quiz"** na interface e envie um arquivo:
+Clique no botão **"+ Adicionar Quiz"** na interface. Você pode escolher entre duas formas:
 
+### Opção 1: ✨ Gerar por Tema com IA (Sem Arquivo)
+Se você não tiver um documento pronto, digite o **tema ou assunto** desejado (ex: *Raciocínio Lógico Proposicional*, *Python Básico*, *História do Brasil*, *Direito Constitucional*), escolha o número de questões (3, 5 ou 10) e o nível de dificuldade. A IA elaborará todo o simulado com alternativas e explicações detalhadas!
+
+### Opção 2: 📄 Enviar Arquivo
+Envie um arquivo já estruturado nos formatos:
 - **`.txt`** — texto puro com questões numeradas
 - **`.pdf`** — documento PDF (extração automática de texto)
 - **`.docx`** — documento Word
 
 Se o arquivo **não contiver gabarito**, ele é gerado automaticamente via `OPENROUTER_API_KEY`. Cada questão pode ter de 2 a N alternativas.
 
-### Formato de questões aceito
+#### Formato de questões aceito em arquivos
 
 ```
 **1.** Enunciado da questão?
@@ -145,12 +160,13 @@ c) Opção C
 | `GET` | `/register` ou `/register.html` | Pública | Página de cadastro de estudante |
 | `GET` | `/api/quizzes` | Pública | Lista quizzes disponíveis |
 | `GET` | `/api/quiz?source=<name>` | Pública | Questões de um quiz (sem gabarito) |
-| `POST` | `/api/quiz/submit` | Pública | Submete respostas e retorna score |
+| `POST` | `/api/quiz/submit` | Pública | Submete respostas e retorna score/gabarito |
+| `POST` | `/api/quiz/generate` | Pública / Convidado / Autenticado | Gera questões por tema via IA |
 | `POST` | `/api/auth/login` | Pública | Login (retorna Bearer Token) |
 | `POST` | `/api/auth/register` | Pública | Cadastro de estudante |
 | `GET` | `/api/auth/me` | Bearer Token | Dados do usuário autenticado |
 | `POST` | `/api/auth/logout` | Bearer Token | Encerramento de sessão |
-| `POST` | `/api/upload` | **Admin** | Upload de arquivo (multipart/form-data) |
+| `POST` | `/api/upload` | Autenticado / Convidado (`?guest=1`) | Upload de arquivo (multipart/form-data) |
 
 ---
 

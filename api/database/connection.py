@@ -1,11 +1,16 @@
 """
-Gerenciamento de conexões com PostgreSQL.
-Usa psycopg2 com context manager para garantir fechamento seguro.
+Gerenciamento otimizado de conexões com PostgreSQL.
+Usa ThreadedConnectionPool com fallback seguro para conexões diretas.
 """
+import threading
+from contextlib import contextmanager
 import psycopg2
 import psycopg2.extras
-from contextlib import contextmanager
+from psycopg2.pool import ThreadedConnectionPool
 from api.utils.config import DATABASE_URL, DEBUG
+
+_pool = None
+_pool_lock = threading.Lock()
 
 
 def _get_database_url() -> str:
@@ -13,13 +18,13 @@ def _get_database_url() -> str:
     url = (DATABASE_URL or "").strip()
     if url.startswith("postgres://"):
         url = "postgresql://" + url[len("postgres://"):]
-    
+
     # Adiciona sslmode=require automaticamente para bancos em nuvem se não estiver presente
     if url and "localhost" not in url and "127.0.0.1" not in url:
         if "sslmode=" not in url:
             sep = "&" if "?" in url else "?"
             url = f"{url}{sep}sslmode=require"
-    
+
     return url
 
 
@@ -37,6 +42,27 @@ def _connect_db():
         raise ConnectionError(f"Erro ao conectar ao PostgreSQL: {msg.strip()}") from None
 
 
+def _get_pool():
+    """Retorna o pool de conexões ativo ou cria um novo com tolerância a falhas."""
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:
+                clean_url = _get_database_url()
+                if not clean_url:
+                    return None
+                try:
+                    # Pool com min 1 e max 10 conexões ativas
+                    _pool = ThreadedConnectionPool(minconn=1, maxconn=10, dsn=clean_url)
+                    if DEBUG:
+                        print("⚡ PostgreSQL connection pool inicializado (1-10 conexões)")
+                except Exception as e:
+                    if DEBUG:
+                        print(f"⚠️ Aviso: Falha ao iniciar connection pool ({e}), usando conexões diretas")
+                    _pool = False
+    return _pool if _pool is not False else None
+
+
 def get_raw_connection():
     """Abre uma conexão direta com o PostgreSQL."""
     return _connect_db()
@@ -45,22 +71,49 @@ def get_raw_connection():
 @contextmanager
 def get_connection():
     """
-    Context manager para conexão PostgreSQL.
-    Garante commit/rollback e fechamento automático.
+    Context manager para conexão PostgreSQL com pooling.
+    Reutiliza conexões do pool quando disponível, reduzindo a latência de handshake.
     """
+    pool = _get_pool()
     conn = None
+    from_pool = False
+
     try:
-        conn = _connect_db()
+        if pool:
+            try:
+                conn = pool.getconn()
+                from_pool = True
+                if conn.closed:
+                    conn = _connect_db()
+                    from_pool = False
+            except Exception:
+                conn = _connect_db()
+                from_pool = False
+        else:
+            conn = _connect_db()
+            from_pool = False
+
         yield conn
         conn.commit()
     except Exception:
-        if conn:
+        if conn and not conn.closed:
             conn.rollback()
         raise
     finally:
         if conn:
-            conn.close()
-
+            if from_pool and pool and not conn.closed:
+                try:
+                    pool.putconn(conn)
+                except Exception:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+            else:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
 
 @contextmanager

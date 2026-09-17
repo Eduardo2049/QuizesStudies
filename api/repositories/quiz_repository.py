@@ -12,53 +12,75 @@ class QuizRepository:
 
     # ─── Leitura ──────────────────────────────────────────────────────────────
 
-    def find_all_sources(self, user_id: int) -> list[dict]:
+    def find_all_sources(self, user_id: int = None) -> list[dict]:
         """
-        Lista todos os quizzes cadastrados.
+        Lista todos os quizzes cadastrados acessíveis ao usuário (públicos ou criados por ele).
 
         Returns:
             list[dict]: [{id, name, label, file_type, ai_generated, created_at}]
         """
         with get_cursor() as cur:
-            cur.execute("""
-                SELECT id, name, label, file_type, ai_generated, created_at,
-                       created_by, is_public
-                FROM quizzes
-                WHERE is_public = TRUE OR created_by = %s
-                ORDER BY created_at ASC
-            """, (user_id,))
+            if user_id:
+                cur.execute("""
+                    SELECT id, name, label, file_type, ai_generated, created_at,
+                           created_by, is_public
+                    FROM quizzes
+                    WHERE is_public = TRUE OR created_by = %s
+                    ORDER BY created_at ASC
+                """, (user_id,))
+            else:
+                cur.execute("""
+                    SELECT id, name, label, file_type, ai_generated, created_at,
+                           created_by, is_public
+                    FROM quizzes
+                    WHERE is_public = TRUE
+                    ORDER BY created_at ASC
+                """)
             return [dict(row) for row in cur.fetchall()]
 
     def find_by_name(self, name: str, user_id: int = None) -> dict:
         """
-        Encontra um quiz pelo campo `name`.
+        Encontra um quiz pelo campo `name` (se público ou se pertencente ao usuário).
 
         Raises:
             QuizNotFound: Se não existir
         """
         with get_cursor() as cur:
-            cur.execute("""
-                SELECT * FROM quizzes
-                WHERE name = %s AND (is_public = TRUE OR created_by = %s)
-            """, (name, user_id))
+            if user_id:
+                cur.execute("""
+                    SELECT * FROM quizzes
+                    WHERE name = %s AND (is_public = TRUE OR created_by = %s)
+                """, (name, user_id))
+            else:
+                cur.execute("""
+                    SELECT * FROM quizzes
+                    WHERE name = %s AND is_public = TRUE
+                """, (name,))
             row = cur.fetchone()
         if not row:
             raise QuizNotFound(name)
         return dict(row)
 
-    def find_default(self, user_id: int) -> dict:
+    def find_default(self, user_id: int = None) -> dict:
         """
-        Retorna o primeiro quiz cadastrado (mais antigo).
+        Retorna o primeiro quiz cadastrado acessível (mais antigo).
 
         Raises:
             QuizNotFound: Se não houver nenhum quiz
         """
         with get_cursor() as cur:
-            cur.execute("""
-                SELECT * FROM quizzes
-                WHERE is_public = TRUE OR created_by = %s
-                ORDER BY created_at ASC LIMIT 1
-            """, (user_id,))
+            if user_id:
+                cur.execute("""
+                    SELECT * FROM quizzes
+                    WHERE is_public = TRUE OR created_by = %s
+                    ORDER BY created_at ASC LIMIT 1
+                """, (user_id,))
+            else:
+                cur.execute("""
+                    SELECT * FROM quizzes
+                    WHERE is_public = TRUE
+                    ORDER BY created_at ASC LIMIT 1
+                """)
             row = cur.fetchone()
         if not row:
             raise QuizNotFound("Nenhum quiz cadastrado")

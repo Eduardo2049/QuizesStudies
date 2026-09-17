@@ -11,6 +11,14 @@ def start_server():
     print("Verificando banco de dados...")
     run_migrations()
 
+    try:
+        from api.repositories.user_repository import UserRepository
+        cleared = UserRepository().clear_all_sessions()
+        if cleared > 0:
+            print(f"Sessões anteriores invalidadas ({cleared} ativas removidas). Novo login necessário.")
+    except Exception:
+        pass
+
     for port in range(PORT, PORT + 11):
         try:
             server = ThreadingHTTPServer((HOST, port), QuizHandler)

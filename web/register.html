@@ -27,15 +27,15 @@
       </nav>
 
       <!-- Formulário de Login (Oculto inicialmente na rota /register) -->
-      <form id="pageLoginForm" class="auth-form-card" hidden novalidate>
+      <form id="pageLoginForm" class="auth-form-card" hidden autocomplete="off" novalidate>
         <div class="form-group">
           <label for="loginUsername">Usuário</label>
-          <input type="text" id="loginUsername" name="username" placeholder="Digite seu usuário" required autocomplete="username">
+          <input type="text" id="loginUsername" name="username" placeholder="Digite seu usuário" required autocomplete="off">
         </div>
 
         <div class="form-group">
           <label for="loginPassword">Senha</label>
-          <input type="password" id="loginPassword" name="password" placeholder="Digite sua senha" required autocomplete="current-password">
+          <input type="password" id="loginPassword" name="password" placeholder="Digite sua senha" required autocomplete="new-password">
         </div>
 
         <div id="loginFeedback" class="form-feedback" hidden></div>
@@ -47,15 +47,15 @@
       </form>
 
       <!-- Formulário de Cadastro (Ativo inicialmente na rota /register) -->
-      <form id="pageRegisterForm" class="auth-form-card" novalidate>
+      <form id="pageRegisterForm" class="auth-form-card" autocomplete="off" novalidate>
         <div class="form-group">
           <label for="regUsername">Usuário</label>
-          <input type="text" id="regUsername" name="username" placeholder="Escolha um nome de usuário" required autocomplete="username" autofocus>
+          <input type="text" id="regUsername" name="username" placeholder="Escolha um nome de usuário" required autocomplete="off" autofocus>
         </div>
 
         <div class="form-group">
           <label for="regEmail">E-mail</label>
-          <input type="email" id="regEmail" name="email" placeholder="seuemail@exemplo.com" required autocomplete="email">
+          <input type="email" id="regEmail" name="email" placeholder="seuemail@exemplo.com" required autocomplete="off">
         </div>
 
         <div class="form-group">
@@ -80,6 +80,12 @@
   </div>
 
   <script>
+    // Limpeza proativa de qualquer resquício de cache ou usuário anterior ao abrir a tela de autenticação
+    localStorage.removeItem('quiz_guest_mode');
+    localStorage.removeItem('quiz_guest_data');
+    localStorage.removeItem('quiz_guest_quizzes');
+    sessionStorage.clear();
+
     // ─── Verificação da sessão HttpOnly ──────────────────────────────────
     fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' })
       .then(res => { if (res.ok) window.location.replace('/'); })
@@ -171,6 +177,10 @@
     // ─── Submissão do Formulário de Login ─────────────────────────────────
     pageLoginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      localStorage.removeItem('quiz_guest_mode');
+      localStorage.removeItem('quiz_guest_data');
+      localStorage.removeItem('quiz_guest_quizzes');
+      sessionStorage.clear();
       loginFeedback.hidden = true;
       loginFeedback.textContent = '';
 
@@ -228,6 +238,10 @@
     // ─── Submissão do Formulário de Cadastro ──────────────────────────────
     pageRegisterForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      localStorage.removeItem('quiz_guest_mode');
+      localStorage.removeItem('quiz_guest_data');
+      localStorage.removeItem('quiz_guest_quizzes');
+      sessionStorage.clear();
       registerFeedback.hidden = true;
       registerFeedback.textContent = '';
 

@@ -163,29 +163,37 @@ class QuizHandler(BaseHTTPRequestHandler):
 
             # 1. API: Listar quizzes
             if request.path == "/api/quizzes":
-                user = self._require_authenticated_user()
-                response = self.quiz_controller.get_quizzes(user["id"])
+                user = self._get_current_user_or_none()
+                user_id = user["id"] if user else None
+                response = self.quiz_controller.get_quizzes(user_id)
                 status, data = ResponseFormatter.success(response["data"])
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
             # 2. API: Carregar um quiz
             if request.path == "/api/quiz":
-                user = self._require_authenticated_user()
+                user = self._get_current_user_or_none()
+                user_id = user["id"] if user else None
                 source_name = query.get("source", [None])[0]
-                response = self.quiz_controller.get_quiz(source_name, user["id"])
+                response = self.quiz_controller.get_quiz(source_name, user_id)
                 status, data = ResponseFormatter.success(response["data"])
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
             # 3. Servir HTML principal
             if request.path in ("/", "/guest", "/index.html", "/api/index.py", "/api/index"):
-                if request.path != "/guest" and not HTTPMiddleware.get_auth_token(self):
-                    self.send_response(302)
-                    self.send_header("Location", "/login")
-                    HTTPMiddleware.add_cache_headers(self, cache=False)
-                    self.end_headers()
-                    return
+                if request.path != "/guest":
+                    user = self._get_current_user_or_none()
+                    if not user:
+                        self.send_response(302)
+                        self.send_header("Location", "/login")
+                        token = HTTPMiddleware.get_auth_token(self)
+                        if token:
+                            clear_cookie = HTTPMiddleware.session_cookie(None, COOKIE_SECURE, 0)
+                            self.send_header("Set-Cookie", clear_cookie)
+                        HTTPMiddleware.add_cache_headers(self, cache=False)
+                        self.end_headers()
+                        return
 
                 index_file = WEB_DIR / "index.html"
                 if index_file.is_file():
@@ -279,7 +287,7 @@ class QuizHandler(BaseHTTPRequestHandler):
 
         except QuizAPIException as e:
             status, data = ResponseFormatter.error(e.message, "QUIZ_ERROR", e.status_code)
-            HTTPMiddleware.send_json_response(self, status, data)
+            HTTPMiddleware.send_json_response(self, status, data, clear_cookie=(e.status_code == 401))
         except Exception as e:
             if DEBUG:
                 import traceback
@@ -362,9 +370,56 @@ class QuizHandler(BaseHTTPRequestHandler):
                 self._handle_upload(query.get("guest", ["0"])[0] == "1")
                 return
 
+            # ── 1.1 Gerar quiz por tema via IA (application/json) ────────────
+            if request.path == "/api/quiz/generate":
+                user = self._get_current_user_or_none()
+                is_guest = (query.get("guest", ["0"])[0] == "1") or (user is None)
+
+                length = int(self.headers.get("Content-Length", 0))
+                if length > MAX_JSON_BYTES:
+                    status, data = ResponseFormatter.bad_request("Corpo da requisição muito grande")
+                    HTTPMiddleware.send_json_response(self, 413, data)
+                    return
+
+                try:
+                    payload = json.loads(self.rfile.read(length)) if length > 0 else {}
+                except json.JSONDecodeError:
+                    status, data = ResponseFormatter.bad_request("JSON inválido")
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
+
+                topic = payload.get("topic", "").strip()
+                if not topic:
+                    status, data = ResponseFormatter.bad_request("O campo 'topic' (tema) é obrigatório")
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
+
+                num_questions = payload.get("num_questions", 5)
+                difficulty = payload.get("difficulty", "Médio")
+                context = payload.get("context", "")
+                requested_public = payload.get("is_public", False) is True
+                is_public = requested_public and user and user.get("role") == "admin"
+
+                response = self.quiz_controller.generate_quiz_by_topic(
+                    topic=topic,
+                    num_questions=num_questions,
+                    difficulty=difficulty,
+                    context=context,
+                    user_id=user["id"] if user else None,
+                    is_public=bool(is_public),
+                    persist=not is_guest,
+                )
+                status, data = ResponseFormatter.created(
+                    response["data"],
+                    response["data"].get("message")
+                )
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
             # ── 2. Submissão de respostas (application/json) ──────────────────
             if request.path == "/api/quiz/submit":
-                user = self._require_authenticated_user()
+                user = self._get_current_user_or_none()
+                user_id = user["id"] if user else None
                 if not _allow_auth_request(self, limit=30):
                     status, data = ResponseFormatter.error(
                         "Muitas submissões. Tente novamente mais tarde.",
@@ -396,7 +451,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                     HTTPMiddleware.send_json_response(self, status, data)
                     return
 
-                response = self.quiz_controller.submit_answers(payload, user["id"])
+                response = self.quiz_controller.submit_answers(payload, user_id)
                 status, data = ResponseFormatter.success(response["data"])
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
@@ -407,7 +462,7 @@ class QuizHandler(BaseHTTPRequestHandler):
 
         except QuizAPIException as e:
             status, data = ResponseFormatter.error(e.message, "QUIZ_ERROR", e.status_code)
-            HTTPMiddleware.send_json_response(self, status, data)
+            HTTPMiddleware.send_json_response(self, status, data, clear_cookie=(e.status_code == 401))
         except Exception as e:
             if DEBUG:
                 import traceback
@@ -484,6 +539,13 @@ class QuizHandler(BaseHTTPRequestHandler):
             response["data"].get("message")
         )
         HTTPMiddleware.send_json_response(self, status, data)
+
+    def _get_current_user_or_none(self):
+        """Retorna o usuário autenticado ou None se não houver token válido (convidado)."""
+        token = HTTPMiddleware.get_auth_token(self)
+        if not token:
+            return None
+        return self.auth_controller.service.validate_token(token)
 
     def _require_authenticated_user(self):
         token = HTTPMiddleware.get_auth_token(self)

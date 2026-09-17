@@ -9,6 +9,31 @@ const timer = document.querySelector('#timer');
 const startBtn = document.querySelector('#startBtn');
 const timerDuration = 24 * 60;
 
+// ─── Modal de Resultado do Simulado ───────────────────────────────────────────
+const resultModal = document.querySelector('#resultModal');
+const closeResultModalBtn = document.querySelector('#closeResultModal');
+const btnCloseResultModal = document.querySelector('#btnCloseResultModal');
+const btnRedoQuiz = document.querySelector('#btnRedoQuiz');
+const resultScoreBadge = document.querySelector('#resultScoreBadge');
+const resultScoreNumber = document.querySelector('#resultScoreNumber');
+const resultScorePercent = document.querySelector('#resultScorePercent');
+const resultSummaryText = document.querySelector('#resultSummaryText');
+const resultQuestionsList = document.querySelector('#resultQuestionsList');
+
+function openResultModal() {
+  if (resultModal) {
+    resultModal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeResultModal() {
+  if (resultModal) {
+    resultModal.hidden = true;
+    document.body.style.overflow = '';
+  }
+}
+
 let questions = [];
 let selectedSource = '';
 let loadRequestId = 0;
@@ -17,15 +42,45 @@ let remainingSeconds = timerDuration;
 let timerInterval;
 
 function isGuestMode() {
-  return localStorage.getItem('quiz_guest_mode') === 'true';
+  return window.location.pathname === '/guest' || sessionStorage.getItem('quiz_guest_mode') === 'true';
+}
+
+function clearGuestData() {
+  sessionStorage.removeItem('quiz_guest_mode');
+  sessionStorage.removeItem('quiz_guest_data');
+  sessionStorage.removeItem('quiz_guest_quizzes');
+  localStorage.removeItem('quiz_guest_mode');
+  localStorage.removeItem('quiz_guest_data');
+  localStorage.removeItem('quiz_guest_quizzes');
 }
 
 function getGuestQuiz() {
   try {
-    return JSON.parse(localStorage.getItem('quiz_guest_data') || 'null');
+    return JSON.parse(sessionStorage.getItem('quiz_guest_data') || localStorage.getItem('quiz_guest_data') || 'null');
   } catch (_) {
     return null;
   }
+}
+
+function getGuestQuizzes() {
+  try {
+    const list = JSON.parse(sessionStorage.getItem('quiz_guest_quizzes') || localStorage.getItem('quiz_guest_quizzes') || '[]');
+    if (Array.isArray(list) && list.length > 0) return list;
+  } catch (_) {}
+  const single = getGuestQuiz();
+  return single ? [single] : [];
+}
+
+function saveGuestQuiz(quizData) {
+  const quizzes = getGuestQuizzes().filter((q) => q.name !== quizData.name);
+  quizzes.unshift(quizData);
+  sessionStorage.setItem('quiz_guest_quizzes', JSON.stringify(quizzes));
+  sessionStorage.setItem('quiz_guest_data', JSON.stringify(quizData));
+}
+
+function findGuestQuizByName(name) {
+  const quizzes = getGuestQuizzes();
+  return quizzes.find((q) => q.name === name) || null;
 }
 
 function escapeHtml(value) {
@@ -68,16 +123,20 @@ function startTimer() {
 
 // ─── Carregamento de Quiz ─────────────────────────────────────────────────────
 async function loadQuiz(source = selectedSource) {
+  // Se for convidado e o quiz for local, carrega diretamente do storage
   if (isGuestMode()) {
-    const localQuiz = getGuestQuiz();
-    if (!localQuiz) {
-      quiz.innerHTML = '<p class="empty-state">Envie um quiz para começar.</p>';
+    const localQuiz = source ? findGuestQuizByName(source) : (getGuestQuizzes()[0] || null);
+    if (localQuiz && (!source || localQuiz.name === source)) {
+      selectedSource = localQuiz.name;
+      questions = localQuiz.questions || [];
+      if (!questions.length) {
+        quiz.innerHTML = '<p class="empty-state">Nenhuma questão encontrada neste quiz.</p>';
+        updateProgress();
+        return;
+      }
+      renderQuestions();
       return;
     }
-    selectedSource = localQuiz.name;
-    questions = localQuiz.questions || [];
-    renderQuestions();
-    return;
   }
 
   const requestId = ++loadRequestId;
@@ -126,30 +185,56 @@ function renderQuestions() {
 }
 
 async function loadQuizList() {
-  if (isGuestMode()) {
-    const localQuiz = getGuestQuiz();
-    quizSelector.innerHTML = localQuiz
-      ? `<option value="${escapeHtml(localQuiz.name)}">${escapeHtml(localQuiz.label)} (local)</option>`
-      : '<option value="">— Nenhum quiz local —</option>';
+  let serverQuizzes = [];
+  try {
+    const response = await fetch('/api/quizzes', { cache: 'no-store' });
+    if (response.ok) {
+      const rawData = await response.json();
+      const data = rawData.data || rawData;
+      serverQuizzes = data.quizzes || [];
+    }
+  } catch (e) {
+    console.warn('Não foi possível carregar quizzes da plataforma:', e);
+  }
+
+  const localQuizzes = isGuestMode() ? getGuestQuizzes() : [];
+
+  if (!serverQuizzes.length && !localQuizzes.length) {
+    quizSelector.innerHTML = '<option value="">— Nenhum quiz disponível —</option>';
     return;
   }
 
-  const response = await fetch('/api/quizzes', { cache: 'no-store' });
-  const rawData = await response.json();
-  const data = rawData.data || rawData;
-  const quizzes = data.quizzes || [];
-
-  if (!quizzes.length) {
-    quizSelector.innerHTML = '<option value="">— Nenhum quiz cadastrado —</option>';
-    return;
+  let html = '';
+  if (serverQuizzes.length > 0) {
+    html += '<optgroup label="Quizzes da Plataforma">';
+    html += serverQuizzes.map((item) =>
+      `<option value="${escapeHtml(item.name)}">
+        ${escapeHtml(item.label)}${item.ai_generated ? ' 🤖' : ''}
+      </option>`
+    ).join('');
+    html += '</optgroup>';
   }
 
-  quizSelector.innerHTML = quizzes.map((item) =>
-    `<option value="${item.name}">
-      ${escapeHtml(item.label)}${item.ai_generated ? ' 🤖' : ''}
-    </option>`
-  ).join('');
-  quizSelector.value = selectedSource;
+  if (localQuizzes.length > 0) {
+    html += '<optgroup label="Seus Quizzes Gerados (Convidado)">';
+    html += localQuizzes.map((item) =>
+      `<option value="${escapeHtml(item.name)}">
+        ${escapeHtml(item.label)} ✨
+      </option>`
+    ).join('');
+    html += '</optgroup>';
+  }
+
+  quizSelector.innerHTML = html;
+
+  // Restaurar seleção se válida
+  const optionExists = selectedSource && quizSelector.querySelector(`option[value="${CSS.escape(selectedSource)}"]`);
+  if (optionExists) {
+    quizSelector.value = selectedSource;
+  } else if (quizSelector.options.length > 0) {
+    selectedSource = quizSelector.options[0].value;
+    quizSelector.value = selectedSource;
+  }
 }
 
 // ─── Progresso ────────────────────────────────────────────────────────────────
@@ -192,7 +277,10 @@ async function handleSubmitQuiz(event) {
 
   try {
     let data;
-    if (isGuestMode()) {
+    const localQuiz = isGuestMode() ? findGuestQuizByName(selectedSource) : null;
+    const isLocalQuiz = Boolean(localQuiz && questions.length > 0 && questions[0]?.answer !== undefined);
+
+    if (isLocalQuiz) {
       const results = questions.map((item) => {
         const selected = answers[String(item.id)];
         return {
@@ -231,25 +319,12 @@ async function handleSubmitQuiz(event) {
     clearInterval(timerInterval);
     timerInterval = undefined;
     timer.classList.remove('running');
-    result.hidden = false;
-    result.innerHTML = `
-      <h2>${escapeHtml(data.score)}/${escapeHtml(data.total)} acertos · ${escapeHtml(data.percentage)}%</h2>
-      <p>Revise suas respostas abaixo. Use "Resetar quiz" para tentar novamente.</p>
-      ${data.results.map((item) => `
-        <div class="review">
-          <strong class="${item.isCorrect ? 'right' : 'wrong'}">
-            ${item.isCorrect ? '✓ Correta' : '✗ Errada'} · Questão ${escapeHtml(item.id)}
-          </strong>
-          <span>${item.isCorrect
-            ? 'Você marcou a alternativa certa.'
-            : (item.selected !== null && item.selected !== undefined
-                ? `Você marcou a alternativa ${escapeHtml(String.fromCharCode(65 + item.selected))}; a correta era ${escapeHtml(String.fromCharCode(65 + item.correct))}.`
-                : `Não respondida; a alternativa correta era ${String.fromCharCode(65 + item.correct)}.`)
-          }</span>
-          ${item.explanation ? `<br><small>${escapeHtml(item.explanation)}</small>` : ''}
-        </div>
-      `).join('')}`;
-    result.scrollIntoView({ behavior: 'smooth' });
+    if (result) {
+      result.hidden = true;
+      result.innerHTML = '';
+    }
+    renderResultModal(data);
+    openResultModal();
   } catch (err) {
     alert('Erro ao conferir respostas. Verifique a conexão com o servidor.');
   } finally {
@@ -257,6 +332,79 @@ async function handleSubmitQuiz(event) {
       submitBtn.disabled = false;
       submitBtn.innerHTML = 'Conferir respostas <span>→</span>';
     }
+  }
+}
+
+function renderResultModal(data) {
+  const { score, total, percentage, results } = data;
+
+  if (resultScoreNumber) resultScoreNumber.textContent = `${score}/${total}`;
+  if (resultScorePercent) resultScorePercent.textContent = `${percentage}%`;
+
+  if (resultScoreBadge) {
+    resultScoreBadge.className = 'results-badge';
+    if (percentage >= 80) {
+      resultScoreBadge.classList.add('excellent');
+      resultScoreBadge.textContent = '🎯 Excelente!';
+    } else if (percentage >= 60) {
+      resultScoreBadge.classList.add('good');
+      resultScoreBadge.textContent = '👍 Bom trabalho!';
+    } else {
+      resultScoreBadge.classList.add('practice');
+      resultScoreBadge.textContent = '💡 Continue praticando!';
+    }
+  }
+
+  if (resultSummaryText) {
+    if (percentage >= 80) {
+      resultSummaryText.textContent = 'Parabéns! Excelente domínio do conteúdo abordado.';
+    } else if (percentage >= 60) {
+      resultSummaryText.textContent = 'Muito bom! Você acertou a maior parte das questões.';
+    } else {
+      resultSummaryText.textContent = 'Revise detalhadamente cada questão abaixo e tente novamente.';
+    }
+  }
+
+  if (resultQuestionsList) {
+    resultQuestionsList.innerHTML = results.map((item) => {
+      const qData = questions.find((q) => q.id === item.id);
+      const questionText = qData?.question || `Questão ${item.id}`;
+      const options = qData?.options || [];
+
+      const hasUserSelected = item.selected !== null && item.selected !== undefined;
+      const userSelectedLabel = hasUserSelected
+        ? `${String.fromCharCode(65 + item.selected)}) ${escapeHtml(options[item.selected] ?? '')}`
+        : 'Não respondida';
+
+      const hasCorrect = item.correct !== null && item.correct !== undefined;
+      const correctLabel = hasCorrect
+        ? `${String.fromCharCode(65 + item.correct)}) ${escapeHtml(options[item.correct] ?? '')}`
+        : '';
+
+      return `
+        <article class="result-card ${item.isCorrect ? 'is-correct' : 'is-wrong'}">
+          <div class="result-card-header">
+            <span class="result-card-qnumber">Questão ${escapeHtml(String(item.id).padStart(2, '0'))}</span>
+            <span class="result-card-tag">${item.isCorrect ? '✓ Correta' : '✗ Errada'}</span>
+          </div>
+          <p class="result-card-question">${escapeHtml(questionText)}</p>
+          <div class="result-card-answers">
+            <div class="result-user-answer">
+              Sua resposta: <strong>${userSelectedLabel}</strong>
+            </div>
+            ${!item.isCorrect && correctLabel ? `
+            <div class="result-correct-answer">
+              Gabarito correto: <strong>${correctLabel}</strong>
+            </div>` : ''}
+          </div>
+          ${item.explanation ? `
+          <div class="result-card-explanation">
+            <strong>💡 Explicação Didática</strong>
+            ${escapeHtml(item.explanation)}
+          </div>` : ''}
+        </article>
+      `;
+    }).join('');
   }
 }
 
@@ -275,10 +423,29 @@ startBtn?.addEventListener('click', () => {
 document.querySelector('#reset').addEventListener('click', () => {
   quiz.reset();
   resetTimer();
-  result.hidden = true;
-  result.innerHTML = '';
+  closeResultModal();
+  if (result) {
+    result.hidden = true;
+    result.innerHTML = '';
+  }
   updateProgress();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+// Ações do Modal de Resultados
+closeResultModalBtn?.addEventListener('click', closeResultModal);
+btnCloseResultModal?.addEventListener('click', closeResultModal);
+btnRedoQuiz?.addEventListener('click', () => {
+  closeResultModal();
+  quiz.reset();
+  resetTimer();
+  updateProgress();
+  const firstQuestion = quiz.querySelector('.question');
+  if (firstQuestion) {
+    firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 });
 
 quiz.addEventListener('change', () => {
@@ -288,18 +455,21 @@ quiz.addEventListener('change', () => {
 
 quizSelector.addEventListener('change', async () => {
   resetTimer();
-  result.hidden = true;
-  result.innerHTML = '';
+  closeResultModal();
+  if (result) {
+    result.hidden = true;
+    result.innerHTML = '';
+  }
   quiz.innerHTML = '';
   try {
     await loadQuiz(quizSelector.value);
   } catch (error) {
     if (error.name !== 'AbortError')
-      result.innerHTML = `<p>Não foi possível carregar este questionário.</p>`;
+      quiz.innerHTML = `<p class="empty-state">Não foi possível carregar este questionário.</p>`;
   }
 });
 
-// ─── Modal de Upload ──────────────────────────────────────────────────────────
+// ─── Modal de Upload / Gerar Quiz ─────────────────────────────────────────
 const uploadModal = document.querySelector('#uploadModal');
 const dropZone = document.querySelector('#dropZone');
 const fileInput = document.querySelector('#fileInput');
@@ -310,8 +480,43 @@ const uploadStatusText = document.querySelector('#uploadStatusText');
 const uploadError = document.querySelector('#uploadError');
 const uploadSuccess = document.querySelector('#uploadSuccess');
 const confirmUploadBtn = document.querySelector('#confirmUpload');
+const confirmGenerateTopicBtn = document.querySelector('#confirmGenerateTopic');
+
+// Abas e Painéis do Modal
+const tabUploadFile = document.querySelector('#tabUploadFile');
+const tabGenerateTopic = document.querySelector('#tabGenerateTopic');
+const panelUpload = document.querySelector('#panelUpload');
+const panelTopic = document.querySelector('#panelTopic');
+const topicInput = document.querySelector('#topicInput');
+const topicNumQuestions = document.querySelector('#topicNumQuestions');
+const topicDifficulty = document.querySelector('#topicDifficulty');
+const topicContext = document.querySelector('#topicContext');
 
 let selectedFile = null;
+
+function switchModalTab(tabName) {
+  uploadError.hidden = true;
+  uploadError.textContent = '';
+  uploadSuccess.hidden = true;
+  uploadSuccess.textContent = '';
+
+  if (tabName === 'topic') {
+    tabGenerateTopic?.classList.add('active');
+    tabUploadFile?.classList.remove('active');
+    panelTopic?.removeAttribute('hidden');
+    panelUpload?.setAttribute('hidden', '');
+    confirmGenerateTopicBtn?.removeAttribute('hidden');
+    confirmUploadBtn?.setAttribute('hidden', '');
+    setTimeout(() => topicInput?.focus(), 50);
+  } else {
+    tabUploadFile?.classList.add('active');
+    tabGenerateTopic?.classList.remove('active');
+    panelUpload?.removeAttribute('hidden');
+    panelTopic?.setAttribute('hidden', '');
+    confirmUploadBtn?.removeAttribute('hidden');
+    confirmGenerateTopicBtn?.setAttribute('hidden', '');
+  }
+}
 
 function openModal() {
   resetModalState();
@@ -336,8 +541,14 @@ function resetModalState() {
   uploadSuccess.hidden = true;
   uploadSuccess.textContent = '';
   confirmUploadBtn.disabled = true;
+  if (confirmGenerateTopicBtn) confirmGenerateTopicBtn.disabled = false;
   dropZone.classList.remove('drop-zone--active', 'drop-zone--error');
   fileInput.value = '';
+  if (topicInput) topicInput.value = '';
+  if (topicContext) topicContext.value = '';
+  if (topicNumQuestions) topicNumQuestions.value = '5';
+  if (topicDifficulty) topicDifficulty.value = 'Médio';
+  switchModalTab('upload');
 }
 
 function setFile(file) {
@@ -361,10 +572,15 @@ function setFile(file) {
 }
 
 function showUploadError(msg) {
-  uploadError.textContent = msg;
+  let cleanMsg = String(msg || 'Ocorreu um erro ao processar a requisição.').trim();
+  if (cleanMsg.includes('{"error"') || cleanMsg.includes('"user_id"') || cleanMsg.includes('OpenRouter')) {
+    cleanMsg = 'O serviço de inteligência artificial está indisponível no momento. Por favor, tente novamente em instantes.';
+  }
+  uploadError.textContent = cleanMsg;
   uploadError.hidden = false;
-  dropZone.classList.add('drop-zone--error');
-  confirmUploadBtn.disabled = true;
+  dropZone?.classList.add('drop-zone--error');
+  if (confirmUploadBtn) confirmUploadBtn.disabled = true;
+  if (confirmGenerateTopicBtn) confirmGenerateTopicBtn.disabled = false;
 }
 
 // ─── Autenticação & Sessão ──────────────────────────────────────────────────
@@ -372,6 +588,7 @@ let currentUser = null;
 
 function clearAuthToken() {
   currentUser = null;
+  clearGuestData();
   updateAuthUI();
 }
 
@@ -398,11 +615,13 @@ function updateAuthUI() {
 }
 
 async function checkAuth() {
-  if (isGuestMode()) {
+  if (window.location.pathname === '/guest') {
     currentUser = { id: null, username: 'Convidado', role: 'guest' };
     updateAuthUI();
     return true;
   }
+
+  clearGuestData();
 
   try {
     const res = await fetch('/api/auth/me', {
@@ -429,9 +648,9 @@ async function checkAuth() {
 
 // ─── Logout ─────────────────────────────────────────────────────────────────
 document.querySelector('#logoutBtn')?.addEventListener('click', async () => {
+  clearGuestData();
   if (isGuestMode()) {
-    localStorage.removeItem('quiz_guest_mode');
-    localStorage.removeItem('quiz_guest_data');
+    clearAuthToken();
     window.location.replace('/login');
     return;
   }
@@ -480,7 +699,7 @@ async function doUpload() {
     }
 
     if (isGuestMode()) {
-      localStorage.setItem('quiz_guest_data', JSON.stringify(data));
+      saveGuestQuiz(data);
     }
 
     uploadStatus.hidden = true;
@@ -489,10 +708,14 @@ async function doUpload() {
 
     // Recarregar lista e selecionar novo quiz
     await loadQuizList();
+    selectedSource = data.name;
     quizSelector.value = data.name;
     resetTimer();
-    result.hidden = true;
-    result.innerHTML = '';
+    closeResultModal();
+    if (result) {
+      result.hidden = true;
+      result.innerHTML = '';
+    }
     quiz.innerHTML = '';
     try { await loadQuiz(data.name); } catch (_) {}
 
@@ -504,7 +727,77 @@ async function doUpload() {
   }
 }
 
-// Eventos do modal de upload
+// ─── Geração por Tema com IA ───────────────────────────────────────────────
+async function doGenerateTopic() {
+  const topic = topicInput?.value.trim();
+  if (!topic) {
+    showUploadError('Por favor, informe o tema ou assunto do quiz.');
+    topicInput?.focus();
+    return;
+  }
+
+  uploadStatus.hidden = false;
+  uploadStatusText.textContent = 'A IA está elaborando as questões e o gabarito…';
+  uploadError.hidden = true;
+  uploadSuccess.hidden = true;
+  confirmGenerateTopicBtn.disabled = true;
+
+  const payload = {
+    topic,
+    num_questions: Number(topicNumQuestions?.value) || 5,
+    difficulty: topicDifficulty?.value || 'Médio',
+    context: topicContext?.value.trim() || '',
+    is_public: document.querySelector('#isPublicQuiz')?.checked || false,
+  };
+
+  try {
+    const response = await fetch(`/api/quiz/generate${isGuestMode() ? '?guest=1' : ''}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload),
+    });
+
+    const raw = await response.json();
+    const data = raw.data || raw;
+
+    if (!response.ok) {
+      showUploadError(data.message || data.error || 'Erro ao gerar quiz por tema.');
+      uploadStatus.hidden = true;
+      confirmGenerateTopicBtn.disabled = false;
+      return;
+    }
+
+    if (isGuestMode()) {
+      saveGuestQuiz(data);
+    }
+
+    uploadStatus.hidden = true;
+    uploadSuccess.textContent = `✓ ${data.message || 'Quiz gerado com sucesso!'}`;
+    uploadSuccess.hidden = false;
+
+    // Recarregar lista e selecionar novo quiz
+    await loadQuizList();
+    selectedSource = data.name;
+    quizSelector.value = data.name;
+    resetTimer();
+    closeResultModal();
+    if (result) {
+      result.hidden = true;
+      result.innerHTML = '';
+    }
+    quiz.innerHTML = '';
+    try { await loadQuiz(data.name); } catch (_) {}
+
+    setTimeout(closeModal, 1400);
+  } catch (err) {
+    showUploadError('Falha na conexão. Verifique o servidor ou a chave de IA.');
+    uploadStatus.hidden = true;
+    confirmGenerateTopicBtn.disabled = false;
+  }
+}
+
+// Eventos do modal de upload / geração
 document.querySelector('#addQuizBtn').addEventListener('click', () => {
   if (!currentUser) {
     window.location.replace('/login');
@@ -515,14 +808,27 @@ document.querySelector('#addQuizBtn').addEventListener('click', () => {
 document.querySelector('#closeModal').addEventListener('click', closeModal);
 document.querySelector('#cancelUpload').addEventListener('click', closeModal);
 confirmUploadBtn.addEventListener('click', doUpload);
+confirmGenerateTopicBtn?.addEventListener('click', doGenerateTopic);
+
+tabUploadFile?.addEventListener('click', () => switchModalTab('upload'));
+tabGenerateTopic?.addEventListener('click', () => switchModalTab('topic'));
+
+topicInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    doGenerateTopic();
+  }
+});
 
 // Fechar clicando fora
 uploadModal.addEventListener('click', (e) => { if (e.target === uploadModal) closeModal(); });
+resultModal?.addEventListener('click', (e) => { if (e.target === resultModal) closeResultModal(); });
 
 // Fechar com Escape
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    if (!uploadModal.hidden) closeModal();
+    if (uploadModal && !uploadModal.hidden) closeModal();
+    if (resultModal && !resultModal.hidden) closeResultModal();
   }
 });
 
@@ -560,8 +866,7 @@ async function init() {
   const isAuthed = await checkAuth();
   if (!isAuthed) return;
   try {
-    await loadQuiz();
-    await loadQuizList();
+    await Promise.all([loadQuiz(), loadQuizList()]);
   } catch (error) {
     if (error.name !== 'AbortError') {
       quiz.innerHTML = '<p class="empty-state">Adicione um quiz usando o botão acima para começar.</p>';

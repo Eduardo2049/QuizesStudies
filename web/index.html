@@ -54,34 +54,82 @@
       <button id="submit" form="quiz" class="primary" type="submit">Conferir respostas <span>→</span></button>
       <button id="reset" class="secondary" type="button">Resetar quiz</button>
     </div>
-
-    <section id="result" class="result" hidden></section>
   </main>
 
-  <!-- ── Modal de Upload ─────────────────────────────────────────────── -->
+  <!-- ── Modal de Upload / Gerar Quiz ──────────────────────────────────── -->
   <div id="uploadModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="modalTitle">
     <div class="modal">
       <button class="modal-close" id="closeModal" aria-label="Fechar">&times;</button>
-      <h2 id="modalTitle" class="modal-title">Adicionar Quiz</h2>
-      <p class="modal-subtitle">Envie um arquivo <strong>TXT</strong>, <strong>PDF</strong> ou <strong>DOCX</strong> com questões. Se não houver gabarito, ele será gerado automaticamente por IA.</p>
+      <h2 id="modalTitle" class="modal-title">Novo Simulado</h2>
 
-      <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="Arraste ou clique para selecionar arquivo">
-        <div class="drop-zone-icon">📄</div>
-        <p class="drop-zone-label">Arraste o arquivo aqui</p>
-        <p class="drop-zone-hint">ou clique para selecionar</p>
-        <p class="drop-zone-types">TXT · PDF · DOCX &nbsp;|&nbsp; Máx. 20 MB</p>
-        <input type="file" id="fileInput" accept=".txt,.pdf,.docx" hidden>
+      <!-- Alternador de Abas: Upload vs Gerar por Tema -->
+      <nav class="modal-tabs" aria-label="Opções para adicionar quiz">
+        <button type="button" class="modal-tab-btn active" id="tabUploadFile" data-target="panelUpload">
+          <span>📄 Enviar Arquivo</span>
+        </button>
+        <button type="button" class="modal-tab-btn" id="tabGenerateTopic" data-target="panelTopic">
+          <span>✨ Gerar por Tema (IA)</span>
+        </button>
+      </nav>
+
+      <!-- Painel 1: Upload de Arquivo -->
+      <div id="panelUpload" class="modal-panel">
+        <p class="modal-subtitle">Envie um arquivo <strong>TXT</strong>, <strong>PDF</strong> ou <strong>DOCX</strong> com questões. Se não houver gabarito, ele será gerado automaticamente por IA.</p>
+
+        <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="Arraste ou clique para selecionar arquivo">
+          <div class="drop-zone-icon">📄</div>
+          <p class="drop-zone-label">Arraste o arquivo aqui</p>
+          <p class="drop-zone-hint">ou clique para selecionar</p>
+          <p class="drop-zone-types">TXT · PDF · DOCX &nbsp;|&nbsp; Máx. 20 MB</p>
+          <input type="file" id="fileInput" accept=".txt,.pdf,.docx" hidden>
+        </div>
+
+        <div id="filePreview" class="file-preview" hidden>
+          <span class="file-preview-icon">📎</span>
+          <span id="filePreviewName" class="file-preview-name"></span>
+          <button class="file-preview-remove" id="removeFile" aria-label="Remover arquivo">&times;</button>
+        </div>
       </div>
 
-      <div id="filePreview" class="file-preview" hidden>
-        <span class="file-preview-icon">📎</span>
-        <span id="filePreviewName" class="file-preview-name"></span>
-        <button class="file-preview-remove" id="removeFile" aria-label="Remover arquivo">&times;</button>
+      <!-- Painel 2: Gerar por Tema (IA) -->
+      <div id="panelTopic" class="modal-panel" hidden>
+        <p class="modal-subtitle">Sem arquivo em mãos? Escolha um tema ou matéria e nossa IA criará um simulado completo com gabarito e explicações didáticas.</p>
+
+        <div class="form-group modal-form-group">
+          <label for="topicInput">Tema ou Assunto do Quiz <span class="required">*</span></label>
+          <input type="text" id="topicInput" placeholder="Ex: Raciocínio Lógico Proposicional, Python Básico, História do Brasil..." autocomplete="off">
+        </div>
+
+        <div class="form-row modal-form-row">
+          <div class="form-group flex-1">
+            <label for="topicNumQuestions">Quantidade</label>
+            <select id="topicNumQuestions">
+              <option value="3">3 questões (rápido)</option>
+              <option value="5" selected>5 questões (padrão)</option>
+              <option value="10">10 questões (completo)</option>
+            </select>
+          </div>
+
+          <div class="form-group flex-1">
+            <label for="topicDifficulty">Dificuldade</label>
+            <select id="topicDifficulty">
+              <option value="Fácil">Fácil</option>
+              <option value="Médio" selected>Médio</option>
+              <option value="Difícil">Difícil</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group modal-form-group">
+          <label for="topicContext">Foco ou Diretrizes Adicionais (Opcional)</label>
+          <input type="text" id="topicContext" placeholder="Ex: Focar em tabela-verdade, questões estilo concurso público, etc.">
+        </div>
       </div>
 
+      <!-- Feedback de status comum -->
       <div id="uploadStatus" class="upload-status" hidden>
         <div class="upload-spinner"></div>
-        <span id="uploadStatusText">Processando arquivo…</span>
+        <span id="uploadStatusText">Processando…</span>
       </div>
 
       <div id="uploadError" class="upload-error" hidden></div>
@@ -94,12 +142,39 @@
 
       <div class="modal-actions">
         <button id="cancelUpload" class="secondary" type="button">Cancelar</button>
-        <button id="confirmUpload" class="primary" type="button" disabled>Enviar</button>
+        <button id="confirmUpload" class="primary" type="button" disabled>Enviar Arquivo</button>
+        <button id="confirmGenerateTopic" class="primary" type="button" hidden>✨ Gerar com IA</button>
       </div>
     </div>
   </div>
 
+  <!-- ── Modal de Resultado do Simulado ───────────────────────────────── -->
+  <div id="resultModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="resultModalTitle">
+    <div class="modal modal--results">
+      <button class="modal-close" id="closeResultModal" aria-label="Fechar">&times;</button>
+      
+      <div class="results-header">
+        <div class="results-badge" id="resultScoreBadge">🎯 Desempenho</div>
+        <h2 id="resultModalTitle" class="results-title">Gabarito & Resultado</h2>
+        <div class="results-score-wrap">
+          <span class="results-score" id="resultScoreNumber">0/0</span>
+          <span class="results-percent" id="resultScorePercent">0%</span>
+        </div>
+        <p class="results-summary-text" id="resultSummaryText">Revise detalhadamente o seu desempenho em cada questão abaixo.</p>
+      </div>
 
+      <div class="results-list" id="resultQuestionsList"></div>
+
+      <div class="results-footer">
+        <button id="btnRedoQuiz" class="primary btn-redo" type="button">
+          <span>↺</span> Refazer Simulado
+        </button>
+        <button id="btnCloseResultModal" class="secondary" type="button">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
 
   <script src="/web/app.js?v=2"></script>
 </body>

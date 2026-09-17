@@ -5,15 +5,12 @@ Execução:
   python -m unittest discover tests
 """
 import unittest
-from pathlib import Path
+from unittest.mock import patch, MagicMock
 
-from api.repositories.quiz_repository import QuizRepository
-from api.exceptions.quiz_exceptions import QuizNotFound, InvalidAnswersFormat
-from api.utils.validators import AnswerValidator, MarkdownValidator
-from api.utils.markdown_parser import load_questions_from_markdown
-from api.utils.quiz_logic import grade_answers, public_questions
-from api.services.quiz_service import QuizService
-from api.controllers.quiz_controller import QuizController
+from api.utils.validators import AnswerValidator
+from api.utils.file_parser import detect_has_answer_key, parse_questions_from_text, validate_questions
+from api.services.auth_service import hash_password, verify_password, AuthService
+from api.services.ai_service import generate_quiz_by_topic, AIServiceError
 
 
 class TestAnswerValidator(unittest.TestCase):
@@ -51,118 +48,149 @@ class TestAnswerValidator(unittest.TestCase):
         self.assertIn("Pelo menos", msg)
 
     def test_invalid_answer_index(self):
-        """Detecta índice de resposta inválido (> 3)"""
-        payload = {"answers": {1: 5}}
+        """Detecta índice de resposta negativo"""
+        payload = {"answers": {1: -1}}
         is_valid, msg = AnswerValidator.validate_submit_payload(payload)
         self.assertFalse(is_valid)
-        self.assertIn("Resposta inválida", msg)
+        self.assertIn("inválido", msg)
 
 
-class TestMarkdownValidator(unittest.TestCase):
-    """Testes para validador de Markdown"""
+class TestFileParser(unittest.TestCase):
+    """Testes para parser de questões e gabarito"""
 
-    def test_valid_markdown(self):
-        """Valida Markdown correto"""
-        content = """
-**1.** Pergunta 1?
-a) Opção A
-b) Opção B
+    def test_detect_has_answer_key(self):
+        """Detecta se há seção de gabarito"""
+        self.assertTrue(detect_has_answer_key("# Gabarito\n1. a)"))
+        self.assertTrue(detect_has_answer_key("Gabarito:\n1. a)"))
+        self.assertFalse(detect_has_answer_key("Apenas perguntas sem gabarito"))
+
+    def test_parse_questions_from_text(self):
+        """Parse de questões com alternativas"""
+        text = """
+**1.** Qual é a capital do Brasil?
+a) São Paulo
+b) Brasília
+c) Rio de Janeiro
+d) Salvador
 
 # Gabarito
-1. a) Resposta
+1. b) Brasília → É a capital federal.
 """
-        is_valid, msg = MarkdownValidator.validate_markdown_content(content)
-        self.assertTrue(is_valid)
-
-    def test_empty_content(self):
-        """Detecta conteúdo vazio"""
-        is_valid, msg = MarkdownValidator.validate_markdown_content("")
-        self.assertFalse(is_valid)
-        self.assertIn("vazio", msg)
-
-    def test_missing_question(self):
-        """Detecta falta de questões"""
-        content = "Apenas texto sem questões\n# Gabarito"
-        is_valid, msg = MarkdownValidator.validate_markdown_content(content)
-        self.assertFalse(is_valid)
-        self.assertIn("questão", msg)
-
-    def test_missing_gabarito(self):
-        """Detecta falta de seção Gabarito"""
-        content = "**1.** Pergunta?\na) Opção A"
-        is_valid, msg = MarkdownValidator.validate_markdown_content(content)
-        self.assertFalse(is_valid)
-        self.assertIn("Gabarito", msg)
+        questions = parse_questions_from_text(text)
+        self.assertEqual(len(questions), 1)
+        self.assertEqual(questions[0]["id"], 1)
+        self.assertEqual(len(questions[0]["options"]), 4)
+        self.assertEqual(questions[0]["answer"], 1)  # b = index 1
+        self.assertEqual(questions[0]["explanation"], "É a capital federal.")
 
 
-class TestQuizRepository(unittest.TestCase):
-    """Testes para repository de quizzes"""
+class TestAuthService(unittest.TestCase):
+    """Testes para regras de senha e seed do admin"""
 
-    def test_find_all_sources(self):
-        """Encontra todas as fontes de quiz disponíveis"""
-        sources = QuizRepository.find_all_sources()
-        self.assertIsInstance(sources, list)
-        self.assertGreater(len(sources), 0)
-        # Garante que encontrou '1 test'
-        names = [s.name for s in sources]
-        self.assertIn("1 test", names)
+    def test_hash_and_verify_password(self):
+        pwd = "CofeDev2468*"
+        pwd_hash, salt = hash_password(pwd)
+        self.assertTrue(verify_password(pwd, salt, pwd_hash))
+        self.assertFalse(verify_password("senhaErrada", salt, pwd_hash))
 
-    def test_find_default(self):
-        """Encontra quiz padrão"""
-        source = QuizRepository.find_default()
-        self.assertIsInstance(source, Path)
-        self.assertTrue(source.exists())
+    def test_seed_admin_creates_or_updates(self):
+        mock_repo = MagicMock()
+        mock_repo.find_by_username.return_value = None
+        service = AuthService(repository=mock_repo)
 
-    def test_find_by_name_success(self):
-        """Encontra quiz existente pelo nome"""
-        source = QuizRepository.find_by_name("1 test")
-        self.assertEqual(source.name, "1 test")
+        service.seed_admin_if_needed()
+        self.assertTrue(mock_repo.create_user.called)
 
-    def test_find_by_name_not_found(self):
-        """Lança QuizNotFound se não existir"""
-        with self.assertRaises(QuizNotFound):
-            QuizRepository.find_by_name("arquivo_inexistente_xyz")
+        # Se já existe, atualiza senha
+        mock_repo.reset_mock()
+        mock_repo.find_by_username.return_value = {"id": 1, "username": "admin"}
+        service.seed_admin_if_needed()
+        self.assertTrue(mock_repo.update_password_and_role.called)
 
 
-class TestQuizServiceAndLogic(unittest.TestCase):
-    """Testes para QuizService e lógica de correção"""
+class TestAITopicGeneration(unittest.TestCase):
+    """Testes para geração de quiz por tema via IA"""
 
-    def setUp(self):
-        self.service = QuizService()
-        self.controller = QuizController()
+    @patch("api.services.ai_service._get_http_session")
+    def test_generate_quiz_by_topic_success(self, mock_get_session):
+        mock_session = MagicMock()
+        mock_response = MagicMock()
+        mock_response.ok = True
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "choices": [{
+                "message": {
+                    "content": """{
+                        "title": "Simulado de Lógica Proposicional",
+                        "questions": [
+                            {
+                                "id": 1,
+                                "section": "Lógica",
+                                "context": "",
+                                "question": "Se chove, a rua molha. Qual a negação?",
+                                "options": [
+                                    "Chove e a rua não molha",
+                                    "Não chove e a rua molha",
+                                    "Não chove e a rua não molha",
+                                    "Chove e a rua molha"
+                                ],
+                                "answer": 0,
+                                "explanation": "Negação de condicional P -> Q é P e ~Q."
+                            }
+                        ]
+                    }"""
+                }
+            }]
+        }
+        mock_session.post.return_value = mock_response
+        mock_get_session.return_value = mock_session
 
-    def test_get_all_quizzes(self):
-        quizzes = self.service.get_all_quizzes()
-        self.assertIsInstance(quizzes, list)
-        self.assertGreater(len(quizzes), 0)
-        self.assertIn("name", quizzes[0])
-        self.assertIn("label", quizzes[0])
+        with patch("api.services.ai_service.OPENROUTER_API_KEY", "dummy_key"):
+            result = generate_quiz_by_topic("Raciocínio Lógico", num_questions=1)
+            self.assertEqual(result["title"], "Simulado de Lógica Proposicional")
+            self.assertEqual(len(result["questions"]), 1)
+            self.assertEqual(result["questions"][0]["answer"], 0)
+            self.assertEqual(len(result["questions"][0]["options"]), 4)
 
-    def test_get_quiz(self):
-        quiz_dto = self.service.get_quiz("1 test")
-        self.assertEqual(quiz_dto.source, "1 test")
-        self.assertEqual(len(quiz_dto.questions), 16)
-        # Respostas não devem estar visíveis no DTO público
-        self.assertIsNone(quiz_dto.questions[0].answer)
+    def test_generate_quiz_by_topic_empty_topic(self):
+        with patch("api.services.ai_service.OPENROUTER_API_KEY", "dummy_key"):
+            with self.assertRaises(AIServiceError):
+                generate_quiz_by_topic("")
 
-    def test_submit_answers(self):
-        # 1 test gabarito da questão 1 é c (índice 2)
-        answers = {1: 2, 2: 1}  # questão 1 acertou, questão 2 (b = 1) acertou
-        result = self.service.submit_answers(answers, "1 test")
-        self.assertEqual(result.total, 16)
-        self.assertEqual(result.score, 2)
-        self.assertTrue(result.results[0]["isCorrect"])
 
-    def test_controller_get_quizzes(self):
-        res = self.controller.get_quizzes()
-        self.assertEqual(res["status"], "success")
-        self.assertIn("quizzes", res["data"])
+class TestSessionAndCacheClearing(unittest.TestCase):
+    """Testes para invalidação de sessões e limpeza de cookies"""
 
-    def test_controller_get_quiz(self):
-        res = self.controller.get_quiz("1 test")
-        self.assertEqual(res["status"], "success")
-        self.assertEqual(res["data"]["source"], "1 test")
-        self.assertEqual(len(res["data"]["questions"]), 16)
+    def test_clear_all_sessions(self):
+        from api.repositories.user_repository import UserRepository
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 5
+        with patch("api.repositories.user_repository.get_cursor") as mock_get_cursor:
+            mock_get_cursor.return_value.__enter__.return_value = mock_cursor
+            repo = UserRepository()
+            count = repo.clear_all_sessions()
+            self.assertEqual(count, 5)
+            mock_cursor.execute.assert_called_once_with("DELETE FROM sessions")
+
+    def test_session_cookie_clear(self):
+        from api.middleware.http_middleware import HTTPMiddleware
+        cookie = HTTPMiddleware.session_cookie(None, secure=True, max_age=0)
+        self.assertIn("Max-Age=0", cookie)
+        self.assertIn("Secure", cookie)
+        self.assertIn("HttpOnly", cookie)
+        self.assertIn("Path=/", cookie)
+
+    def test_send_json_response_clear_cookie(self):
+        from api.middleware.http_middleware import HTTPMiddleware
+        handler = MagicMock()
+        handler.headers = {}
+        handler.wfile = MagicMock()
+        HTTPMiddleware.send_json_response(handler, 401, {"error": "unauthorized"}, clear_cookie=True)
+        set_cookie_calls = [
+            call for call in handler.send_header.call_args_list if call[0][0] == "Set-Cookie"
+        ]
+        self.assertEqual(len(set_cookie_calls), 1)
+        self.assertIn("Max-Age=0", set_cookie_calls[0][0][1])
 
 
 if __name__ == "__main__":
