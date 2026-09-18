@@ -18,7 +18,11 @@ from api.services.auth_service import hash_password
 from api.utils.config import ADMIN_USERNAME, ADMIN_PASSWORD
 
 def main():
-    new_password = sys.argv[1] if len(sys.argv) > 1 else (ADMIN_PASSWORD or "CofeDev2468*")
+    new_password = sys.argv[1] if len(sys.argv) > 1 else ADMIN_PASSWORD
+    if not new_password:
+        print("Uso: python scripts/reset_admin.py \"NovaSenha123*\"")
+        print("Ou defina ADMIN_PASSWORD no ambiente.")
+        sys.exit(1)
     username = sys.argv[2] if len(sys.argv) > 2 else (ADMIN_USERNAME or "admin")
 
     try:

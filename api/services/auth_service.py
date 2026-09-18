@@ -42,7 +42,12 @@ class AuthService:
     def seed_admin_if_needed(self):
         """Garante a existência do usuário administrador e sincroniza sua senha com ADMIN_PASSWORD."""
         try:
-            admin_pwd = ADMIN_PASSWORD or "CofeDev2468*"
+            admin_pwd = ADMIN_PASSWORD
+            if not admin_pwd:
+                raise RuntimeError(
+                    "ADMIN_PASSWORD não definido no ambiente. "
+                    "Adicione ao .env antes de iniciar o servidor."
+                )
             pwd_hash, salt = hash_password(admin_pwd)
 
             admin = self.repo.find_by_username(ADMIN_USERNAME)

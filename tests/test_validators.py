@@ -88,7 +88,7 @@ class TestAuthService(unittest.TestCase):
     """Testes para regras de senha e seed do admin"""
 
     def test_hash_and_verify_password(self):
-        pwd = "CofeDev2468*"
+        pwd = "TestSenha@Local99"  # senha fictícia apenas para validar hash/verify
         pwd_hash, salt = hash_password(pwd)
         self.assertTrue(verify_password(pwd, salt, pwd_hash))
         self.assertFalse(verify_password("senhaErrada", salt, pwd_hash))

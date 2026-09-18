@@ -97,7 +97,7 @@ O servidor inicia em `http://localhost:8000` (ou próxima porta livre) e executa
 - **Acesso de Estudantes**: Cadastro via `/register` e autenticação via `/login`.
 - **Acesso de Administrador**:
   - Usuário: `admin`
-  - Senha: sincronizada automaticamente com `ADMIN_PASSWORD` no ambiente (padrão de desenvolvimento: `CofeDev2468*`).
+  - Senha: definida pela variável de ambiente `ADMIN_PASSWORD` no seu `.env` (obrigatório antes de iniciar).
   - **Redefinição rápida de senha do admin**:
     ```bash
     python scripts/reset_admin.py "NovaSenha123*"

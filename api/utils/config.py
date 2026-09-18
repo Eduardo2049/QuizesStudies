@@ -55,7 +55,9 @@ AI_PROVIDER = os.getenv("AI_PROVIDER", "google" if GEMINI_API_KEY else "openrout
 
 # Autenticação e Segurança
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "CofeDev2468*")
+# ADMIN_PASSWORD deve ser sempre definido via variável de ambiente.
+# O fallback abaixo é apenas para desenvolvimento local — nunca use em produção.
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv("ALLOWED_ORIGINS", "").split(",")
