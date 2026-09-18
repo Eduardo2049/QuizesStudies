@@ -58,6 +58,21 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 
 ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT TRUE;
+
+CREATE TABLE IF NOT EXISTS quiz_attempts (
+    id                 SERIAL PRIMARY KEY,
+    user_id            INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    quiz_id            INTEGER REFERENCES quizzes(id) ON DELETE SET NULL,
+    quiz_name          VARCHAR(255) NOT NULL,
+    score              INTEGER NOT NULL,
+    total              INTEGER NOT NULL,
+    percentage         INTEGER NOT NULL,
+    wrong_question_ids JSONB DEFAULT '[]'::jsonb,
+    created_at         TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_quiz_attempts_user_id ON quiz_attempts(user_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_attempts_quiz_id ON quiz_attempts(quiz_id);
 """
 
 

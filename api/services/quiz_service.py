@@ -28,6 +28,7 @@ class QuizService:
                 "label": row["label"],
                 "file_type": row.get("file_type", ""),
                 "ai_generated": row.get("ai_generated", False),
+                "question_count": int(row.get("question_count") or 0),
             }
             for row in sources
         ]
@@ -105,10 +106,36 @@ class QuizService:
         ]
 
         result = grade_answers(answers, questions_for_grading)
+        wrong_ids = [r["id"] for r in result["results"] if not r.get("isCorrect")]
+
+        attempt_id = None
+        if user_id and quiz_row:
+            try:
+                saved = self.repository.save_attempt(
+                    user_id=user_id,
+                    quiz_id=quiz_row.get("id"),
+                    quiz_name=quiz_row.get("name", source_name or "quiz"),
+                    score=result["score"],
+                    total=result["total"],
+                    percentage=result["percentage"],
+                    wrong_question_ids=wrong_ids,
+                )
+                if saved:
+                    attempt_id = saved.get("id")
+            except Exception:
+                pass  # Registro de métrica não deve quebrar a correção
 
         return GradeResultDTO(
             score=result["score"],
             total=result["total"],
             percentage=result["percentage"],
             results=result["results"],
+            wrong_ids=wrong_ids,
+            attempt_id=attempt_id,
         )
+
+    def get_user_attempts(self, user_id: int) -> list[dict]:
+        """Retorna histórico de tentativas do aluno."""
+        if not user_id:
+            return []
+        return self.repository.find_user_attempts(user_id)

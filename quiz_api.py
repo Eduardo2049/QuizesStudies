@@ -28,6 +28,13 @@ def start_server():
             print("Pressione Ctrl+C para encerrar.")
             server.serve_forever()
             return
+        except KeyboardInterrupt:
+            print("\nServidor encerrado.")
+            try:
+                server.server_close()
+            except Exception:
+                pass
+            return
         except OSError as error:
             if error.errno not in (10013, 10048, 13, 98):
                 raise
@@ -39,5 +46,8 @@ def start_server():
 
 
 if __name__ == "__main__":
-    start_server()
+    try:
+        start_server()
+    except KeyboardInterrupt:
+        print("\nServidor encerrado.")
 

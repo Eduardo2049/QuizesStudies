@@ -7,19 +7,119 @@ const progressBar = document.querySelector('#progressBar');
 const quizSelector = document.querySelector('#quizSelector');
 const timer = document.querySelector('#timer');
 const startBtn = document.querySelector('#startBtn');
-const timerDuration = 24 * 60;
+
+// ─── Toolbar & Modos de Visualização ──────────────────────────────────────────
+const examToolbar = document.querySelector('#examToolbar');
+const btnToggleFocus = document.querySelector('#btnToggleFocus');
+const btnToggleList = document.querySelector('#btnToggleList');
+const btnQuickSubmit = document.querySelector('#btnQuickSubmit');
+const questionPalette = document.querySelector('#questionPalette');
+
+// ─── Navegação do Modo Foco ───────────────────────────────────────────────────
+const focusNavigation = document.querySelector('#focusNavigation');
+const btnPrevQuestion = document.querySelector('#btnPrevQuestion');
+const btnNextQuestion = document.querySelector('#btnNextQuestion');
+const focusIndicator = document.querySelector('#focusIndicator');
+
+// ─── Modal Catálogo de Simulados ──────────────────────────────────────────────
+const catalogModal = document.querySelector('#catalogModal');
+const btnOpenCatalog = document.querySelector('#btnOpenCatalog');
+const closeCatalogModalBtn = document.querySelector('#closeCatalogModal');
+const catalogSearchInput = document.querySelector('#catalogSearchInput');
+const catalogList = document.querySelector('#catalogList');
+const catalogTabBtns = document.querySelectorAll('.catalog-tab-btn');
+
+// ─── Modal de Confirmação: Finalizar Simulado ──────────────────────────────────
+const confirmSubmitModal = document.querySelector('#confirmSubmitModal');
+const confirmSubmitCancel = document.querySelector('#confirmSubmitCancel');
+const confirmSubmitConfirm = document.querySelector('#confirmSubmitConfirm');
+const confirmSubmitAnsweredEl = document.querySelector('#confirmSubmitAnswered');
+const confirmSubmitTotalEl = document.querySelector('#confirmSubmitTotal');
+const confirmSubmitMissingEl = document.querySelector('#confirmSubmitMissing');
+const confirmSubmitWarning = document.querySelector('#confirmSubmitWarning');
+
+/** Abre o modal de confirmação de finalização e retorna uma Promise<boolean> */
+function openConfirmSubmitModal(answeredCount, totalCount) {
+  return new Promise((resolve) => {
+    if (confirmSubmitAnsweredEl) confirmSubmitAnsweredEl.textContent = answeredCount;
+    if (confirmSubmitTotalEl) confirmSubmitTotalEl.textContent = totalCount;
+    const missing = totalCount - answeredCount;
+    if (confirmSubmitWarning) {
+      if (missing > 0) {
+        if (confirmSubmitMissingEl) confirmSubmitMissingEl.textContent = missing;
+        confirmSubmitWarning.hidden = false;
+      } else {
+        confirmSubmitWarning.hidden = true;
+      }
+    }
+    if (confirmSubmitModal) {
+      confirmSubmitModal.hidden = false;
+      document.body.style.overflow = 'hidden';
+    }
+
+    function onConfirm() {
+      cleanup();
+      resolve(true);
+    }
+    function onCancel() {
+      cleanup();
+      resolve(false);
+    }
+    function cleanup() {
+      if (confirmSubmitModal) {
+        confirmSubmitModal.hidden = true;
+        document.body.style.overflow = '';
+      }
+      confirmSubmitConfirm?.removeEventListener('click', onConfirm);
+      confirmSubmitCancel?.removeEventListener('click', onCancel);
+      confirmSubmitModal?.removeEventListener('click', onOverlayClick);
+    }
+    function onOverlayClick(e) {
+      if (e.target === confirmSubmitModal) onCancel();
+    }
+
+    confirmSubmitConfirm?.addEventListener('click', onConfirm);
+    confirmSubmitCancel?.addEventListener('click', onCancel);
+    confirmSubmitModal?.addEventListener('click', onOverlayClick);
+  });
+}
+
+function openCatalogModal() {
+  if (catalogModal) {
+    catalogModal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    renderCatalogList();
+    if (catalogSearchInput) {
+      setTimeout(() => catalogSearchInput.focus(), 100);
+    }
+  }
+}
+
+function closeCatalogModal() {
+  if (catalogModal) {
+    catalogModal.hidden = true;
+    document.body.style.overflow = '';
+  }
+}
+
+let currentQuestionIndex = 0;
+let viewMode = 'focus'; // 'focus' | 'list'
+let allPlatformQuizzes = [];
+let currentCatalogFilter = 'all';
 
 // ─── Modal de Resultado do Simulado ───────────────────────────────────────────
 const resultModal = document.querySelector('#resultModal');
 const closeResultModalBtn = document.querySelector('#closeResultModal');
 const btnCloseResultModal = document.querySelector('#btnCloseResultModal');
 const btnRedoQuiz = document.querySelector('#btnRedoQuiz');
+const btnTrainMistakes = document.querySelector('#btnTrainMistakes');
+const btnRemixMistakes = document.querySelector('#btnRemixMistakes');
+const mistakesCount = document.querySelector('#mistakesCount');
 const resultScoreBadge = document.querySelector('#resultScoreBadge');
 const resultScoreNumber = document.querySelector('#resultScoreNumber');
 const resultScorePercent = document.querySelector('#resultScorePercent');
 const resultSummaryText = document.querySelector('#resultSummaryText');
 const resultQuestionsList = document.querySelector('#resultQuestionsList');
-
 function openResultModal() {
   if (resultModal) {
     resultModal.hidden = false;
@@ -34,11 +134,33 @@ function closeResultModal() {
   }
 }
 
+// ─── Modal Explicativo: Por que o Quiz Study? ──────────────────────────────────
+const aboutModal = document.querySelector('#aboutModal');
+const btnOpenAboutModal = document.querySelector('#btnOpenAboutModal');
+const closeAboutModalBtn = document.querySelector('#closeAboutModal');
+const btnCloseAbout = document.querySelector('#btnCloseAbout');
+
+function openAboutModal() {
+  if (aboutModal) {
+    aboutModal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeAboutModal() {
+  if (aboutModal) {
+    aboutModal.hidden = true;
+    document.body.style.overflow = '';
+  }
+}
+
+let currentWrongQuestions = [];
+
 let questions = [];
 let selectedSource = '';
 let loadRequestId = 0;
 let loadController;
-let remainingSeconds = timerDuration;
+let remainingSeconds = 24 * 60; // valor padrão; recalculado em resetTimer()
 let timerInterval;
 
 function isGuestMode() {
@@ -93,12 +215,34 @@ function escapeHtml(value) {
   }[character]));
 }
 
-// ─── Timer ────────────────────────────────────────────────────────────────────
+// ─── Timer Adaptativo + Customizável ─────────────────────────────────────────
+const timerPreset = document.querySelector('#timerPreset');
+const timerConfig = document.querySelector('#timerConfig');
+// (referência ao #timer já existe na const 'timer' declarada no início)
+
+/** Tempo customizado pelo usuário (null = usar automático) */
+let customTimerSeconds = null;
+
+function calculateTimerDuration(questionCount) {
+  // Se há um preset fixo, usa ele; senão calcula adaptive
+  if (customTimerSeconds !== null) return customTimerSeconds;
+  const count = Math.max(1, questionCount || 1);
+  return Math.max(5 * 60, count * 150); // ~2m30s por questão, mínimo de 5 minutos
+}
+
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 function resetTimer() {
   clearInterval(timerInterval);
   timerInterval = undefined;
-  remainingSeconds = timerDuration;
-  timer.textContent = '24:00';
+  const count = questions.length || 5;
+  const duration = calculateTimerDuration(count);
+  remainingSeconds = duration;
+  timer.textContent = formatTime(duration);
   timer.classList.remove('expired', 'running');
   if (startBtn) startBtn.classList.remove('hidden');
 }
@@ -109,9 +253,7 @@ function startTimer() {
   if (startBtn) startBtn.classList.add('hidden');
   timerInterval = setInterval(() => {
     remainingSeconds -= 1;
-    const minutes = Math.floor(remainingSeconds / 60);
-    const seconds = remainingSeconds % 60;
-    timer.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    timer.textContent = formatTime(remainingSeconds);
     if (remainingSeconds === 0) {
       clearInterval(timerInterval);
       timerInterval = undefined;
@@ -120,6 +262,64 @@ function startTimer() {
     }
   }, 1000);
 }
+
+// ─── Lógica do painel de configuração do timer ────────────────────────────────
+let timerConfigTimeout;
+
+function showTimerConfig() {
+  clearTimeout(timerConfigTimeout);
+  timerConfig?.classList.add('timer-config--visible');
+}
+
+function hideTimerConfig(delay = 900) {
+  clearTimeout(timerConfigTimeout);
+  timerConfigTimeout = setTimeout(() => {
+    timerConfig?.classList.remove('timer-config--visible');
+  }, delay);
+}
+
+timer?.addEventListener('mouseenter', showTimerConfig);
+timer?.addEventListener('mouseleave', () => hideTimerConfig());
+timerConfig?.addEventListener('mouseenter', showTimerConfig);
+timerConfig?.addEventListener('mouseleave', () => hideTimerConfig());
+timer?.addEventListener('focus', showTimerConfig);
+timer?.addEventListener('blur', () => hideTimerConfig());
+
+timerPreset?.addEventListener('change', () => {
+  const val = timerPreset.value;
+
+  if (val === 'auto') {
+    customTimerSeconds = null;
+  } else if (val === 'custom') {
+    const raw = prompt('Informe o tempo desejado em minutos (ex: 35):');
+    const mins = parseInt(raw, 10);
+    if (!isNaN(mins) && mins > 0 && mins <= 300) {
+      customTimerSeconds = mins * 60;
+      // Adiciona opção temporária para mostrar o valor escolhido
+      const existingCustom = timerPreset.querySelector('[value="custom-set"]');
+      if (existingCustom) existingCustom.remove();
+      const opt = document.createElement('option');
+      opt.value = 'custom-set';
+      opt.textContent = `${mins} min ✎`;
+      timerPreset.insertBefore(opt, timerPreset.querySelector('[value="custom"]'));
+      timerPreset.value = 'custom-set';
+    } else {
+      if (raw !== null) alert('Por favor, informe um número entre 1 e 300 minutos.');
+      // Reverter para a seleção anterior
+      timerPreset.value = customTimerSeconds !== null ? 'custom-set' : 'auto';
+      return;
+    }
+  } else {
+    customTimerSeconds = parseInt(val, 10);
+  }
+
+  // Aplicar imediatamente se o timer não estiver rodando
+  if (!timerInterval) {
+    resetTimer();
+  }
+  hideTimerConfig(200);
+});
+
 
 // ─── Carregamento de Quiz ─────────────────────────────────────────────────────
 async function loadQuiz(source = selectedSource) {
@@ -163,8 +363,14 @@ async function loadQuiz(source = selectedSource) {
 }
 
 function renderQuestions() {
+  if (currentQuestionIndex >= questions.length) {
+    currentQuestionIndex = Math.max(0, questions.length - 1);
+  }
+
+  quiz.classList.toggle('quiz--focus', viewMode === 'focus');
+
   quiz.innerHTML = questions.map((item, index) => `
-    <article class="question">
+    <article class="question ${viewMode === 'focus' && index === currentQuestionIndex ? 'question--active' : ''}" data-index="${index}" id="question-card-${index}">
       <p class="section">${escapeHtml(item.section)}</p>
       ${item.context && (index === 0 || questions[index - 1].context !== item.context)
         ? `<p class="context">${escapeHtml(item.context)}</p>` : ''}
@@ -181,7 +387,92 @@ function renderQuestions() {
         `).join('')}
       </div>
     </article>`).join('');
+
+  updateFocusNavigation();
+  renderQuestionPalette();
   updateProgress();
+}
+
+function renderQuestionPalette() {
+  if (!questionPalette) return;
+  if (!questions.length) {
+    questionPalette.innerHTML = '';
+    questionPalette.hidden = true;
+    return;
+  }
+
+  questionPalette.hidden = false;
+  const answered = new FormData(quiz);
+  const answeredKeys = new Set([...answered.keys()].map((k) => k.replace('q-', '')));
+
+  questionPalette.innerHTML = questions.map((item, index) => {
+    const isAnswered = answeredKeys.has(String(item.id));
+    const isCurrent = viewMode === 'focus' && index === currentQuestionIndex;
+    const classes = ['palette-btn'];
+    if (isAnswered) classes.push('answered');
+    if (isCurrent) classes.push('active');
+
+    return `
+      <button type="button" 
+              class="${classes.join(' ')}" 
+              data-index="${index}" 
+              title="Questão ${index + 1}${isAnswered ? ' (Respondida)' : ''}">
+        ${index + 1}
+      </button>
+    `;
+  }).join('');
+}
+
+function goToQuestion(index) {
+  if (index < 0 || index >= questions.length) return;
+  currentQuestionIndex = index;
+
+  if (viewMode === 'focus') {
+    const cards = quiz.querySelectorAll('.question');
+    cards.forEach((card, idx) => {
+      card.classList.toggle('question--active', idx === currentQuestionIndex);
+    });
+    updateFocusNavigation();
+    renderQuestionPalette();
+    const activeCard = quiz.querySelector('.question.question--active');
+    if (activeCard) {
+      activeCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  } else {
+    renderQuestionPalette();
+    const targetCard = document.querySelector(`#question-card-${index}`);
+    if (targetCard) {
+      targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+}
+
+function updateFocusNavigation() {
+  if (!focusNavigation) return;
+  if (viewMode !== 'focus' || !questions.length) {
+    focusNavigation.hidden = true;
+    return;
+  }
+
+  focusNavigation.hidden = false;
+  if (focusIndicator) {
+    focusIndicator.textContent = `Questão ${currentQuestionIndex + 1} de ${questions.length}`;
+  }
+
+  if (btnPrevQuestion) {
+    btnPrevQuestion.disabled = currentQuestionIndex === 0;
+  }
+
+  if (btnNextQuestion) {
+    const isLast = currentQuestionIndex === questions.length - 1;
+    if (isLast) {
+      btnNextQuestion.innerHTML = '🏁 Finalizar Simulado';
+      btnNextQuestion.classList.add('is-final');
+    } else {
+      btnNextQuestion.innerHTML = 'Próxima →';
+      btnNextQuestion.classList.remove('is-final');
+    }
+  }
 }
 
 async function loadQuizList() {
@@ -192,6 +483,7 @@ async function loadQuizList() {
       const rawData = await response.json();
       const data = rawData.data || rawData;
       serverQuizzes = data.quizzes || [];
+      allPlatformQuizzes = serverQuizzes;
     }
   } catch (e) {
     console.warn('Não foi possível carregar quizzes da plataforma:', e);
@@ -245,6 +537,17 @@ function updateProgress() {
   progress.textContent = `${count} de ${questions.length} respondidas`;
   percent.textContent = `${value}%`;
   progressBar.style.width = `${value}%`;
+
+  renderQuestionPalette();
+
+  if (btnQuickSubmit) {
+    btnQuickSubmit.hidden = questions.length === 0;
+    if (count > 0) {
+      btnQuickSubmit.textContent = `🏁 Finalizar (${count}/${questions.length})`;
+    } else {
+      btnQuickSubmit.textContent = '🏁 Finalizar Simulado';
+    }
+  }
 }
 
 // ─── Eventos do Quiz ──────────────────────────────────────────────────────────
@@ -262,12 +565,9 @@ async function handleSubmitQuiz(event) {
     return;
   }
 
-  if (answeredCount < questions.length) {
-    const confirmSubmit = confirm(
-      `Você respondeu ${answeredCount} de ${questions.length} questões. As questões não respondidas serão consideradas erradas.\n\nDeseja conferir o resultado agora?`
-    );
-    if (!confirmSubmit) return;
-  }
+  // Modal de confirmação customizado (substitui o confirm() nativo)
+  const confirmed = await openConfirmSubmitModal(answeredCount, questions.length);
+  if (!confirmed) return;
 
   const submitBtn = document.querySelector('#submit');
   if (submitBtn) {
@@ -278,7 +578,8 @@ async function handleSubmitQuiz(event) {
   try {
     let data;
     const localQuiz = isGuestMode() ? findGuestQuizByName(selectedSource) : null;
-    const isLocalQuiz = Boolean(localQuiz && questions.length > 0 && questions[0]?.answer !== undefined);
+    const hasLocalAnswers = questions.length > 0 && questions[0]?.answer !== undefined;
+    const isLocalQuiz = Boolean(localQuiz && hasLocalAnswers) || Boolean(questions[0]?.is_remix) || (Boolean(!selectedSource) && hasLocalAnswers);
 
     if (isLocalQuiz) {
       const results = questions.map((item) => {
@@ -292,11 +593,13 @@ async function handleSubmitQuiz(event) {
         };
       });
       const score = results.filter((item) => item.isCorrect).length;
+      const wrongIds = results.filter((item) => !item.isCorrect).map((item) => item.id);
       data = {
         score,
         total: results.length,
         percentage: results.length ? Math.round(score / results.length * 100) : 0,
         results,
+        wrong_ids: wrongIds,
       };
     } else {
       const headers = { 'Content-Type': 'application/json' };
@@ -337,6 +640,21 @@ async function handleSubmitQuiz(event) {
 
 function renderResultModal(data) {
   const { score, total, percentage, results } = data;
+
+  // Filtrar questões erradas para o Caderno de Erros e Variações IA
+  const wrongIds = data.wrong_ids || results.filter((item) => !item.isCorrect).map((item) => item.id);
+  currentWrongQuestions = questions.filter((q) => wrongIds.includes(q.id));
+
+  if (btnTrainMistakes && btnRemixMistakes) {
+    if (currentWrongQuestions.length > 0) {
+      if (mistakesCount) mistakesCount.textContent = currentWrongQuestions.length;
+      btnTrainMistakes.hidden = false;
+      btnRemixMistakes.hidden = false;
+    } else {
+      btnTrainMistakes.hidden = true;
+      btnRemixMistakes.hidden = true;
+    }
+  }
 
   if (resultScoreNumber) resultScoreNumber.textContent = `${score}/${total}`;
   if (resultScorePercent) resultScorePercent.textContent = `${percentage}%`;
@@ -445,6 +763,240 @@ btnRedoQuiz?.addEventListener('click', () => {
     firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } else {
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+});
+
+// Caderno de Erros: Refazer apenas as questões erradas
+btnTrainMistakes?.addEventListener('click', () => {
+  if (!currentWrongQuestions.length) return;
+  closeResultModal();
+  questions = [...currentWrongQuestions];
+  renderQuestions();
+  quiz.reset();
+  resetTimer();
+  updateProgress();
+  const firstQuestion = quiz.querySelector('.question');
+  if (firstQuestion) {
+    firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+});
+
+// Gerar Variações Inéditas com IA
+btnRemixMistakes?.addEventListener('click', async () => {
+  if (!currentWrongQuestions.length) return;
+
+  const originalContent = btnRemixMistakes.innerHTML;
+  btnRemixMistakes.disabled = true;
+  btnRemixMistakes.innerHTML = '<span>⏳</span> Criando variações com IA…';
+
+  try {
+    const response = await fetch('/api/quiz/remix-mistakes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ questions: currentWrongQuestions }),
+    });
+
+    const raw = await response.json();
+    if (!response.ok) {
+      throw new Error(raw?.data?.message || raw?.message || 'Erro ao comunicar com a IA');
+    }
+
+    const remixedQuestions = raw.data?.questions || [];
+    if (!remixedQuestions.length) {
+      throw new Error('Nenhuma questão gerada.');
+    }
+
+    closeResultModal();
+    questions = remixedQuestions;
+    renderQuestions();
+    quiz.reset();
+    resetTimer();
+    updateProgress();
+    const firstQuestion = quiz.querySelector('.question');
+    if (firstQuestion) {
+      firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  } catch (err) {
+    alert(`Erro ao gerar variações com IA: ${err.message}`);
+  } finally {
+    btnRemixMistakes.disabled = false;
+    btnRemixMistakes.innerHTML = originalContent;
+  }
+});
+
+// Ações do Modal Explicativo (Sobre / Benchmarking)
+btnOpenAboutModal?.addEventListener('click', openAboutModal);
+closeAboutModalBtn?.addEventListener('click', closeAboutModal);
+btnCloseAbout?.addEventListener('click', closeAboutModal);
+
+// ─── Ações de Navegação e Alternância de Modo ─────────────────────────────
+btnPrevQuestion?.addEventListener('click', () => {
+  if (currentQuestionIndex > 0) {
+    goToQuestion(currentQuestionIndex - 1);
+  }
+});
+
+btnNextQuestion?.addEventListener('click', () => {
+  if (currentQuestionIndex === questions.length - 1) {
+    handleSubmitQuiz();
+  } else if (currentQuestionIndex < questions.length - 1) {
+    goToQuestion(currentQuestionIndex + 1);
+  }
+});
+
+btnToggleFocus?.addEventListener('click', () => {
+  viewMode = 'focus';
+  btnToggleFocus.classList.add('active');
+  btnToggleList.classList.remove('active');
+  renderQuestions();
+  goToQuestion(currentQuestionIndex);
+});
+
+btnToggleList?.addEventListener('click', () => {
+  viewMode = 'list';
+  btnToggleList.classList.add('active');
+  btnToggleFocus.classList.remove('active');
+  renderQuestions();
+});
+
+btnQuickSubmit?.addEventListener('click', (e) => {
+  e.preventDefault();
+  handleSubmitQuiz();
+});
+
+questionPalette?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.palette-btn');
+  if (!btn) return;
+  const targetIndex = Number(btn.getAttribute('data-index'));
+  if (Number.isFinite(targetIndex)) {
+    goToQuestion(targetIndex);
+  }
+});
+
+// Navegação rápida por teclado (Setas Esquerda / Direita no Modo Foco)
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+  if (viewMode !== 'focus' || !questions.length) return;
+  if (uploadModal && !uploadModal.hidden) return;
+  if (resultModal && !resultModal.hidden) return;
+  if (aboutModal && !aboutModal.hidden) return;
+  if (catalogModal && !catalogModal.hidden) return;
+
+  if (e.key === 'ArrowRight') {
+    if (currentQuestionIndex < questions.length - 1) {
+      goToQuestion(currentQuestionIndex + 1);
+    }
+  } else if (e.key === 'ArrowLeft') {
+    if (currentQuestionIndex > 0) {
+      goToQuestion(currentQuestionIndex - 1);
+    }
+  }
+});
+
+// ─── Catálogo de Simulados ────────────────────────────────────────────────
+function renderCatalogList() {
+  if (!catalogList) return;
+
+  const localQuizzes = isGuestMode() ? getGuestQuizzes() : [];
+  const localItems = localQuizzes.map((q) => ({
+    ...q,
+    is_guest: true,
+    question_count: q.questions ? q.questions.length : (q.question_count || 5),
+  }));
+
+  const combined = [...allPlatformQuizzes, ...localItems];
+  const searchTerm = (catalogSearchInput?.value || '').trim().toLowerCase();
+
+  const filtered = combined.filter((item) => {
+    // Filtro por tab
+    if (currentCatalogFilter === 'platform' && (item.is_guest || item.ai_generated)) return false;
+    if (currentCatalogFilter === 'ai' && !item.ai_generated) return false;
+    if (currentCatalogFilter === 'custom' && !item.is_guest && (!item.file_type || item.file_type === 'txt' || item.ai_generated)) return false;
+
+    // Filtro por busca textual
+    if (searchTerm) {
+      const titleMatch = (item.label || '').toLowerCase().includes(searchTerm);
+      const nameMatch = (item.name || '').toLowerCase().includes(searchTerm);
+      return titleMatch || nameMatch;
+    }
+    return true;
+  });
+
+  if (!filtered.length) {
+    catalogList.innerHTML = '<div class="catalog-empty">Nenhum simulado encontrado para os filtros selecionados.</div>';
+    return;
+  }
+
+  catalogList.innerHTML = filtered.map((item) => {
+    const count = item.question_count || 5;
+    const estMinutes = Math.round(count * 2.5);
+    const badgeLabel = item.ai_generated
+      ? '✨ IA'
+      : (item.file_type ? item.file_type.toUpperCase() : (item.is_guest ? 'LOCAL' : 'OFICIAL'));
+
+    return `
+      <div class="catalog-card" data-source="${escapeHtml(item.name)}">
+        <div class="catalog-card-header">
+          <h3 class="catalog-card-title">${escapeHtml(item.label)}</h3>
+          <span class="catalog-card-badge ${item.ai_generated ? 'ai' : ''}">${badgeLabel}</span>
+        </div>
+        <div class="catalog-card-meta">
+          <span>📝 ${count} questões</span>
+          <span>⏱️ ~${estMinutes} min</span>
+        </div>
+        <button type="button" class="primary catalog-card-btn">Iniciar Simulado ▶</button>
+      </div>
+    `;
+  }).join('');
+}
+
+btnOpenCatalog?.addEventListener('click', openCatalogModal);
+closeCatalogModalBtn?.addEventListener('click', closeCatalogModal);
+
+catalogSearchInput?.addEventListener('input', () => {
+  renderCatalogList();
+});
+
+catalogTabBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    catalogTabBtns.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentCatalogFilter = btn.getAttribute('data-filter') || 'all';
+    renderCatalogList();
+  });
+});
+
+catalogList?.addEventListener('click', async (e) => {
+  const card = e.target.closest('.catalog-card');
+  if (!card) return;
+  const source = card.getAttribute('data-source');
+  if (!source) return;
+
+  closeCatalogModal();
+  selectedSource = source;
+  if (quizSelector) quizSelector.value = source;
+  resetTimer();
+  closeResultModal();
+  if (result) {
+    result.hidden = true;
+    result.innerHTML = '';
+  }
+  quiz.innerHTML = '';
+
+  try {
+    await loadQuiz(source);
+    startTimer();
+    const firstQuestion = quiz.querySelector('.question');
+    if (firstQuestion) {
+      firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  } catch (err) {
+    alert('Erro ao carregar o simulado selecionado.');
   }
 });
 
@@ -823,12 +1375,21 @@ topicInput?.addEventListener('keydown', (e) => {
 // Fechar clicando fora
 uploadModal.addEventListener('click', (e) => { if (e.target === uploadModal) closeModal(); });
 resultModal?.addEventListener('click', (e) => { if (e.target === resultModal) closeResultModal(); });
+aboutModal?.addEventListener('click', (e) => { if (e.target === aboutModal) closeAboutModal(); });
+catalogModal?.addEventListener('click', (e) => { if (e.target === catalogModal) closeCatalogModal(); });
 
 // Fechar com Escape
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (uploadModal && !uploadModal.hidden) closeModal();
     if (resultModal && !resultModal.hidden) closeResultModal();
+    if (aboutModal && !aboutModal.hidden) closeAboutModal();
+    if (catalogModal && !catalogModal.hidden) closeCatalogModal();
+    // Fechar modal de confirmação (= cancelar a finalização)
+    if (confirmSubmitModal && !confirmSubmitModal.hidden) {
+      confirmSubmitModal.hidden = true;
+      document.body.style.overflow = '';
+    }
   }
 });
 

@@ -72,9 +72,47 @@ class QuizController:
                 "score": result_dto.score,
                 "total": result_dto.total,
                 "percentage": result_dto.percentage,
-                "results": result_dto.results
+                "results": result_dto.results,
+                "wrong_ids": result_dto.wrong_ids,
+                "attempt_id": result_dto.attempt_id,
             }
         }
+
+    @timing_decorator
+    @error_handler_decorator
+    def get_user_attempts(self, user_id: int) -> dict:
+        """GET /api/user/attempts - Retorna histórico de tentativas do usuário"""
+        attempts = self.service.get_user_attempts(user_id)
+        formatted = []
+        for att in attempts:
+            item = dict(att)
+            if item.get("created_at"):
+                item["created_at"] = item["created_at"].isoformat()
+            formatted.append(item)
+        return {
+            "status": "success",
+            "data": {"attempts": formatted}
+        }
+
+    @timing_decorator
+    @error_handler_decorator
+    def remix_mistakes(self, questions: list[dict]) -> dict:
+        """POST /api/quiz/remix-mistakes - Gera variações inéditas via IA para questões erradas"""
+        from api.services.ai_service import remix_questions_by_ai, AIServiceError
+        if not isinstance(questions, list) or not questions:
+            raise QuizAPIException("Nenhuma questão enviada para variação.", 400)
+        try:
+            remixed = remix_questions_by_ai(questions)
+            return {
+                "status": "success",
+                "data": {
+                    "questions": remixed,
+                    "count": len(remixed),
+                    "message": f"Geradas {len(remixed)} variações inéditas com sucesso!",
+                }
+            }
+        except AIServiceError as e:
+            raise QuizAPIException(str(e), 422)
 
     @timing_decorator
     @error_handler_decorator

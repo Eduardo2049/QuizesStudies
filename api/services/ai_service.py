@@ -3,6 +3,7 @@ Serviço de IA via OpenRouter.
 Gera gabarito automaticamente para quizzes sem resposta definida.
 """
 import json
+import re
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -138,6 +139,8 @@ def _get_model_candidates(configured_model: str) -> list[str]:
 
 
 def _log_ai(msg: str) -> None:
+    if not DEBUG:
+        return
     try:
         print(msg)
     except UnicodeEncodeError:
@@ -211,6 +214,8 @@ def _call_openrouter(
     last_status = 500
     last_raw = ""
 
+    masked_key = f"{api_key[:6]}...{api_key[-4:]}" if len(api_key) > 10 else "***"
+
     for idx, model in enumerate(candidates):
         payload = {
             "model": model,
@@ -220,7 +225,7 @@ def _call_openrouter(
             "response_format": {"type": "json_object"},
         }
         try:
-            _log_ai(f"[IA] Conectando ao {provider_name} (Modelo: '{model}')...")
+            _log_ai(f"[IA] Conectando ao {provider_name} (Key: {masked_key} | Modelo: '{model}')...")
             resp = session.post(url, json=payload, headers=headers, timeout=timeout)
             raw = resp.text
             last_status = resp.status_code
@@ -229,7 +234,7 @@ def _call_openrouter(
             if resp.ok:
                 data = resp.json()
                 content = data["choices"][0]["message"]["content"]
-                _log_ai(f"[IA] Sucesso com {provider_name} (Modelo: '{model}')")
+                _log_ai(f"[IA] Sucesso com {provider_name} (Key: {masked_key} | Modelo: '{model}')")
                 return content, model
 
             if idx < len(candidates) - 1:
@@ -268,11 +273,11 @@ def generate_answer_key(questions: list[dict]) -> list[dict]:
         messages=[{"role": "user", "content": prompt}],
         temperature=0.1,
         max_tokens=max_tokens,
-        timeout=60,
+        timeout=35,  # Gemini Flash Lite responde em <10s; 35s = margem segura
     )
 
     if DEBUG:
-        print(f"🤖 OpenRouter ({used_model}) respondeu:\n{content[:300]}")
+        print(f"🤖 IA [{used_model}] respondeu:\n{content[:300]}")
 
     # Parsear a resposta JSON do LLM
     try:
@@ -422,11 +427,11 @@ def generate_quiz_by_topic(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.5,
         max_tokens=max_tokens,
-        timeout=90,
+        timeout=45,  # Geração completa: max 45s antes de retornar erro
     )
 
     if DEBUG:
-        print(f"🤖 OpenRouter Quiz Gerado ({used_model}):\n{content[:300]}")
+        print(f"🤖 IA Quiz Gerado [{used_model}]:\n{content[:300]}")
 
     try:
         parsed = json.loads(content)
@@ -509,4 +514,90 @@ def generate_quiz_by_topic(
         "topic": clean_topic,
         "questions": valid_questions,
     }
+
+
+def remix_questions_by_ai(questions: list[dict]) -> list[dict]:
+    """
+    Gera variações inéditas para uma lista de questões (ex: questões que o aluno errou).
+    Mantém o mesmo conceito e nível de dificuldade, mas altera os dados/cenário para
+    garantir aprendizado real em vez de mera memorização mecânica da alternativa.
+    """
+    if not questions:
+        return []
+
+    selected_questions = questions[:10]
+
+    lines = [
+        "Você é um professor especialista em provas de alto rendimento.",
+        "O aluno errou as questões abaixo. Crie uma NOVA VARIAÇÃO INÉDITA para cada uma delas:",
+        "- Mantenha exatamente o mesmo conceito teórico, subtema e nível de dificuldade da questão original.",
+        "- Altere o cenário, os números, os nomes ou o exemplo prático para que seja uma pergunta nova e desafiadora.",
+        "- Cada questão deve ter exatamente entre 4 e 5 opções limpas (sem letras como 'a)' no texto).",
+        "- O campo 'answer' deve ser o índice numérico (0 a N-1) da opção correta.",
+        "- O campo 'explanation' deve conter uma explicação didática detalhada de 2 a 3 frases.",
+        "",
+        "Retorne SOMENTE um JSON válido no formato:",
+        '{"questions": [{"id": 1, "section": "Subtema", "question": "Nova pergunta?", "options": ["A", "B", "C", "D"], "answer": 0, "explanation": "..."}]}',
+        "",
+        "Questões originais a variar:",
+        "",
+    ]
+
+    for idx, q in enumerate(selected_questions, start=1):
+        lines.append(f"Questão {idx} (Tema: {q.get('section', 'Geral')}): {q.get('question')}")
+        opts = q.get("options", [])
+        if isinstance(opts, list):
+            for oi, opt in enumerate(opts):
+                lines.append(f"  {chr(65+oi)}) {opt}")
+        lines.append("")
+
+    prompt = "\n".join(lines)
+    max_tokens = min(3500, max(800, len(selected_questions) * 320))
+
+    content, used_model = _call_openrouter(
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.6,
+        max_tokens=max_tokens,
+        timeout=35,  # Remix de erros: mesmo prazo do gabarito
+    )
+
+    try:
+        parsed = json.loads(content)
+        raw_list = parsed.get("questions") if isinstance(parsed, dict) else parsed
+        if not isinstance(raw_list, list):
+            raw_list = next((v for v in parsed.values() if isinstance(v, list)), [])
+    except Exception as e:
+        raise AIServiceError(f"A IA não retornou JSON válido para as variações: {e}")
+
+    remixed = []
+    for idx, item in enumerate(raw_list, start=1):
+        if not isinstance(item, dict):
+            continue
+        q_text = str(item.get("question") or "").strip()
+        opts = item.get("options") or []
+        if not q_text or not isinstance(opts, list) or len(opts) < 2:
+            continue
+
+        clean_opts = [re.sub(r"^[a-eA-E][)\s\-\.]+", "", str(o)).strip() for o in opts]
+        ans = int(item.get("answer", 0))
+        if ans < 0 or ans >= len(clean_opts):
+            ans = 0
+
+        orig_q = selected_questions[idx - 1] if idx - 1 < len(selected_questions) else {}
+        remixed.append({
+            "id": idx,
+            "question_number": idx,
+            "section": str(item.get("section") or orig_q.get("section") or "Caderno de Erros (Variação IA)").strip(),
+            "context": str(item.get("context") or "").strip(),
+            "question": q_text,
+            "options": clean_opts,
+            "answer": ans,
+            "explanation": str(item.get("explanation") or "Explicação didática da variação.").strip(),
+            "is_remix": True,
+        })
+
+    if not remixed:
+        raise AIServiceError("Não foi possível gerar variações para as questões selecionadas.")
+
+    return remixed
 

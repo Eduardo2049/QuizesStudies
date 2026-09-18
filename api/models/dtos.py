@@ -27,3 +27,5 @@ class GradeResultDTO:
     total: int
     percentage: int
     results: List[dict]
+    wrong_ids: List[int] = field(default_factory=list)
+    attempt_id: Optional[int] = None

@@ -17,24 +17,28 @@ class QuizRepository:
         Lista todos os quizzes cadastrados acessíveis ao usuário (públicos ou criados por ele).
 
         Returns:
-            list[dict]: [{id, name, label, file_type, ai_generated, created_at}]
+            list[dict]: [{id, name, label, file_type, ai_generated, created_at, question_count}]
         """
         with get_cursor() as cur:
             if user_id:
                 cur.execute("""
-                    SELECT id, name, label, file_type, ai_generated, created_at,
-                           created_by, is_public
-                    FROM quizzes
-                    WHERE is_public = TRUE OR created_by = %s
-                    ORDER BY created_at ASC
+                    SELECT q.id, q.name, q.label, q.file_type, q.ai_generated, q.created_at,
+                           q.created_by, q.is_public, COUNT(qs.id) AS question_count
+                    FROM quizzes q
+                    LEFT JOIN questions qs ON qs.quiz_id = q.id
+                    WHERE q.is_public = TRUE OR q.created_by = %s
+                    GROUP BY q.id
+                    ORDER BY q.created_at ASC
                 """, (user_id,))
             else:
                 cur.execute("""
-                    SELECT id, name, label, file_type, ai_generated, created_at,
-                           created_by, is_public
-                    FROM quizzes
-                    WHERE is_public = TRUE
-                    ORDER BY created_at ASC
+                    SELECT q.id, q.name, q.label, q.file_type, q.ai_generated, q.created_at,
+                           q.created_by, q.is_public, COUNT(qs.id) AS question_count
+                    FROM quizzes q
+                    LEFT JOIN questions qs ON qs.quiz_id = q.id
+                    WHERE q.is_public = TRUE
+                    GROUP BY q.id
+                    ORDER BY q.created_at ASC
                 """)
             return [dict(row) for row in cur.fetchall()]
 
@@ -195,3 +199,44 @@ class QuizRepository:
         with get_cursor() as cur:
             cur.execute("DELETE FROM quizzes WHERE id = %s RETURNING id", (quiz_id,))
             return cur.fetchone() is not None
+
+    def save_attempt(
+        self,
+        user_id: int,
+        quiz_id: int,
+        quiz_name: str,
+        score: int,
+        total: int,
+        percentage: int,
+        wrong_question_ids: list[int],
+    ) -> dict:
+        """Salva a tentativa de um usuário no quiz."""
+        with get_cursor() as cur:
+            cur.execute("""
+                INSERT INTO quiz_attempts
+                    (user_id, quiz_id, quiz_name, score, total, percentage, wrong_question_ids)
+                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+                RETURNING id, user_id, quiz_id, quiz_name, score, total, percentage, wrong_question_ids, created_at
+            """, (
+                user_id,
+                quiz_id,
+                quiz_name,
+                score,
+                total,
+                percentage,
+                json.dumps(wrong_question_ids),
+            ))
+            return dict(cur.fetchone())
+
+    def find_user_attempts(self, user_id: int, limit: int = 10) -> list[dict]:
+        """Retorna as últimas tentativas realizadas pelo usuário."""
+        with get_cursor() as cur:
+            cur.execute("""
+                SELECT id, user_id, quiz_id, quiz_name, score, total, percentage,
+                       wrong_question_ids, created_at
+                FROM quiz_attempts
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (user_id, limit))
+            return [dict(row) for row in cur.fetchall()]

@@ -180,6 +180,18 @@ class QuizHandler(BaseHTTPRequestHandler):
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
+            # 2.1 API: Histórico de tentativas do usuário (Caderno de Erros)
+            if request.path == "/api/user/attempts":
+                user = self._get_current_user_or_none()
+                if not user:
+                    status, data = ResponseFormatter.success({"attempts": []})
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
+                response = self.quiz_controller.get_user_attempts(user["id"])
+                status, data = ResponseFormatter.success(response["data"])
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
             # 3. Servir HTML principal
             if request.path in ("/", "/guest", "/index.html", "/api/index.py", "/api/index"):
                 if request.path != "/guest":
@@ -452,6 +464,36 @@ class QuizHandler(BaseHTTPRequestHandler):
                     return
 
                 response = self.quiz_controller.submit_answers(payload, user_id)
+                status, data = ResponseFormatter.success(response["data"])
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
+            # ── 2.1 Mutação/Remix de questões erradas via IA (application/json) ──────────
+            if request.path == "/api/quiz/remix-mistakes":
+                length = int(self.headers.get("Content-Length", 0))
+                if length > MAX_JSON_BYTES:
+                    status, data = ResponseFormatter.bad_request("Corpo da requisição muito grande")
+                    HTTPMiddleware.send_json_response(self, 413, data)
+                    return
+                if length == 0:
+                    status, data = ResponseFormatter.bad_request("Corpo da requisição vazio")
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
+
+                try:
+                    payload = json.loads(self.rfile.read(length))
+                except json.JSONDecodeError:
+                    status, data = ResponseFormatter.bad_request("JSON inválido")
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
+
+                questions = payload.get("questions", [])
+                if not isinstance(questions, list) or not questions:
+                    status, data = ResponseFormatter.bad_request("Lista de questões 'questions' é obrigatória")
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
+
+                response = self.quiz_controller.remix_mistakes(questions)
                 status, data = ResponseFormatter.success(response["data"])
                 HTTPMiddleware.send_json_response(self, status, data)
                 return

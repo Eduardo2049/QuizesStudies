@@ -1,6 +1,31 @@
 # Quizes Study
 
-Plataforma de simulados e treino de raciocínio lógico. Faça upload de provas em **PDF**, **DOCX** ou **TXT** e receba quizzes interativos com gabarito automático via IA.
+Plataforma de simulados de alto rendimento e treino de raciocínio lógico. Transforme qualquer material em **PDF**, **DOCX** ou **TXT** (ou gere tópicos do zero) em simulados interativos com gabarito pedagógico e **Caderno de Erros inteligente com mutações por IA**.
+
+> **Proposta de Valor Central:** *“Da sua apostila ao simulado ativo em 5 segundos.”*  
+> Menos tempo formatando flashcards, zero distração com fóruns poluídos e foco total na retenção de raciocínio.
+
+---
+
+## Por que o Quiz Study existe? (Diferenciais de Mercado)
+
+Estudantes para concursos, certificações e vestibulares enfrentam três grandes problemas no mercado atual:
+1. **Criação Lenta de Questões:** Plataformas como o Anki exigem digitação e formatação manual card por card.
+2. **Bancos Estáticos e Rígidos:** Grandes sites (como QConcursos e Gran) dependem exclusivamente de provas antigas de bancas, sem permitir que o aluno pratique sobre suas próprias anotações, resumos ou livros de faculdade.
+3. **Decoreba de Gabarito:** Ao refazer uma questão errada, o cérebro tende a lembrar da letra correta (*"na 3 era a C"*), gerando uma falsa ilusão de aprendizado.
+
+O **Quiz Study** resolve isso unindo a extração instantânea de conteúdo à **Mutação de Questões por IA**: a IA identifica onde você errou e pode gerar variações inéditas mantendo o mesmo conceito teórico e nível de dificuldade, forçando a aplicação real do raciocínio.
+
+### 📊 Benchmarking Competitivo
+
+| Critério / Ferramenta | Quiz Study | Quizlet | QConcursos / Gran Cursos | Anki |
+|---|:---:|:---:|:---:|:---:|
+| **Geração Instantânea por Material Próprio** | **Sim (PDF, DOCX, TXT)** | Não (Manual ou listas públicas) | Não (Apenas banco próprio de bancas) | Não (Manual card a card) |
+| **Geração de Simulado por Tema via IA** | **Sim (Google Gemini / OpenRouter)** | Limitado (em planos pagos) | Não | Não nativo |
+| **Caderno de Erros com Mutação IA** | **Sim (Gera variações inéditas)** | Não (Apenas repete o card) | Não (Filtra questões estáticas) | Não (Repete o mesmo card) |
+| **Explicação Didática Passo a Passo** | **Sim (Imediata via IA)** | Raras (Geralmente apenas definição) | Sim (Fórum / Comentários de profs) | Apenas se o usuário tiver escrito |
+| **Experiência Limpa e Sem Fricção** | **Sim (Modo foco + cronômetro)** | Não (Gameficado/Anúncios) | Não (Poluído de propagandas e fórum) | Interface crua e curva alta |
+| **Acesso Convidado sem Cadastro** | **Sim (Guest Mode completo)** | Não | Não | Sim (Local) |
 
 ---
 
@@ -160,7 +185,9 @@ c) Opção C
 | `GET` | `/register` ou `/register.html` | Pública | Página de cadastro de estudante |
 | `GET` | `/api/quizzes` | Pública | Lista quizzes disponíveis |
 | `GET` | `/api/quiz?source=<name>` | Pública | Questões de um quiz (sem gabarito) |
-| `POST` | `/api/quiz/submit` | Pública | Submete respostas e retorna score/gabarito |
+| `POST` | `/api/quiz/submit` | Pública | Submete respostas, salva tentativa e retorna score/gabarito |
+| `GET` | `/api/user/attempts` | Autenticado / Convidado | Histórico de tentativas e caderno de erros |
+| `POST` | `/api/quiz/remix-mistakes` | Pública | Cria variações inéditas com IA para questões erradas |
 | `POST` | `/api/quiz/generate` | Pública / Convidado / Autenticado | Gera questões por tema via IA |
 | `POST` | `/api/auth/login` | Pública | Login (retorna Bearer Token) |
 | `POST` | `/api/auth/register` | Pública | Cadastro de estudante |
@@ -247,4 +274,18 @@ CREATE TABLE questions (
     answer          INTEGER,          -- índice base-0 (0=A, 1=B, ...)
     explanation     TEXT DEFAULT ''
 );
+
+-- Tentativas e Histórico de Desempenho (Caderno de Erros)
+CREATE TABLE quiz_attempts (
+    id                 SERIAL PRIMARY KEY,
+    user_id            INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    quiz_id            INTEGER REFERENCES quizzes(id) ON DELETE CASCADE,
+    score              INTEGER NOT NULL,
+    total              INTEGER NOT NULL,
+    percentage         INTEGER NOT NULL,
+    wrong_question_ids JSONB DEFAULT '[]'::jsonb,
+    created_at         TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX idx_quiz_attempts_user ON quiz_attempts(user_id);
+CREATE INDEX idx_quiz_attempts_quiz ON quiz_attempts(quiz_id);
 ```

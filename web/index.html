@@ -28,6 +28,12 @@
           Questionário <select id="quizSelector"></select>
         </label>
         <div class="hero-top-buttons">
+          <button id="btnOpenCatalog" class="btn-catalog" type="button" title="Explorar todos os simulados disponíveis">
+            📚 Explorar Simulados
+          </button>
+          <button id="btnOpenAboutModal" class="btn-about" type="button" title="Conheça o propósito e diferenciais do Quiz Study">
+            💡 Por que o Quiz Study?
+          </button>
           <button id="addQuizBtn" class="btn-add-quiz" type="button" title="Adicionar novo quiz">
             <span class="btn-add-icon">＋</span> Adicionar Quiz
           </button>
@@ -50,12 +56,56 @@
       <div class="status">
         <span id="progress">0 de 0 respondidas</span>
         <span id="percent">0%</span>
-        <span id="timer" aria-live="polite" title="Tempo restante">24:00</span>
+        <div class="timer-wrap">
+          <span id="timer" aria-live="polite" title="Clique para definir o tempo">24:00</span>
+          <div class="timer-config" id="timerConfig">
+            <label class="timer-config-label" for="timerPreset">⏱</label>
+            <select id="timerPreset" class="timer-preset-select" title="Definir tempo do simulado">
+              <option value="auto">Automático</option>
+              <option value="300">5 min</option>
+              <option value="600">10 min</option>
+              <option value="900">15 min</option>
+              <option value="1200">20 min</option>
+              <option value="1440">24 min</option>
+              <option value="1800">30 min</option>
+              <option value="2700">45 min</option>
+              <option value="3600">60 min</option>
+              <option value="custom">Personalizado…</option>
+            </select>
+          </div>
+        </div>
       </div>
       <div class="progress-track"><div id="progressBar"></div></div>
+
+      <div class="exam-toolbar" id="examToolbar">
+        <div class="view-mode-toggle" role="group" aria-label="Modo de visualização">
+          <button type="button" id="btnToggleFocus" class="toggle-btn active" title="Exibe 1 questão por vez para foco total">
+            🎯 Modo Foco
+          </button>
+          <button type="button" id="btnToggleList" class="toggle-btn" title="Exibe todas as questões em scroll contínuo">
+            📜 Modo Lista
+          </button>
+        </div>
+        <button id="btnQuickSubmit" class="primary btn-quick-submit" type="button" title="Conferir respostas do simulado">
+          🏁 Finalizar Simulado
+        </button>
+      </div>
+
+      <!-- Paleta/Régua de Navegação Rápida entre Questões -->
+      <nav id="questionPalette" class="question-palette" aria-label="Navegação rápida de questões"></nav>
     </header>
 
     <form id="quiz" class="quiz" novalidate></form>
+
+    <div id="focusNavigation" class="focus-navigation" hidden>
+      <button type="button" id="btnPrevQuestion" class="secondary nav-btn" disabled>
+        ← Anterior
+      </button>
+      <span id="focusIndicator" class="focus-indicator">Questão 1 de 5</span>
+      <button type="button" id="btnNextQuestion" class="primary nav-btn">
+        Próxima →
+      </button>
+    </div>
 
     <div class="actions">
       <button id="submit" form="quiz" class="primary" type="submit">Conferir respostas <span>→</span></button>
@@ -173,13 +223,150 @@
       <div class="results-list" id="resultQuestionsList"></div>
 
       <div class="results-footer">
-        <button id="btnRedoQuiz" class="primary btn-redo" type="button">
-          <span>↺</span> Refazer Simulado
+        <button id="btnRedoQuiz" class="secondary btn-redo" type="button">
+          <span>↺</span> Refazer Tudo
+        </button>
+        <button id="btnTrainMistakes" class="primary btn-mistakes" type="button" hidden>
+          <span>🎯</span> Caderno de Erros (<span id="mistakesCount">0</span>)
+        </button>
+        <button id="btnRemixMistakes" class="primary btn-remix" type="button" hidden>
+          <span>✨</span> Gerar Variações Inéditas (IA)
         </button>
         <button id="btnCloseResultModal" class="secondary" type="button">
           Fechar
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- ── Modal Explicativo: Por que o Quiz Study? ────────────────────────── -->
+  <div id="aboutModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="aboutModalTitle">
+    <div class="modal modal--about">
+      <button class="modal-close" id="closeAboutModal" aria-label="Fechar">&times;</button>
+      
+      <div class="about-header">
+        <span class="about-badge">⚡ Propósito & Diferenciais</span>
+        <h2 id="aboutModalTitle" class="about-title">Por que o Quiz Study existe?</h2>
+        <p class="about-tagline">“Da sua apostila ao simulado ativo em 5 segundos.”</p>
+      </div>
+
+      <div class="about-content">
+        <section class="about-pillars">
+          <div class="pillar-card">
+            <div class="pillar-icon">⏱️</div>
+            <h3>Fricção Zero</h3>
+            <p>Em vez de gastar horas criando flashcards manualmente ou caçando questões desatualizadas, basta arrastar seu PDF/DOCX ou digitar um tema.</p>
+          </div>
+          <div class="pillar-card">
+            <div class="pillar-icon">🧠</div>
+            <h3>Retenção & IA Ativa</h3>
+            <p>Errou uma questão? A IA não te dá apenas a explicação: ela gera variações inéditas para provar que você entendeu o conceito e não apenas decorou a alternativa.</p>
+          </div>
+          <div class="pillar-card">
+            <div class="pillar-icon">🎯</div>
+            <h3>Foco no Raciocínio</h3>
+            <p>Interface limpa, modo focado com cronômetro de prova, sem distrações, anúncios ou fóruns poluídos que quebram o fluxo de estudos.</p>
+          </div>
+        </section>
+
+        <section class="about-comparison">
+          <h3 class="comparison-title">Como nos comparamos com outras ferramentas?</h3>
+          <div class="comparison-table-wrap">
+            <table class="comparison-table">
+              <thead>
+                <tr>
+                  <th>Recurso / Diferencial</th>
+                  <th class="highlight-col">Quiz Study</th>
+                  <th>Quizlet</th>
+                  <th>QConcursos / Gran</th>
+                  <th>Anki</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Criação de simulados</strong></td>
+                  <td class="highlight-col"><strong>Instantânea por PDF/DOCX ou Tema IA</strong></td>
+                  <td>Manual ou listas públicas</td>
+                  <td>Banco fixo de bancas</td>
+                  <td>Criação 100% manual</td>
+                </tr>
+                <tr>
+                  <td><strong>Caderno de Erros Inteligente</strong></td>
+                  <td class="highlight-col"><strong>Retreino + Variações Inéditas por IA</strong></td>
+                  <td>Apenas repete o card</td>
+                  <td>Filtro de questões estáticas</td>
+                  <td>Repetição espaçada (mesmo card)</td>
+                </tr>
+                <tr>
+                  <td><strong>Explicação pedagógica</strong></td>
+                  <td class="highlight-col"><strong>Passo a passo por IA na hora</strong></td>
+                  <td>Apenas termo/definição</td>
+                  <td>Comentários de fórum / profs</td>
+                  <td>Apenas o verso do card</td>
+                </tr>
+                <tr>
+                  <td><strong>Privacidade & Material Próprio</strong></td>
+                  <td class="highlight-col"><strong>Simulado sobre seu próprio material</strong></td>
+                  <td>Público / Compartilhado</td>
+                  <td>Não aceita material próprio</td>
+                  <td>Local / Manual</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <div class="modal-actions about-modal-actions">
+        <button id="btnCloseAbout" class="primary btn-close-about" type="button">Entendi, vamos treinar! 🚀</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal de Confirmação: Finalizar Simulado ────────────────────── -->
+  <div id="confirmSubmitModal" class="modal-overlay" hidden aria-modal="true" role="alertdialog" aria-labelledby="confirmSubmitTitle">
+    <div class="modal modal--confirm-submit">
+      <div class="confirm-submit-icon">🏁</div>
+      <h2 id="confirmSubmitTitle" class="confirm-submit-title">Finalizar Simulado?</h2>
+      <p class="confirm-submit-msg" id="confirmSubmitMsg">
+        Você respondeu <strong id="confirmSubmitAnswered">0</strong> de <strong id="confirmSubmitTotal">0</strong> questões.
+      </p>
+      <p class="confirm-submit-warning" id="confirmSubmitWarning" hidden>
+        ⚠️ As <strong id="confirmSubmitMissing">0</strong> questões não respondidas serão consideradas <strong>erradas</strong>.
+      </p>
+      <div class="confirm-submit-actions">
+        <button id="confirmSubmitCancel" class="secondary" type="button">Voltar e revisar</button>
+        <button id="confirmSubmitConfirm" class="primary btn-confirm-finish" type="button">
+          Confirmar e ver gabarito →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal Catálogo de Simulados ──────────────────────────────────── -->
+  <div id="catalogModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="catalogModalTitle">
+    <div class="modal modal--catalog">
+      <button class="modal-close" id="closeCatalogModal" aria-label="Fechar">&times;</button>
+      
+      <div class="catalog-header">
+        <span class="catalog-badge">📚 Biblioteca de Estudos</span>
+        <h2 id="catalogModalTitle" class="catalog-title">Explorar Simulados</h2>
+        <p class="catalog-subtitle">Escolha um simulado para treinar com foco total ou filtre por assunto.</p>
+
+        <div class="catalog-search-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="catalogSearchInput" class="catalog-search-input" placeholder="Pesquisar simulado por tema, matéria ou tipo…" autocomplete="off">
+        </div>
+
+        <div class="catalog-tabs">
+          <button type="button" class="catalog-tab-btn active" data-filter="all">Todos</button>
+          <button type="button" class="catalog-tab-btn" data-filter="platform">Plataforma</button>
+          <button type="button" class="catalog-tab-btn" data-filter="ai">Gerados por IA ✨</button>
+          <button type="button" class="catalog-tab-btn" data-filter="custom">Meus Uploads 📄</button>
+        </div>
+      </div>
+
+      <div id="catalogList" class="catalog-grid"></div>
     </div>
   </div>
 

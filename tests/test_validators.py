@@ -193,5 +193,70 @@ class TestSessionAndCacheClearing(unittest.TestCase):
         self.assertIn("Max-Age=0", set_cookie_calls[0][0][1])
 
 
+class TestMistakesRetentionAndRemix(unittest.TestCase):
+    """Testes para o Caderno de Erros e Mutação por IA"""
+
+    @patch("api.services.ai_service._call_openrouter")
+    def test_remix_questions_by_ai(self, mock_call):
+        from api.services.ai_service import remix_questions_by_ai
+        mock_ai_json = (
+            '{"questions": [{'
+            '"id": 1, "section": "Lógica Proposicional", '
+            '"question": "Se chove, então a rua fica molhada. A rua não está molhada. Logo:", '
+            '"options": ["Choveu", "Não choveu", "Está frio", "Está sol"], '
+            '"answer": 1, '
+            '"explanation": "Pelo Modus Tollens, a negação do consequente implica a negação do antecedente."'
+            '}]}'
+        )
+        mock_call.return_value = (mock_ai_json, "gemini-flash-lite-latest")
+
+        wrong_questions = [{
+            "id": 10,
+            "section": "Lógica Proposicional",
+            "question": "Se faz sol, vou à praia. Não fui à praia. Logo:",
+            "options": ["Fez sol", "Não fez sol", "Choveu", "Fiquei em casa"],
+            "answer": 1,
+        }]
+
+        remixed = remix_questions_by_ai(wrong_questions)
+        self.assertEqual(len(remixed), 1)
+        self.assertEqual(remixed[0]["id"], 1)
+        self.assertEqual(remixed[0]["answer"], 1)
+        self.assertTrue(remixed[0]["is_remix"])
+        self.assertIn("Modus Tollens", remixed[0]["explanation"])
+
+    def test_quiz_repository_save_attempt(self):
+        from api.repositories.quiz_repository import QuizRepository
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {
+            "id": 42,
+            "user_id": 1,
+            "quiz_id": 2,
+            "quiz_name": "quiz-logica",
+            "score": 3,
+            "total": 5,
+            "percentage": 60,
+            "wrong_question_ids": [2, 4],
+        }
+
+        with patch("api.repositories.quiz_repository.get_cursor") as mock_get_cursor:
+            mock_get_cursor.return_value.__enter__.return_value = mock_cursor
+            repo = QuizRepository()
+            result = repo.save_attempt(
+                user_id=1,
+                quiz_id=2,
+                quiz_name="quiz-logica",
+                score=3,
+                total=5,
+                percentage=60,
+                wrong_question_ids=[2, 4]
+            )
+            self.assertEqual(result["id"], 42)
+            self.assertEqual(result["quiz_name"], "quiz-logica")
+            mock_cursor.execute.assert_called_once()
+            sql = mock_cursor.execute.call_args[0][0]
+            self.assertIn("INSERT INTO quiz_attempts", sql)
+
+
 if __name__ == "__main__":
     unittest.main()
