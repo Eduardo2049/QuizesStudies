@@ -601,3 +601,114 @@ def remix_questions_by_ai(questions: list[dict]) -> list[dict]:
 
     return remixed
 
+
+def parse_and_structure_questions_with_ai(
+    text: str,
+    max_chars: int = 40_000,
+) -> list[dict]:
+    """
+    Analisa texto bruto e despadronizado de uma prova/simulado (TXT, PDF, DOCX)
+    com diferentes padrões ou sem numeração uniforme, usando IA para extrair e estruturar
+    perguntas, alternativas, respostas (detectadas ou resolvidas) e explicações.
+
+    Args:
+        text: Texto cru extraído do arquivo
+        max_chars: Limite seguro de caracteres para análise do LLM
+
+    Returns:
+        list[dict]: [{id, question, options, answer, explanation, section, context}]
+
+    Raises:
+        AIServiceError: Se a IA falhar ou não conseguir estruturar questões válidas
+    """
+    if not text or not text.strip():
+        raise AIServiceError("Texto vazio fornecido para estruturação por IA.")
+
+    # Respeitar limite de caracteres para evitar estouro de tokens/timeout
+    truncated_text = text.strip()
+    if len(truncated_text) > max_chars:
+        truncated_text = truncated_text[:max_chars]
+
+    prompt_lines = [
+        "Você é um especialista em processamento e estruturação de avaliações, simulados e provas acadêmicas e de concursos.",
+        "Sua tarefa é analisar o documento em anexo (que pode ter sido extraído de um TXT, PDF ou DOCX) com formatação livre, questões sem numeração explícita, alternativas em formatos variados ou gabarito em diferentes partes do texto.",
+        "",
+        "Instruções obrigatórias:",
+        "1. Identifique cada questão individual contida no texto.",
+        "2. Para cada questão, isole o enunciado limpo no campo 'question'.",
+        "3. Isole cada alternativa no campo 'options' (como lista de strings, sem prefixos como 'a)', 'B.', etc.). Cada questão deve ter pelo menos 2 alternativas (normalmente 4 ou 5).",
+        "4. Resposta ('answer'):",
+        "   - Se o documento contiver gabarito explícito ou resposta indicada para aquela questão, use-a.",
+        "   - Se o documento NÃO contiver resposta/gabarito para aquela questão, você DEVE analisar e resolver a questão, definindo em 'answer' o índice numérico (base 0) da alternativa correta.",
+        "5. Forneça em 'explanation' uma explicação didática e concisa (1-3 frases) justificando por que aquela alternativa é a correta.",
+        "6. Identifique seções ou temas em 'section' (ex: 'Raciocínio Lógico', 'Português', 'Direito Constitucional', ou 'Geral' se não especificado).",
+        "",
+        "IMPORTANTE: Retorne SOMENTE um objeto JSON válido, sem texto adicional, no formato:",
+        '{"questions": [{"id": 1, "section": "Geral", "context": "", "question": "...", "options": ["Opção 1", "Opção 2"], "answer": 0, "explanation": "..."}]}',
+        "",
+        "--- INÍCIO DO DOCUMENTO ---",
+        truncated_text,
+        "--- FIM DO DOCUMENTO ---",
+    ]
+
+    prompt = "\n".join(prompt_lines)
+    max_tokens = 3800
+
+    content, used_model = _call_openrouter(
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2,
+        max_tokens=max_tokens,
+        timeout=60,
+    )
+
+    if DEBUG:
+        _log_ai(f"🤖 IA [{used_model}] estruturou documento:\n{content[:400]}")
+
+    try:
+        parsed = json.loads(content)
+        raw_list = parsed.get("questions") if isinstance(parsed, dict) else parsed
+        if not isinstance(raw_list, list):
+            raw_list = next((v for v in parsed.values() if isinstance(v, list)), [])
+        if not isinstance(raw_list, list):
+            raise ValueError("Esperado array de questões no JSON retornado.")
+    except Exception as e:
+        raise AIServiceError(f"A IA não retornou JSON válido ao estruturar o arquivo: {e}")
+
+    structured_questions = []
+    for idx, item in enumerate(raw_list, start=1):
+        if not isinstance(item, dict):
+            continue
+        q_text = str(item.get("question") or "").strip()
+        opts = item.get("options") or []
+        if not q_text or not isinstance(opts, list) or len(opts) < 2:
+            continue
+
+        clean_opts = [re.sub(r"^[a-eA-E0-9][)\s\-\.:]+", "", str(o)).strip() for o in opts]
+        try:
+            ans = int(item.get("answer", 0))
+        except (ValueError, TypeError):
+            ans = 0
+
+        if ans < 0 or ans >= len(clean_opts):
+            ans = 0
+
+        structured_questions.append({
+            "id": idx,
+            "question_number": idx,
+            "section": str(item.get("section") or "Geral").strip(),
+            "context": str(item.get("context") or "").strip(),
+            "question": q_text,
+            "options": clean_opts,
+            "answer": ans,
+            "explanation": str(item.get("explanation") or "").strip(),
+            "ai_generated": True,
+        })
+
+    if not structured_questions:
+        raise AIServiceError(
+            "A inteligência artificial não conseguiu identificar questões válidas no texto do documento."
+        )
+
+    return structured_questions
+
+

@@ -17,7 +17,13 @@ from api.utils.file_parser import (
     parse_questions_from_text,
     validate_questions,
 )
-from api.services.ai_service import generate_answer_key, apply_ai_answers, AIServiceError
+from api.services.ai_service import (
+    generate_answer_key,
+    apply_ai_answers,
+    parse_and_structure_questions_with_ai,
+    AIServiceError,
+)
+from api.utils.config import OPENROUTER_API_KEY, GEMINI_API_KEY
 from api.repositories.quiz_repository import QuizRepository
 from api.exceptions.quiz_exceptions import QuizAPIException
 
@@ -34,6 +40,8 @@ class UploadService:
     """Service para processamento e ingesta de novos quizzes"""
 
     MAX_QUESTIONS = 500
+    MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
+    ALLOWED_FILE_TYPES = {"txt", "pdf", "docx"}
 
     def __init__(self, repository: QuizRepository = None):
         self.repo = repository or QuizRepository()
@@ -61,6 +69,20 @@ class UploadService:
         Raises:
             QuizAPIException: Se parsing falhar ou IA não disponível
         """
+        # 0. Validação de tipo de arquivo e peso
+        clean_ext = file_type.lower().lstrip(".")
+        if clean_ext not in self.ALLOWED_FILE_TYPES:
+            raise QuizAPIException(
+                f"Tipo de arquivo não suportado: .{clean_ext}. Use TXT, PDF ou DOCX.",
+                400
+            )
+
+        if content and len(content) > self.MAX_UPLOAD_BYTES:
+            raise QuizAPIException(
+                f"Arquivo excede o limite máximo permitido de {self.MAX_UPLOAD_BYTES // (1024 * 1024)} MB",
+                413
+            )
+
         # 1. Extrair texto
         try:
             text = extract_text(content, file_type)
@@ -75,43 +97,64 @@ class UploadService:
         if len(text) > 1_000_000:
             raise QuizAPIException("Texto extraído excede o limite permitido", 413)
 
-        # 2. Parse das questões
+        # 2. Parse das questões (Camada 1: Heurística / Regex Multi-Padrão)
         questions = parse_questions_from_text(text)
+        is_valid, error_msg = validate_questions(questions)
+        ai_generated = False
+
+        # Camada 2: Fallback para IA se o regex não encontrar questões válidas
+        # (ex: TXT sem numeração, perguntas e respostas sem separação clássica, formato livre)
+        if not is_valid:
+            has_ai_key = bool(GEMINI_API_KEY or OPENROUTER_API_KEY)
+            if has_ai_key:
+                try:
+                    questions = parse_and_structure_questions_with_ai(text)
+                    is_valid, error_msg = validate_questions(questions)
+                    if is_valid:
+                        ai_generated = True
+                except AIServiceError as e:
+                    raise QuizAPIException(
+                        f"Não foi possível estruturar as questões do arquivo automaticamente com IA: {e}",
+                        422
+                    )
+                except Exception as e:
+                    raise QuizAPIException(
+                        f"Erro na análise do documento por IA: {e}",
+                        422
+                    )
+
+            if not is_valid:
+                raise QuizAPIException(
+                    f"Arquivo com formato não reconhecido: {error_msg}. "
+                    "Verifique se o arquivo possui questões e alternativas ou configure a IA (GEMINI_API_KEY / OPENROUTER_API_KEY) para interpretação automática.",
+                    400
+                )
 
         if len(questions) > self.MAX_QUESTIONS:
             raise QuizAPIException(
                 f"O arquivo excede o limite de {self.MAX_QUESTIONS} questões", 413
             )
 
-        is_valid, error_msg = validate_questions(questions)
-        if not is_valid:
-            raise QuizAPIException(f"Arquivo inválido: {error_msg}", 400)
-
-        # 3. Detectar gabarito
-        has_answer_key = detect_has_answer_key(text)
-        ai_generated = False
-
-        # 4. Gerar gabarito via IA se necessário
-        if not has_answer_key:
-            questions_without_answers = [
-                q for q in questions if q.get("answer") is None
-            ]
-            if questions_without_answers:
-                try:
-                    ai_answers = generate_answer_key(questions_without_answers)
-                    questions = apply_ai_answers(questions, ai_answers)
-                    ai_generated = True
-                except AIServiceError as e:
-                    raise QuizAPIException(
-                        f"Gabarito não encontrado no arquivo e a IA não pôde gerá-lo: {e}",
-                        422
-                    )
+        # 3. Detectar gabarito e gerar respostas faltantes se necessário
+        questions_without_answers = [
+            q for q in questions if q.get("answer") is None
+        ]
+        if questions_without_answers:
+            try:
+                ai_answers = generate_answer_key(questions_without_answers)
+                questions = apply_ai_answers(questions, ai_answers)
+                ai_generated = True
+            except AIServiceError as e:
+                raise QuizAPIException(
+                    f"Gabarito não encontrado no arquivo e a IA não pôde gerá-lo: {e}",
+                    422
+                )
 
         # Verificar que todas as questões têm resposta
         missing = [q["id"] for q in questions if q.get("answer") is None]
         if missing:
             raise QuizAPIException(
-                f"Questões sem gabarito: {missing}. Configure OPENROUTER_API_KEY para gerar automaticamente.",
+                f"Questões sem gabarito: {missing}. Configure GEMINI_API_KEY ou OPENROUTER_API_KEY para gerar automaticamente.",
                 422
             )
 
