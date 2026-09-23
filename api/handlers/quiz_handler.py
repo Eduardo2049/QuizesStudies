@@ -21,25 +21,76 @@ from api.utils.validators import AnswerValidator
 ALLOWED_EXTENSIONS = {"txt", "pdf", "docx"}
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 MAX_JSON_BYTES = 256 * 1024
-AUTH_RATE_WINDOW_SECONDS = 15 * 60
-AUTH_RATE_LIMIT = 10
-_auth_requests = defaultdict(deque)
-_auth_requests_lock = Lock()
 
 
-def _allow_auth_request(handler, limit: int = AUTH_RATE_LIMIT) -> bool:
-    """Applies a small per-process limit to login and registration attempts."""
-    client_ip = getattr(handler, "client_address", ("unknown",))[0]
-    now = time.monotonic()
-    cutoff = now - AUTH_RATE_WINDOW_SECONDS
-    with _auth_requests_lock:
-        requests = _auth_requests[(handler.path, client_ip)]
-        while requests and requests[0] <= cutoff:
-            requests.popleft()
-        if len(requests) >= limit:
-            return False
-        requests.append(now)
-        return True
+class RateLimiter:
+    """
+    Rate-limiter genérico com janela deslizante por (rota, IP).
+
+    Considera IP real a partir de CF-Connecting-IP → X-Forwarded-For → socket address,
+    resistente a ataques de bypass via proxy intermediário.
+    """
+
+    def __init__(self, limit: int, window_seconds: int):
+        self.limit = limit
+        self.window = window_seconds
+        self._requests: dict = defaultdict(deque)
+        self._lock = Lock()
+
+    def is_allowed(self, key: str) -> tuple[bool, int]:
+        """
+        Retorna (permitido, retry_after_segundos).
+        retry_after é 0 quando a requisição é permitida.
+        """
+        now = time.monotonic()
+        cutoff = now - self.window
+        with self._lock:
+            reqs = self._requests[key]
+            while reqs and reqs[0] <= cutoff:
+                reqs.popleft()
+            if len(reqs) >= self.limit:
+                # Calcula quantos segundos até a janela liberar a próxima vaga
+                retry_after = max(1, int(reqs[0] - cutoff + 1))
+                return False, retry_after
+            reqs.append(now)
+            return True, 0
+
+    def check_handler(self, handler, route_key: str) -> tuple[bool, int]:
+        """Extrai o IP real do handler e verifica o rate-limit."""
+        client_ip = HTTPMiddleware.get_client_ip(handler)
+        return self.is_allowed(f"{route_key}:{client_ip}")
+
+
+# ─── Instâncias de rate-limiters por rota ────────────────────────────────────
+_rl_auth = RateLimiter(limit=10, window_seconds=15 * 60)    # login/register: 10/15min
+_rl_submit = RateLimiter(limit=30, window_seconds=15 * 60)  # submit: 30/15min
+_rl_upload = RateLimiter(limit=5, window_seconds=60)         # upload: 5/min
+_rl_generate = RateLimiter(limit=10, window_seconds=60)      # generate IA: 10/min
+_rl_remix = RateLimiter(limit=10, window_seconds=60)         # remix IA: 10/min
+_rl_read = RateLimiter(limit=120, window_seconds=60)         # leitura geral: 120/min
+
+
+def _rate_limited_response(handler, retry_after: int) -> None:
+    """Envia resposta 429 com header Retry-After."""
+    from api.middleware.http_middleware import ResponseFormatter
+    status, data = ResponseFormatter.error(
+        f"Muitas requisições. Tente novamente em {retry_after} segundo(s).",
+        "RATE_LIMITED",
+        429,
+    )
+    handler.send_response(429)
+    handler.send_header("Content-Type", "application/json; charset=utf-8")
+    handler.send_header("Retry-After", str(retry_after))
+    body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+    handler.send_header("Content-Length", str(len(body)))
+    HTTPMiddleware.add_cors_headers(handler)
+    HTTPMiddleware.add_security_headers(handler)
+    HTTPMiddleware.add_cache_headers(handler, cache=False)
+    handler.end_headers()
+    try:
+        handler.wfile.write(body)
+    except (BrokenPipeError, ConnectionAbortedError):
+        pass
 
 
 def _parse_multipart(body: bytes, boundary: str) -> tuple[str | None, bytes | None, dict[str, str]]:
@@ -163,6 +214,10 @@ class QuizHandler(BaseHTTPRequestHandler):
 
             # 1. API: Listar quizzes
             if request.path == "/api/quizzes":
+                allowed, retry_after = _rl_read.check_handler(self, "GET:/api/quizzes")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
                 user = self._get_current_user_or_none()
                 user_id = user["id"] if user else None
                 response = self.quiz_controller.get_quizzes(user_id)
@@ -172,6 +227,10 @@ class QuizHandler(BaseHTTPRequestHandler):
 
             # 2. API: Carregar um quiz
             if request.path == "/api/quiz":
+                allowed, retry_after = _rl_read.check_handler(self, "GET:/api/quiz")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
                 user = self._get_current_user_or_none()
                 user_id = user["id"] if user else None
                 source_name = query.get("source", [None])[0]
@@ -186,6 +245,10 @@ class QuizHandler(BaseHTTPRequestHandler):
                 if not user:
                     status, data = ResponseFormatter.success({"attempts": []})
                     HTTPMiddleware.send_json_response(self, status, data)
+                    return
+                allowed, retry_after = _rl_read.check_handler(self, "GET:/api/user/attempts")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
                     return
                 response = self.quiz_controller.get_user_attempts(user["id"])
                 status, data = ResponseFormatter.success(response["data"])
@@ -318,13 +381,9 @@ class QuizHandler(BaseHTTPRequestHandler):
         try:
             # ── 0. Rotas de Autenticação ───────────────────────────────────────
             if request.path == "/api/auth/login":
-                if not _allow_auth_request(self):
-                    status, data = ResponseFormatter.error(
-                        "Muitas tentativas. Tente novamente mais tarde.",
-                        "RATE_LIMITED",
-                        429,
-                    )
-                    HTTPMiddleware.send_json_response(self, status, data)
+                allowed, retry_after = _rl_auth.check_handler(self, "POST:/api/auth/login")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
                     return
                 length = int(self.headers.get("Content-Length", 0))
                 if length > MAX_JSON_BYTES:
@@ -345,13 +404,9 @@ class QuizHandler(BaseHTTPRequestHandler):
                 return
 
             if request.path == "/api/auth/register":
-                if not _allow_auth_request(self):
-                    status, data = ResponseFormatter.error(
-                        "Muitas tentativas. Tente novamente mais tarde.",
-                        "RATE_LIMITED",
-                        429,
-                    )
-                    HTTPMiddleware.send_json_response(self, status, data)
+                allowed, retry_after = _rl_auth.check_handler(self, "POST:/api/auth/register")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
                     return
                 length = int(self.headers.get("Content-Length", 0))
                 if length > MAX_JSON_BYTES:
@@ -379,11 +434,19 @@ class QuizHandler(BaseHTTPRequestHandler):
 
             # ── 1. Upload de arquivo (multipart/form-data) ────────────────────
             if request.path == "/api/upload":
+                allowed, retry_after = _rl_upload.check_handler(self, "POST:/api/upload")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
                 self._handle_upload(query.get("guest", ["0"])[0] == "1")
                 return
 
             # ── 1.1 Gerar quiz por tema via IA (application/json) ────────────
             if request.path == "/api/quiz/generate":
+                allowed, retry_after = _rl_generate.check_handler(self, "POST:/api/quiz/generate")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
                 user = self._get_current_user_or_none()
                 is_guest = (query.get("guest", ["0"])[0] == "1") or (user is None)
 
@@ -430,16 +493,12 @@ class QuizHandler(BaseHTTPRequestHandler):
 
             # ── 2. Submissão de respostas (application/json) ──────────────────
             if request.path == "/api/quiz/submit":
+                allowed, retry_after = _rl_submit.check_handler(self, "POST:/api/quiz/submit")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
                 user = self._get_current_user_or_none()
                 user_id = user["id"] if user else None
-                if not _allow_auth_request(self, limit=30):
-                    status, data = ResponseFormatter.error(
-                        "Muitas submissões. Tente novamente mais tarde.",
-                        "RATE_LIMITED",
-                        429,
-                    )
-                    HTTPMiddleware.send_json_response(self, status, data)
-                    return
                 length = int(self.headers.get("Content-Length", 0))
                 if length > MAX_JSON_BYTES:
                     status, data = ResponseFormatter.bad_request("Corpo da requisição muito grande")
@@ -470,6 +529,10 @@ class QuizHandler(BaseHTTPRequestHandler):
 
             # ── 2.1 Mutação/Remix de questões erradas via IA (application/json) ──────────
             if request.path == "/api/quiz/remix-mistakes":
+                allowed, retry_after = _rl_remix.check_handler(self, "POST:/api/quiz/remix-mistakes")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
                 length = int(self.headers.get("Content-Length", 0))
                 if length > MAX_JSON_BYTES:
                     status, data = ResponseFormatter.bad_request("Corpo da requisição muito grande")

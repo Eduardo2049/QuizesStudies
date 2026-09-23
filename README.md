@@ -123,9 +123,16 @@ semgrep scan --config auto .
    - O `Dockerfile` cria e executa o processo sob um usuário sem privilégios (`appuser`, UID 1000), prevenindo ataques de escape de container e execução indevida como `root` (`dockerfile.security.missing-user.missing-user`).
 2. **Prevenção de SSRF e Protocolos Arbitrários**:
    - A integração com a API do OpenRouter em `api/services/ai_service.py` utiliza a biblioteca `requests` com timeout explícito e validação estrita de protocolo HTTP/HTTPS, eliminando riscos de leitura local de arquivos via esquemas como `file://` (`python.lang.security.audit.dynamic-urllib-use-detected`).
-3. **Validação Rigorosa de Payloads**:
-   - Proteção de rotas, limites de tamanho de upload (máx. 20 MB), validação de tipos de arquivo (whitelist: `.txt`, `.pdf`, `.docx`) e sanitização de dados.
-4. **Status do Scan**:
+3. **Proteção contra Ataques de Rajada e DDoS (Rate Limiting por Janela Deslizante)**:
+   - Implementação de `RateLimiter` genérico em [`api/handlers/quiz_handler.py`](file:///c:/Users/eduardo.asousa/Projetos/Pessoal/QuizesStudies/api/handlers/quiz_handler.py) protegendo rotas críticas (`/api/auth/*`, `/api/upload`, `/api/quiz/generate`).
+   - Resolução confiável do IP de origem seguindo a cadeia segura: `CF-Connecting-IP` → primeiro IP confiável de `X-Forwarded-For` → endereço de socket (`client_address`).
+4. **Cota de Proteção de Tokens de IA por IP (`AI_TOKEN_QUOTA_PER_HOUR`)**:
+   - Limite configurável de tokens consumidos por hora por IP (padrão: **200.000 tokens/hora**, ajustável no `.env`), impedindo o esgotamento malicioso de cotas do Gemini / OpenRouter.
+5. **Cabeçalhos de Segurança HTTP e HSTS**:
+   - Aplicação de `Strict-Transport-Security` (HSTS com `max-age=63072000; includeSubDomains; preload`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy` e `Referrer-Policy`.
+6. **Validação Rigorosa de Payloads**:
+   - Limite estrito de tamanho para JSONs (`MAX_JSON_BYTES = 1 MB`), upload com teto de 20 MB e whitelist de formatos (`.txt`, `.pdf`, `.docx`).
+7. **Status do Scan SAST**:
    - ✅ **0 vulnerabilidades / 0 achados bloqueantes** em mais de 490 regras aplicadas.
 
 ---
@@ -150,13 +157,13 @@ Clique no botão **"+ Adicionar Quiz"** na interface. Você pode escolher entre 
 ### Opção 1: ✨ Gerar por Tema com IA (Sem Arquivo)
 Se você não tiver um documento pronto, digite o **tema ou assunto** desejado (ex: *Raciocínio Lógico Proposicional*, *Python Básico*, *História do Brasil*, *Direito Constitucional*), escolha o número de questões (3, 5 ou 10) e o nível de dificuldade. A IA elaborará todo o simulado com alternativas e explicações detalhadas!
 
-### Opção 2: 📄 Enviar Arquivo
-Envie um arquivo já estruturado nos formatos:
-- **`.txt`** — texto puro com questões numeradas
-- **`.pdf`** — documento PDF (extração automática de texto)
-- **`.docx`** — documento Word
+### Opção 2: 📄 Enviar Arquivo (com Parsing Heurístico e IA)
+Envie um arquivo nos formatos suportados:
+- **`.txt`** — texto estruturado ou em formato livre. O sistema conta com **parser heurístico inteligente e adaptação via IA** capaz de reconhecer perguntas e alternativas mesmo sem números de separação (`1.`, `2.`), marcadores padronizados ou com quebras de linha irregulares (respeitando o limite de peso de 20 MB).
+- **`.pdf`** — documento PDF (extração automática de texto via `pdfplumber`)
+- **`.docx`** — documento Word (via `python-docx`)
 
-Se o arquivo **não contiver gabarito**, ele é gerado automaticamente via `OPENROUTER_API_KEY`. Cada questão pode ter de 2 a N alternativas.
+Se o arquivo **não contiver gabarito**, as respostas e justificativas são geradas automaticamente via IA (`OPENROUTER_API_KEY` ou Gemini). Cada questão pode ter de 2 a N alternativas.
 
 #### Formato de questões aceito em arquivos
 
@@ -194,6 +201,43 @@ c) Opção C
 | `GET` | `/api/auth/me` | Bearer Token | Dados do usuário autenticado |
 | `POST` | `/api/auth/logout` | Bearer Token | Encerramento de sessão |
 | `POST` | `/api/upload` | Autenticado / Convidado (`?guest=1`) | Upload de arquivo (multipart/form-data) |
+
+---
+
+## Testes de Carga, Segurança e Consumo de Tokens
+
+O projeto conta com suítes completas tanto para **auditoria em ambiente isolado (sem custo de tokens)** quanto para **testes reais de carga contra o servidor ativo**.
+
+### 1. Testes Automatizados de Segurança e Carga (Mock — Sem Custo)
+Valida a integridade do `RateLimiter`, cotas de tokens por IP e concorrência massiva:
+```bash
+python -m unittest tests/test_load_and_token_usage.py
+```
+- **Cobertura (23 testes passando)**:
+  - **Limite exato de 200k tokens**: Validação do corte determinístico em 200.000 tokens com retorno HTTP `429 Too Many Requests`.
+  - **Alta concorrência**: 500 chamadas simultâneas com 50 threads (latência p99 < 10ms).
+  - **Simulação DDoS**: 50 IPs diferentes concorrentes sem bypass de cota individual.
+  - **Resistência Anti-Spoofing**: Proteção contra manipulação de cabeçalhos `X-Forwarded-For`.
+
+### 2. Teste Real de Carga contra a API (Consome Tokens Reais)
+Para testar a infraestrutura com geração real de questões via IA (`POST /api/quiz/generate`):
+```bash
+# Nível 1: Teste rápido de validação (5 chamadas, 1 worker, ~7k tokens)
+python tests/test_real_api_load.py --calls 5 --workers 1 --guest --questions 3
+
+# Nível 2: Carga moderada (10 chamadas, 3 workers, ~15k tokens)
+python tests/test_real_api_load.py --calls 10 --workers 3 --guest --questions 5
+
+# Nível 3: Teste de estresse com teto de 200k tokens
+python tests/test_real_api_load.py --calls 50 --workers 5 --guest --questions 10 --token-limit 200000
+
+# Nível 4: Rajada imediata para testar bloqueio 429 pelo Rate Limiter
+python tests/test_real_api_load.py --calls 30 --workers 10 --burst --guest
+```
+- **Recursos do script**:
+  - **Auto-detecção inteligente de porta**: Identifica se o servidor está na porta `8001`, `8002`, etc., evitando conflitos com serviços nativos do Windows (como IIS/HTTP.sys na porta 8000).
+  - **Monitoramento em tempo real**: Exibe status individual (`OK`, `429 BLOCKED`, `ERR`), latência e barra de progresso do consumo acumulado de tokens.
+  - **Contabilidade precisa e custos**: Tokens só são contabilizados em caso de sucesso real, gerando ao final relatório com latência percentilar (p50, p95, max) e estimativa de custo em USD.
 
 ---
 

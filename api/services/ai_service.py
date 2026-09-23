@@ -3,8 +3,12 @@ Serviço de IA via OpenRouter.
 Gera gabarito automaticamente para quizzes sem resposta definida.
 """
 import json
+import os
 import re
+import time
 import requests
+from collections import defaultdict, deque
+from threading import Lock
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from api.utils.config import (
@@ -41,6 +45,122 @@ def _get_http_session() -> requests.Session:
 class AIServiceError(Exception):
     """Erro ao chamar a API de IA"""
     pass
+
+
+class AIQuotaExceededError(Exception):
+    """
+    Levantada quando o IP/sessão excede a cota de tokens permitida por hora.
+    Atributo `retry_after` informa quantos segundos aguardar até a janela reiniciar.
+    """
+    def __init__(self, message: str, retry_after: int = 3600):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+# ─── Cota de tokens de IA por IP ─────────────────────────────────────────────
+# Limite padrão: 50.000 tokens estimados/hora por IP.
+# Pode ser ajustado via variável de ambiente AI_TOKEN_QUOTA_PER_HOUR.
+_AI_TOKEN_QUOTA_PER_HOUR = int(os.getenv("AI_TOKEN_QUOTA_PER_HOUR", "50000"))
+_AI_TOKEN_WINDOW_SECONDS = 3600  # 1 hora
+
+
+class _TokenQuota:
+    """
+    Rastreia o consumo estimado de tokens de IA por chave (geralmente o IP do cliente).
+    Usa uma janela deslizante de 1 hora.
+
+    Estimativa de tokens: len(texto) / 4 (regra geral para português/inglês).
+    """
+
+    def __init__(self, quota: int, window_seconds: int):
+        self.quota = quota
+        self.window = window_seconds
+        # {key: deque of (timestamp, tokens_used)}
+        self._usage: dict = defaultdict(deque)
+        self._lock = Lock()
+
+    def estimate_tokens(self, text: str) -> int:
+        """Estima tokens como len(text) / 4, mínimo 1."""
+        return max(1, len(text) // 4)
+
+    def check_and_record(self, key: str, estimated_tokens: int) -> tuple[bool, int, int]:
+        """
+        Verifica se a chave tem quota disponível e registra o consumo.
+
+        Retorna (permitido, tokens_usados_na_janela, retry_after_segundos).
+        retry_after é 0 quando permitido.
+        """
+        now = time.monotonic()
+        cutoff = now - self.window
+        with self._lock:
+            entries = self._usage[key]
+            # Remove entradas fora da janela
+            while entries and entries[0][0] <= cutoff:
+                entries.popleft()
+
+            used = sum(t for _, t in entries)
+            if used + estimated_tokens > self.quota:
+                # Calcula quanto tempo falta para a janela dar espaço
+                if entries:
+                    retry_after = max(1, int(entries[0][0] - cutoff + 1))
+                else:
+                    retry_after = self.window
+                return False, used, retry_after
+
+            entries.append((now, estimated_tokens))
+            return True, used + estimated_tokens, 0
+
+    def get_usage(self, key: str) -> int:
+        """Retorna o total de tokens estimados usados na janela atual."""
+        now = time.monotonic()
+        cutoff = now - self.window
+        with self._lock:
+            entries = self._usage[key]
+            while entries and entries[0][0] <= cutoff:
+                entries.popleft()
+            return sum(t for _, t in entries)
+
+
+# Instância global do controle de quota
+_token_quota = _TokenQuota(_AI_TOKEN_QUOTA_PER_HOUR, _AI_TOKEN_WINDOW_SECONDS)
+
+# Chave padrão usada quando não há IP disponível (ex: chamadas internas)
+_DEFAULT_QUOTA_KEY = "internal"
+
+
+def check_ai_token_quota(prompt: str, ip: str | None = None) -> int:
+    """
+    Verifica e registra o consumo estimado de tokens para um prompt.
+
+    Args:
+        prompt: Texto do prompt a ser enviado à IA.
+        ip: IP do cliente (None usa chave interna, sem limite por IP).
+
+    Returns:
+        Tokens estimados consumidos nesta chamada.
+
+    Raises:
+        AIQuotaExceededError: Se a cota horária por IP for excedida.
+    """
+    key = ip or _DEFAULT_QUOTA_KEY
+    # Não aplica cota para chamadas internas sem IP
+    if key == _DEFAULT_QUOTA_KEY:
+        return _token_quota.estimate_tokens(prompt)
+
+    estimated = _token_quota.estimate_tokens(prompt)
+    allowed, used, retry_after = _token_quota.check_and_record(key, estimated)
+
+    if not allowed:
+        raise AIQuotaExceededError(
+            f"Cota de tokens de IA excedida ({used:,} tokens usados na última hora). "
+            f"Tente novamente em {retry_after // 60 + 1} minuto(s).",
+            retry_after=retry_after,
+        )
+
+    if DEBUG:
+        print(f"[ai_quota] IP={key} estimated={estimated} used_after={used}/{_AI_TOKEN_QUOTA_PER_HOUR}")
+
+    return estimated
 
 
 def _build_prompt(questions: list[dict]) -> str:
@@ -254,20 +374,23 @@ def _call_openrouter(
     raise AIServiceError("Não foi possível conectar ao provedor de inteligência artificial.")
 
 
-def generate_answer_key(questions: list[dict]) -> list[dict]:
+def generate_answer_key(questions: list[dict], client_ip: str | None = None) -> list[dict]:
     """
     Gera gabarito para uma lista de questões via OpenRouter API.
 
     Args:
         questions: Lista de dicts com {id, question, options, ...}
+        client_ip: IP do cliente para controle de cota de tokens (opcional).
 
     Returns:
         Lista de {question_id, answer: int, explanation: str}
 
     Raises:
         AIServiceError: Se a API não responder ou retornar JSON inválido
+        AIQuotaExceededError: Se o IP exceder a cota de tokens por hora
     """
     prompt = _build_prompt(questions)
+    check_ai_token_quota(prompt, ip=client_ip)
     max_tokens = min(3500, max(500, len(questions) * 120))
     content, used_model = _call_openrouter(
         messages=[{"role": "user", "content": prompt}],
@@ -344,6 +467,7 @@ def generate_quiz_by_topic(
     num_questions: int = 5,
     difficulty: str = "Médio",
     context: str = "",
+    client_ip: str | None = None,
 ) -> dict:
     """
     Gera um conjunto completo de questões de quiz sobre um tema especificado via OpenRouter API.
@@ -353,6 +477,7 @@ def generate_quiz_by_topic(
         num_questions: Quantidade de questões (1 a 20, padrão 5)
         difficulty: Nível ("Fácil", "Médio", "Difícil")
         context: Diretrizes ou instruções adicionais opcionais
+        client_ip: IP do cliente para controle de cota de tokens (opcional).
 
     Returns:
         dict: {
@@ -363,6 +488,7 @@ def generate_quiz_by_topic(
 
     Raises:
         AIServiceError: Se falhar a comunicação ou o modelo não gerar questões válidas
+        AIQuotaExceededError: Se o IP exceder a cota de tokens por hora
     """
     if not OPENROUTER_API_KEY:
         raise AIServiceError(
@@ -422,6 +548,7 @@ def generate_quiz_by_topic(
 }"""
     ])
     prompt = "\n".join(prompt_lines)
+    check_ai_token_quota(prompt, ip=client_ip)
     max_tokens = min(3500, max(800, qty * 350))
     content, used_model = _call_openrouter(
         messages=[{"role": "user", "content": prompt}],
