@@ -54,7 +54,7 @@ class AuthService:
             if not admin:
                 admin = self.repo.create_user(
                     username=ADMIN_USERNAME,
-                    email="admin@ifuture.study",
+                    email="admin@quiz.study",
                     password_hash=pwd_hash,
                     salt=salt,
                     role="admin",
