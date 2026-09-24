@@ -54,6 +54,7 @@ class UploadService:
         created_by: int,
         is_public: bool,
         persist: bool = True,
+        client_ip: str = None,
     ) -> dict:
         """
         Processa upload de arquivo e cria quiz no banco.
@@ -105,10 +106,16 @@ class UploadService:
         # Camada 2: Fallback para IA se o regex não encontrar questões válidas
         # (ex: TXT sem numeração, perguntas e respostas sem separação clássica, formato livre)
         if not is_valid:
+            if created_by is None:
+                raise QuizAPIException(
+                    "O arquivo requer estruturação por Inteligência Artificial. "
+                    "Faça login para utilizar recursos com IA.",
+                    401
+                )
             has_ai_key = bool(GEMINI_API_KEY or OPENROUTER_API_KEY)
             if has_ai_key:
                 try:
-                    questions = parse_and_structure_questions_with_ai(text)
+                    questions = parse_and_structure_questions_with_ai(text, client_ip=client_ip)
                     is_valid, error_msg = validate_questions(questions)
                     if is_valid:
                         ai_generated = True
@@ -140,8 +147,14 @@ class UploadService:
             q for q in questions if q.get("answer") is None
         ]
         if questions_without_answers:
+            if created_by is None:
+                raise QuizAPIException(
+                    "O arquivo não possui gabarito e a resolução por Inteligência Artificial requer login. "
+                    "Faça login para utilizar recursos com IA.",
+                    401
+                )
             try:
-                ai_answers = generate_answer_key(questions_without_answers)
+                ai_answers = generate_answer_key(questions_without_answers, client_ip=client_ip)
                 questions = apply_ai_answers(questions, ai_answers)
                 ai_generated = True
             except AIServiceError as e:

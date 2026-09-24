@@ -7,11 +7,16 @@ sem limite fixo (2 a N alternativas por questão).
 """
 import re
 import io
+import zipfile
 from typing import Optional
 
 MAX_PDF_PAGES = 100
 MAX_DOCX_PARAGRAPHS = 10_000
 MAX_EXTRACTED_CHARS = 1_000_000
+MAX_DOCX_UNCOMPRESSED_BYTES = 30 * 1024 * 1024  # 30 MB
+MAX_DOCX_COMPRESSION_RATIO = 100
+MAX_DOCX_ENTRIES = 1_000
+MAX_LINE_PARSE_CHARS = 2_000
 
 
 # ─── Extração de texto bruto por formato ─────────────────────────────────────
@@ -51,8 +56,31 @@ def parse_pdf(content: bytes) -> str:
     return "\n".join(text_parts)
 
 
+def _validate_docx_zip(content: bytes) -> None:
+    """Verifica proteção contra ZIP Bomb e integridade em arquivos DOCX."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            infolist = zf.infolist()
+            if len(infolist) > MAX_DOCX_ENTRIES:
+                raise ValueError(f"DOCX contém muitas entradas internas ({len(infolist)}).")
+            total_uncompressed = 0
+            total_compressed = 0
+            for info in infolist:
+                total_uncompressed += info.file_size
+                total_compressed += info.compress_size
+                if info.compress_size > 0 and (info.file_size / info.compress_size) > MAX_DOCX_COMPRESSION_RATIO:
+                    raise ValueError("Arquivo DOCX suspeito de Zip Bomb (razão de compressão individual excessiva).")
+            if total_uncompressed > MAX_DOCX_UNCOMPRESSED_BYTES:
+                raise ValueError("DOCX descompactado excede o limite de tamanho permitido (30 MB).")
+            if total_compressed > 0 and (total_uncompressed / total_compressed) > MAX_DOCX_COMPRESSION_RATIO:
+                raise ValueError("Arquivo DOCX suspeito de Zip Bomb (razão de compressão total excessiva).")
+    except zipfile.BadZipFile:
+        raise ValueError("Arquivo DOCX inválido ou corrompido.")
+
+
 def parse_docx(content: bytes) -> str:
-    """Extrai texto de arquivo DOCX usando python-docx."""
+    """Extrai texto de arquivo DOCX usando python-docx com proteção contra Zip Bomb."""
+    _validate_docx_zip(content)
     try:
         from docx import Document
     except ImportError:
@@ -111,8 +139,9 @@ def detect_has_answer_key(text: str) -> bool:
 # ─── Parser flexível de questões e alternativas ──────────────────────────────
 
 # Padrão para marcador de alternativas (usado para detecção inline via finditer)
+# Usa lookbehind (?<=\s) em vez de \s+ para evitar comportamento quadrático/ReDoS
 INLINE_MARKER_PATTERN = re.compile(
-    r"(?:^|\s+)(?:\(([a-z])\)|\[([a-z])\]|([a-z])\*{0,2}\s*[\.\-\)\:\—\–])\s*",
+    r"(?:^|(?<=\s))(?:\(([a-z])\)|\[([a-z])\]|([a-z])\*{0,2}\s*[\.\-\)\:\—\–])\s*",
     re.IGNORECASE
 )
 
@@ -211,6 +240,8 @@ def _extract_qnum_and_text(match: re.Match) -> tuple[int, str]:
 
 def _extract_inline_options(text: str) -> list[str]:
     """Extrai alternativas em linha única se houver pelo menos 2 marcadores identificados."""
+    if len(text) > MAX_LINE_PARSE_CHARS:
+        text = text[:MAX_LINE_PARSE_CHARS]
     matches = list(INLINE_MARKER_PATTERN.finditer(text))
     if len(matches) < 2:
         return []
@@ -256,6 +287,8 @@ def parse_questions_from_text(text: str) -> list[dict]:
     while i < len(lines):
         line = lines[i]
         stripped = line.strip()
+        if len(stripped) > MAX_LINE_PARSE_CHARS:
+            stripped = stripped[:MAX_LINE_PARSE_CHARS]
 
         if not stripped:
             i += 1

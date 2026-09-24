@@ -96,13 +96,13 @@ class QuizController:
 
     @timing_decorator
     @error_handler_decorator
-    def remix_mistakes(self, questions: list[dict]) -> dict:
+    def remix_mistakes(self, questions: list[dict], client_ip: str | None = None) -> dict:
         """POST /api/quiz/remix-mistakes - Gera variações inéditas via IA para questões erradas"""
         from api.services.ai_service import remix_questions_by_ai, AIServiceError
         if not isinstance(questions, list) or not questions:
             raise QuizAPIException("Nenhuma questão enviada para variação.", 400)
         try:
-            remixed = remix_questions_by_ai(questions)
+            remixed = remix_questions_by_ai(questions, client_ip=client_ip)
             return {
                 "status": "success",
                 "data": {
@@ -125,8 +125,9 @@ class QuizController:
         user_id: int = None,
         is_public: bool = False,
         persist: bool = True,
+        client_ip: str = None,
     ) -> dict:
-        """Gera quiz por tema utilizando IA (OpenRouter)"""
+        """Gera quiz por tema utilizando IA"""
         from api.services.ai_service import generate_quiz_by_topic, AIServiceError
         from api.services.upload_service import _slugify
 
@@ -136,6 +137,7 @@ class QuizController:
                 num_questions=num_questions,
                 difficulty=difficulty,
                 context=context,
+                client_ip=client_ip,
             )
         except AIServiceError as e:
             raise QuizAPIException(str(e), 422)
@@ -145,6 +147,9 @@ class QuizController:
         base_name = f"quiz-{topic_slug}" if topic_slug else "quiz-ia"
         name = base_name
         questions = generated["questions"]
+        usage = generated.get("usage") or {}
+        model = generated.get("model") or ""
+        provider = generated.get("provider") or ""
 
         if not persist or not user_id:
             return {
@@ -157,6 +162,9 @@ class QuizController:
                     "ai_generated": True,
                     "local_only": True,
                     "questions": questions,
+                    "usage": usage,
+                    "model": model,
+                    "provider": provider,
                     "message": f"Quiz '{title}' gerado com sucesso por IA ({len(questions)} questões)!",
                 }
             }
@@ -199,6 +207,9 @@ class QuizController:
                     }
                     for q in questions
                 ],
+                "usage": usage,
+                "model": model,
+                "provider": provider,
                 "message": f"Quiz '{title}' criado e salvo com {len(questions)} questões!",
             }
         }
@@ -220,10 +231,11 @@ class UploadController:
         created_by: int,
         is_public: bool,
         persist: bool = True,
+        client_ip: str = None,
     ) -> dict:
         """POST /api/upload - Processa arquivo e cria quiz no banco"""
         result = self.upload_service.process_upload(
-            filename, content, file_type, created_by, is_public, persist
+            filename, content, file_type, created_by, is_public, persist, client_ip=client_ip
         )
         return {
             "status": "success",

@@ -1,3 +1,7 @@
+import { initTheme, toggleTheme } from './modules/theme.js';
+import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js';
+import { calculateQuizStats, renderStatsHtml } from './modules/stats.js';
+
 // ─── Estado global ────────────────────────────────────────────────────────────
 const quiz = document.querySelector('#quiz');
 const result = document.querySelector('#result');
@@ -380,9 +384,10 @@ function renderQuestions() {
       </div>
       <div class="options">
         ${item.options.map((option, i) => `
-          <label class="option">
+          <label class="option" id="option-${index}-${i}">
             <input type="radio" name="q-${item.id}" value="${i}">
             <span>${String.fromCharCode(65 + i)}) ${escapeHtml(option)}</span>
+            ${getShortcutBadgeHtml(i)}
           </label>
         `).join('')}
       </div>
@@ -681,6 +686,26 @@ function renderResultModal(data) {
     } else {
       resultSummaryText.textContent = 'Revise detalhadamente cada questão abaixo e tente novamente.';
     }
+  }
+
+  // ─── Feedback Pedagógico & Estatísticas Avançadas ───
+  try {
+    const totalExamSeconds = calculateTimerDuration(questions.length);
+    const timeSpent = Math.max(1, totalExamSeconds - (remainingSeconds || 0));
+    const normalizedResults = (results || []).map((r) => ({
+      question_id: r.id,
+      correct: Boolean(r.isCorrect),
+      user_answer: r.selected,
+      answer: r.correct,
+      explanation: r.explanation,
+    }));
+    const stats = calculateQuizStats(questions, normalizedResults, timeSpent);
+    const statsContainer = document.querySelector('#resultStatsContainer');
+    if (statsContainer && stats) {
+      statsContainer.innerHTML = renderStatsHtml(stats);
+    }
+  } catch (err) {
+    console.error('Erro ao renderizar estatísticas:', err);
   }
 
   if (resultQuestionsList) {
@@ -1424,6 +1449,43 @@ fileInput.addEventListener('change', () => {
 resetTimer();
 
 async function init() {
+  initTheme();
+
+  initShortcuts({
+    onNextQuestion: () => btnNextQuestion?.click(),
+    onPrevQuestion: () => btnPrevQuestion?.click(),
+    onSelectOption: (qIndex, optIndex) => {
+      const card = document.querySelector(`#question-card-${qIndex}`);
+      if (!card) return;
+      const radio = card.querySelectorAll('input[type="radio"]')[optIndex];
+      if (radio) {
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change', { bubbles: true }));
+        const optionLabel = radio.closest('.option');
+        if (optionLabel) {
+          optionLabel.classList.remove('option--hotkey-pulse');
+          void optionLabel.offsetWidth;
+          optionLabel.classList.add('option--hotkey-pulse');
+        }
+      }
+    },
+    onSubmitQuiz: () => {
+      btnQuickSubmit?.click();
+    },
+    onCloseModals: () => {
+      closeCatalogModal();
+      closeResultModal();
+      closeAboutModal();
+      const uploadModalEl = document.querySelector('#uploadModal');
+      if (uploadModalEl) uploadModalEl.hidden = true;
+      if (confirmSubmitModal) confirmSubmitModal.hidden = true;
+      document.body.style.overflow = '';
+    },
+    getViewMode: () => viewMode,
+    getCurrentQuestionIndex: () => currentQuestionIndex,
+    getQuestionsCount: () => questions.length,
+  });
+
   const isAuthed = await checkAuth();
   if (!isAuthed) return;
   try {

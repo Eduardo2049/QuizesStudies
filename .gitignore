@@ -11,6 +11,9 @@ env/
 .DS_Store
 Thumbs.db
 .vercel
+node_modules/
 
 # Variáveis de ambiente (contém segredos!)
 .env
+.env.local
+.env.*.local

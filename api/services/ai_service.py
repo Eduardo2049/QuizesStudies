@@ -108,6 +108,16 @@ class _TokenQuota:
                 return False, used, retry_after
 
             entries.append((now, estimated_tokens))
+
+            # Limpeza periódica para evitar vazamento de memória com muitos IPs
+            if len(self._usage) > 100:
+                expired_keys = [
+                    k for k, v in self._usage.items()
+                    if not v or v[-1][0] <= cutoff
+                ]
+                for k in expired_keys:
+                    del self._usage[k]
+
             return True, used + estimated_tokens, 0
 
     def get_usage(self, key: str) -> int:
@@ -118,6 +128,9 @@ class _TokenQuota:
             entries = self._usage[key]
             while entries and entries[0][0] <= cutoff:
                 entries.popleft()
+            if not entries:
+                del self._usage[key]
+                return 0
             return sum(t for _, t in entries)
 
 
@@ -273,13 +286,13 @@ def _call_openrouter(
     temperature: float,
     max_tokens: int,
     timeout: int = 75,
-) -> tuple[str, str]:
+) -> tuple[str, str, dict]:
     """
     Chama a API de Inteligência Artificial:
     - Se AI_PROVIDER for 'google'/'gemini' ou se GEMINI_API_KEY estiver configurada,
       conecta diretamente ao Google AI Studio (100% gratuito).
     - Caso contrário ou se AI_PROVIDER for 'openrouter', conecta via OpenRouter.
-    Retorna (content, used_model).
+    Retorna (content, used_model, usage).
     """
     force_google = AI_PROVIDER in ("google", "gemini")
     force_openrouter = AI_PROVIDER == "openrouter"
@@ -334,8 +347,6 @@ def _call_openrouter(
     last_status = 500
     last_raw = ""
 
-    masked_key = f"{api_key[:6]}...{api_key[-4:]}" if len(api_key) > 10 else "***"
-
     for idx, model in enumerate(candidates):
         payload = {
             "model": model,
@@ -345,7 +356,7 @@ def _call_openrouter(
             "response_format": {"type": "json_object"},
         }
         try:
-            _log_ai(f"[IA] Conectando ao {provider_name} (Key: {masked_key} | Modelo: '{model}')...")
+            _log_ai(f"[IA] Conectando ao {provider_name} (Modelo: '{model}')...")
             resp = session.post(url, json=payload, headers=headers, timeout=timeout)
             raw = resp.text
             last_status = resp.status_code
@@ -354,8 +365,9 @@ def _call_openrouter(
             if resp.ok:
                 data = resp.json()
                 content = data["choices"][0]["message"]["content"]
-                _log_ai(f"[IA] Sucesso com {provider_name} (Key: {masked_key} | Modelo: '{model}')")
-                return content, model
+                usage = data.get("usage") or {}
+                _log_ai(f"[IA] Sucesso com {provider_name} (Modelo: '{model}') | Tokens: {usage}")
+                return content, model, usage
 
             if idx < len(candidates) - 1:
                 _log_ai(f"[IA AVISO] Modelo '{model}' retornou {resp.status_code}. Tentando '{candidates[idx+1]}'...")
@@ -372,6 +384,15 @@ def _call_openrouter(
     if last_raw:
         raise AIServiceError(_format_user_friendly_error(last_status, last_raw))
     raise AIServiceError("Não foi possível conectar ao provedor de inteligência artificial.")
+
+
+def _unpack_call_result(res) -> tuple[str, str, dict]:
+    """Suporta retorno de 2-tupla (mocks em testes) e 3-tupla (chamadas reais com usage)."""
+    if isinstance(res, tuple) and len(res) == 3:
+        return res[0], res[1], res[2]
+    elif isinstance(res, tuple) and len(res) == 2:
+        return res[0], res[1], {}
+    return str(res), "mock", {}
 
 
 def generate_answer_key(questions: list[dict], client_ip: str | None = None) -> list[dict]:
@@ -392,12 +413,13 @@ def generate_answer_key(questions: list[dict], client_ip: str | None = None) -> 
     prompt = _build_prompt(questions)
     check_ai_token_quota(prompt, ip=client_ip)
     max_tokens = min(3500, max(500, len(questions) * 120))
-    content, used_model = _call_openrouter(
+    call_res = _call_openrouter(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.1,
         max_tokens=max_tokens,
         timeout=35,  # Gemini Flash Lite responde em <10s; 35s = margem segura
     )
+    content, used_model, usage = _unpack_call_result(call_res)
 
     if DEBUG:
         print(f"🤖 IA [{used_model}] respondeu:\n{content[:300]}")
@@ -490,10 +512,10 @@ def generate_quiz_by_topic(
         AIServiceError: Se falhar a comunicação ou o modelo não gerar questões válidas
         AIQuotaExceededError: Se o IP exceder a cota de tokens por hora
     """
-    if not OPENROUTER_API_KEY:
+    if not (GEMINI_API_KEY or OPENROUTER_API_KEY):
         raise AIServiceError(
-            "OPENROUTER_API_KEY não configurada. "
-            "Adicione a chave no arquivo .env para usar geração de quizzes por IA."
+            "Nenhuma chave de IA configurada. "
+            "Adicione GEMINI_API_KEY ou OPENROUTER_API_KEY no arquivo .env."
         )
 
     clean_topic = str(topic or "").strip()
@@ -550,12 +572,13 @@ def generate_quiz_by_topic(
     prompt = "\n".join(prompt_lines)
     check_ai_token_quota(prompt, ip=client_ip)
     max_tokens = min(3500, max(800, qty * 350))
-    content, used_model = _call_openrouter(
+    call_res = _call_openrouter(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.5,
         max_tokens=max_tokens,
         timeout=45,  # Geração completa: max 45s antes de retornar erro
     )
+    content, used_model, usage = _unpack_call_result(call_res)
 
     if DEBUG:
         print(f"🤖 IA Quiz Gerado [{used_model}]:\n{content[:300]}")
@@ -636,14 +659,18 @@ def generate_quiz_by_topic(
     if not valid_questions:
         raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
 
+    provider_name = "Google AI Studio" if AI_PROVIDER in ("google", "gemini") or GEMINI_API_KEY else "OpenRouter"
     return {
         "title": str(title).strip(),
         "topic": clean_topic,
         "questions": valid_questions,
+        "usage": usage,
+        "model": used_model,
+        "provider": provider_name,
     }
 
 
-def remix_questions_by_ai(questions: list[dict]) -> list[dict]:
+def remix_questions_by_ai(questions: list[dict], client_ip: str | None = None) -> list[dict]:
     """
     Gera variações inéditas para uma lista de questões (ex: questões que o aluno errou).
     Mantém o mesmo conceito e nível de dificuldade, mas altera os dados/cenário para
@@ -679,14 +706,16 @@ def remix_questions_by_ai(questions: list[dict]) -> list[dict]:
         lines.append("")
 
     prompt = "\n".join(lines)
+    check_ai_token_quota(prompt, ip=client_ip)
     max_tokens = min(3500, max(800, len(selected_questions) * 320))
 
-    content, used_model = _call_openrouter(
+    call_res = _call_openrouter(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.6,
         max_tokens=max_tokens,
         timeout=35,  # Remix de erros: mesmo prazo do gabarito
     )
+    content, used_model, usage = _unpack_call_result(call_res)
 
     try:
         parsed = json.loads(content)
@@ -732,6 +761,7 @@ def remix_questions_by_ai(questions: list[dict]) -> list[dict]:
 def parse_and_structure_questions_with_ai(
     text: str,
     max_chars: int = 40_000,
+    client_ip: str | None = None,
 ) -> list[dict]:
     """
     Analisa texto bruto e despadronizado de uma prova/simulado (TXT, PDF, DOCX)
@@ -779,14 +809,16 @@ def parse_and_structure_questions_with_ai(
     ]
 
     prompt = "\n".join(prompt_lines)
+    check_ai_token_quota(prompt, ip=client_ip)
     max_tokens = 3800
 
-    content, used_model = _call_openrouter(
+    call_res = _call_openrouter(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.2,
         max_tokens=max_tokens,
         timeout=60,
     )
+    content, used_model, usage = _unpack_call_result(call_res)
 
     if DEBUG:
         _log_ai(f"🤖 IA [{used_model}] estruturou documento:\n{content[:400]}")

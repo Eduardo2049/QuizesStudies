@@ -129,14 +129,62 @@ def _http_post(url, payload, token=None, timeout=90):
         return 0, {"error": str(e)}, latency
 
 
-def estimate_tokens(num_questions):
-    input_tokens = 800 + num_questions * 40
-    output_tokens = num_questions * 220
-    return input_tokens, output_tokens
+def _http_get(url, token=None, timeout=30):
+    headers = {
+        "User-Agent": "QuizLoadTest/1.0",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    t0 = time.perf_counter()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            latency = (time.perf_counter() - t0) * 1000
+            data = json.loads(resp.read().decode("utf-8"))
+            return resp.status, data, latency
+    except urllib.error.HTTPError as e:
+        latency = (time.perf_counter() - t0) * 1000
+        try:
+            data = json.loads(e.read().decode("utf-8"))
+        except Exception:
+            data = {"error": str(e)}
+        return e.code, data, latency
+    except Exception as e:
+        latency = (time.perf_counter() - t0) * 1000
+        return 0, {"error": str(e)}, latency
 
 
-def run_single_call(call_id, base_url, num_questions, token, is_guest):
+def run_single_call(call_id, base_url, num_questions, token, is_guest, endpoint="generate"):
     topic = TOPICS[call_id % len(TOPICS)]
+    
+    if endpoint == "quizzes":
+        url = f"{base_url}/api/quizzes"
+        status, data, latency = _http_get(url, token=token)
+        result = {
+            "call_id": call_id + 1,
+            "topic": "GET /api/quizzes",
+            "status": status,
+            "latency_ms": latency,
+            "real_prompt_tokens": 0,
+            "real_completion_tokens": 0,
+            "real_total_tokens": 0,
+            "model": "API Local",
+            "success": status in (200, 201),
+            "rate_limited": status == 429,
+            "error": None,
+            "questions_generated": 0,
+        }
+        if not result["success"]:
+            if status == 429:
+                retry_after = data.get("retry_after") or "?"
+                result["error"] = f"429 Rate Limited (Retry-After: {retry_after}s)"
+            elif status == 0:
+                result["error"] = data.get("error", "Conexão recusada")
+            else:
+                result["error"] = data.get("message") or data.get("error") or f"HTTP {status}"
+        return result
+
+    # Endpoint padrão: generate (IA)
     guest_param = "?guest=1" if is_guest else ""
     url = f"{base_url}/api/quiz/generate{guest_param}"
     payload = {
@@ -145,25 +193,29 @@ def run_single_call(call_id, base_url, num_questions, token, is_guest):
         "difficulty": ["Facil", "Medio", "Dificil"][call_id % 3],
     }
     status, data, latency = _http_post(url, payload, token=token)
-    input_est, output_est = estimate_tokens(num_questions)
+    api_data = data.get("data") if isinstance(data.get("data"), dict) else data
+    usage = api_data.get("usage") or {}
+    real_prompt = int(usage.get("prompt_tokens") or 0)
+    real_comp = int(usage.get("completion_tokens") or 0)
+    real_tot = int(usage.get("total_tokens") or (real_prompt + real_comp))
+    model_name = api_data.get("model") or api_data.get("provider") or "IA"
+
     result = {
         "call_id": call_id + 1,
         "topic": topic,
         "status": status,
         "latency_ms": latency,
-        "estimated_input_tokens": 0,
-        "estimated_output_tokens": 0,
-        "estimated_total_tokens": 0,
+        "real_prompt_tokens": real_prompt,
+        "real_completion_tokens": real_comp,
+        "real_total_tokens": real_tot,
+        "model": model_name,
         "success": status in (200, 201),
         "rate_limited": status == 429,
         "error": None,
         "questions_generated": 0,
     }
     if result["success"]:
-        result["estimated_input_tokens"] = input_est
-        result["estimated_output_tokens"] = output_est
-        result["estimated_total_tokens"] = input_est + output_est
-        questions = data.get("questions") or data.get("data", {}).get("questions", [])
+        questions = data.get("questions") or api_data.get("questions", [])
         result["questions_generated"] = len(questions)
     elif status == 429:
         retry_after = data.get("retry_after") or "?"
@@ -175,11 +227,18 @@ def run_single_call(call_id, base_url, num_questions, token, is_guest):
     return result
 
 
-def print_live(result, cumulative_tokens, token_limit):
+def print_live(result, cumulative_tokens, token_limit, endpoint="generate"):
     ts = datetime.now().strftime("%H:%M:%S")
     if result["success"]:
         status_str = f"[OK {result['status']}]"
-        detail = f"{result['questions_generated']}q geradas | {result['latency_ms']:.0f}ms | ~{result['estimated_total_tokens']:,}tk"
+        if endpoint == "quizzes":
+            detail = f"OK | {result['latency_ms']:.0f}ms"
+        else:
+            if result["real_total_tokens"] > 0:
+                tk_str = f"Tokens reais: {result['real_total_tokens']:,}"
+            else:
+                tk_str = "Tokens: N/A"
+            detail = f"{result['questions_generated']}q geradas | {result['latency_ms']:.0f}ms | {tk_str} ({result['model']})"
     elif result["rate_limited"]:
         status_str = "[429 BLOCKED]"
         detail = result["error"]
@@ -187,31 +246,34 @@ def print_live(result, cumulative_tokens, token_limit):
         status_str = f"[ERR {result['status']}]"
         detail = str(result.get("error", ""))[:60]
 
-    pct = min(100.0, (cumulative_tokens / token_limit * 100)) if token_limit > 0 else 0
-    bar_done = int(pct / 5)
-    bar = "#" * bar_done + "." * (20 - bar_done)
-
-    print(f"  {ts} #{result['call_id']:>3} {status_str:<14} {result['topic'][:28]:<28} | {detail}")
-    print(f"            Tokens: {cumulative_tokens:>9,} / {token_limit:,}  [{bar}] {pct:.1f}%")
+    if endpoint == "generate" and token_limit > 0:
+        pct = min(100.0, (cumulative_tokens / token_limit * 100))
+        bar_done = int(pct / 5)
+        bar = "#" * bar_done + "." * (20 - bar_done)
+        print(f"  {ts} #{result['call_id']:>3} {status_str:<14} {result['topic'][:28]:<28} | {detail}")
+        if cumulative_tokens > 0:
+            print(f"            Tokens reais acumulados: {cumulative_tokens:>9,} / {token_limit:,}  [{bar}] {pct:.1f}%")
+    else:
+        print(f"  {ts} #{result['call_id']:>3} {status_str:<14} {result['topic'][:28]:<28} | {detail}")
 
 
 def run_load_test(base_url, num_calls, workers, num_questions,
-                  burst, token, is_guest, token_limit):
+                  burst, token, is_guest, token_limit, endpoint="generate"):
     sep = "=" * 72
     print(f"\n{sep}")
     print(f"  TESTE REAL DE CARGA -- QuizesStudies")
     print(f"  Servidor   : {base_url}")
-    print(f"  Chamadas   : {num_calls}  |  Workers: {workers}  |  Questoes/quiz: {num_questions}")
-    inp, out = estimate_tokens(num_questions)
-    total_max = (inp + out) * num_calls
-    print(f"  Tokens max (sem bloqueios): ~{total_max:,}")
-    print(f"  Limite do teste           : {token_limit:,}")
-    print(f"  Modo  : {'RAJADA (sem sleep)' if burst else 'Normal (0.3s entre lotes)'}")
-    print(f"  Auth  : {'Bearer token' if token else 'Guest / sem autenticacao'}")
+    print(f"  Endpoint   : {'POST /api/quiz/generate (IA)' if endpoint == 'generate' else 'GET /api/quizzes (Sem consumo de IA)'}")
+    print(f"  Chamadas   : {num_calls}  |  Workers: {workers}")
+    if endpoint == "generate":
+        print(f"  Questoes   : {num_questions} por chamada")
+        print(f"  Limite cota: {token_limit:,} tokens")
+    print(f"  Modo       : {'RAJADA (sem sleep)' if burst else 'Normal (0.3s entre lotes)'}")
+    print(f"  Auth       : {'Bearer token' if token else 'Guest / sem autenticacao'}")
     print()
-    print(f"  !!! AVISO: Consome tokens REAIS. Ctrl+C para abortar. !!!")
-    print(f"{sep}")
-    print()
+    if endpoint == "generate":
+        print(f"  !!! AVISO: Chamadas reais a API de IA. Ctrl+C para abortar. !!!")
+    print(f"{sep}\n")
 
     results = []
     cumulative_tokens = 0
@@ -224,12 +286,12 @@ def run_load_test(base_url, num_calls, workers, num_questions,
             return None
         if not burst and workers > 1 and call_id > 0:
             time.sleep(0.3)
-        result = run_single_call(call_id, base_url, num_questions, token, is_guest)
+        result = run_single_call(call_id, base_url, num_questions, token, is_guest, endpoint=endpoint)
         with lock:
-            cumulative_tokens += result["estimated_total_tokens"]
+            cumulative_tokens += result["real_total_tokens"]
             results.append(result)
-            print_live(result, cumulative_tokens, token_limit)
-            if cumulative_tokens >= token_limit:
+            print_live(result, cumulative_tokens, token_limit, endpoint=endpoint)
+            if token_limit > 0 and cumulative_tokens >= token_limit:
                 print(f"\n  [LIMITE] {token_limit:,} tokens atingidos -- parando.")
                 stop_flag.set()
         return result
@@ -254,11 +316,9 @@ def run_load_test(base_url, num_calls, workers, num_questions,
     errors = [r for r in results if r and not r["success"] and not r["rate_limited"]]
     latencies = sorted(r["latency_ms"] for r in ok) if ok else [0]
     total_questions = sum(r["questions_generated"] for r in ok)
-    total_tokens = sum(r["estimated_total_tokens"] for r in results if r)
-    total_input = sum(r["estimated_input_tokens"] for r in ok)
-    total_output = sum(r["estimated_output_tokens"] for r in ok)
-    cost_usd = (total_input / 1_000_000 * COST_INPUT_PER_1M) + \
-               (total_output / 1_000_000 * COST_OUTPUT_PER_1M)
+    total_tokens = sum(r["real_total_tokens"] for r in ok)
+    total_input = sum(r["real_prompt_tokens"] for r in ok)
+    total_output = sum(r["real_completion_tokens"] for r in ok)
 
     print(f"\n{sep}")
     print(f"  RELATORIO FINAL")
@@ -267,7 +327,8 @@ def run_load_test(base_url, num_calls, workers, num_questions,
     print(f"  Sucesso (OK)      : {len(ok)}")
     print(f"  Bloqueadas (429)  : {len(blocked)}")
     print(f"  Erros             : {len(errors)}")
-    print(f"  Questoes geradas  : {total_questions}")
+    if endpoint == "generate":
+        print(f"  Questoes geradas  : {total_questions}")
     print()
     if ok:
         print(f"  Latencia:")
@@ -276,29 +337,33 @@ def run_load_test(base_url, num_calls, workers, num_questions,
             print(f"    p95 : {latencies[max(0, int(len(latencies)*0.95)-1)]:.0f}ms")
         print(f"    max : {max(latencies):.0f}ms")
     print()
-    print(f"  Tokens estimados:")
-    print(f"    Input  : ~{total_input:,}")
-    print(f"    Output : ~{total_output:,}")
-    print(f"    TOTAL  : ~{total_tokens:,}")
-    print(f"  Custo est.  : ~${cost_usd:.5f} USD (OpenRouter Gemini Flash)")
-    print(f"  Google AI Studio: gratuito ate 1.500 req/dia e cota diaria de tokens")
-    if errors:
-        print(f"\n  Erros:")
-        for r in errors[:5]:
-            print(f"    #{r['call_id']}: {r['error']}")
+    if endpoint == "generate":
+        if total_tokens > 0:
+            cost_usd = (total_input / 1_000_000 * COST_INPUT_PER_1M) + \
+                       (total_output / 1_000_000 * COST_OUTPUT_PER_1M)
+            print(f"  Tokens REAIS reportados pela API:")
+            print(f"    Input (Prompt)     : {total_input:,}")
+            print(f"    Output (Completion): {total_output:,}")
+            print(f"    TOTAL              : {total_tokens:,}")
+            print(f"  Custo estimado (se via OpenRouter): ~${cost_usd:.5f} USD")
+            print(f"  (Obs: Se via Google AI Studio direto, e 100% gratuito dentro da cota)")
+        else:
+            print(f"  Tokens: O provedor de IA nao retornou contagem no payload.")
     print(sep)
     return len(ok) > 0
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Teste de carga REAL na API QuizesStudies (consome tokens reais)"
+        description="Teste de carga REAL na API QuizesStudies"
     )
     parser.add_argument("--base-url", default=None,
                         help="URL base do servidor. Se omitido, detecta automaticamente.")
-    parser.add_argument("--calls", type=int, default=5)
+    parser.add_argument("--calls", type=int, default=3)
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--questions", type=int, default=3)
+    parser.add_argument("--endpoint", choices=["generate", "quizzes"], default="generate",
+                        help="'generate' (IA) ou 'quizzes' (leitura rapida sem consumo de tokens)")
     parser.add_argument("--token-limit", type=int, default=200_000)
     parser.add_argument("--burst", action="store_true")
     parser.add_argument("--guest", action="store_true")
@@ -336,5 +401,6 @@ if __name__ == "__main__":
         token=args.token,
         is_guest=args.guest,
         token_limit=args.token_limit,
+        endpoint=args.endpoint,
     )
     sys.exit(0 if success else 1)

@@ -3,6 +3,7 @@ Repositories - Padrão Spring @Repository
 Camada de acesso a dados via PostgreSQL
 """
 import json
+import secrets
 from api.database.connection import get_cursor
 from api.exceptions.quiz_exceptions import QuizNotFound
 
@@ -152,27 +153,32 @@ class QuizRepository:
             dict: Quiz salvo com id
         """
         with get_cursor() as cur:
-            # Inserir ou atualizar quiz
-            cur.execute("""
-                INSERT INTO quizzes
-                    (name, label, original_filename, file_type, ai_generated, created_by, is_public)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (name) DO UPDATE SET
-                    label = EXCLUDED.label,
-                    original_filename = EXCLUDED.original_filename,
-                    file_type = EXCLUDED.file_type,
-                    ai_generated = EXCLUDED.ai_generated,
-                    created_by = EXCLUDED.created_by,
-                    is_public = EXCLUDED.is_public
-                RETURNING id, name, label, file_type, ai_generated, created_at, created_by, is_public
-            """, (name, label, original_filename, file_type, ai_generated, created_by, is_public))
+            # Inserir quiz com proteção contra sobreescrita acidental
+            target_name = name
+            try:
+                cur.execute("""
+                    INSERT INTO quizzes
+                        (name, label, original_filename, file_type, ai_generated, created_by, is_public)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id, name, label, file_type, ai_generated, created_at, created_by, is_public
+                """, (target_name, label, original_filename, file_type, ai_generated, created_by, is_public))
+            except Exception as e:
+                err_str = str(e).lower()
+                if "unique" in err_str or "duplicate" in err_str or "violates unique" in err_str:
+                    target_name = f"{name[:100]}-{secrets.token_hex(4)}"
+                    cur.execute("""
+                        INSERT INTO quizzes
+                            (name, label, original_filename, file_type, ai_generated, created_by, is_public)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id, name, label, file_type, ai_generated, created_at, created_by, is_public
+                    """, (target_name, label, original_filename, file_type, ai_generated, created_by, is_public))
+                else:
+                    raise
+
             quiz = dict(cur.fetchone())
             quiz_id = quiz["id"]
 
-            # Remover questões antigas (em caso de re-upload)
-            cur.execute("DELETE FROM questions WHERE quiz_id = %s", (quiz_id,))
-
-            # Inserir questões
+            # Inserir questões do novo quiz
             for q in questions:
                 qnum = q.get("question_number") or q.get("id", 0)
                 options_json = json.dumps(q.get("options", []), ensure_ascii=False)

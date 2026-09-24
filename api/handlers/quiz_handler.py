@@ -3,6 +3,7 @@ Handler HTTP Principal — Suporte a multipart/form-data para upload de arquivos
 """
 import io
 import json
+import os
 import re
 import time
 from collections import defaultdict, deque
@@ -25,10 +26,8 @@ MAX_JSON_BYTES = 256 * 1024
 
 class RateLimiter:
     """
-    Rate-limiter genérico com janela deslizante por (rota, IP).
-
-    Considera IP real a partir de CF-Connecting-IP → X-Forwarded-For → socket address,
-    resistente a ataques de bypass via proxy intermediário.
+    Rate-limiter genérico com janela deslizante por chave (rota, IP, conta).
+    Remove chaves expiradas automaticamente para prevenir vazamento de memória.
     """
 
     def __init__(self, limit: int, window_seconds: int):
@@ -36,6 +35,7 @@ class RateLimiter:
         self.window = window_seconds
         self._requests: dict = defaultdict(deque)
         self._lock = Lock()
+        self._counter = 0
 
     def is_allowed(self, key: str) -> tuple[bool, int]:
         """
@@ -45,14 +45,21 @@ class RateLimiter:
         now = time.monotonic()
         cutoff = now - self.window
         with self._lock:
+            self._counter += 1
             reqs = self._requests[key]
             while reqs and reqs[0] <= cutoff:
                 reqs.popleft()
             if len(reqs) >= self.limit:
-                # Calcula quantos segundos até a janela liberar a próxima vaga
                 retry_after = max(1, int(reqs[0] - cutoff + 1))
                 return False, retry_after
             reqs.append(now)
+
+            # Limpeza periódica a cada 100 checagens para evitar vazamento de memória
+            if self._counter % 100 == 0:
+                expired = [k for k, v in self._requests.items() if not v or v[-1] <= cutoff]
+                for k in expired:
+                    del self._requests[k]
+
             return True, 0
 
     def check_handler(self, handler, route_key: str) -> tuple[bool, int]:
@@ -163,20 +170,74 @@ class QuizHandler(BaseHTTPRequestHandler):
         self.auth_controller = AuthController()
         super().__init__(*args, **kwargs)
 
+    def setup(self):
+        super().setup()
+        if hasattr(self, "connection") and self.connection:
+            try:
+                self.connection.settimeout(30.0)
+            except Exception:
+                pass
+
     def do_OPTIONS(self):
         """Handle CORS preflight requests"""
         HTTPMiddleware.handle_preflight(self)
 
+    def _read_body_bytes(self, max_bytes: int) -> bytes | None:
+        """Lê o corpo da requisição com validação estrita de Content-Length."""
+        raw_len = self.headers.get("Content-Length")
+        if raw_len is None:
+            status, data = ResponseFormatter.bad_request("Cabeçalho Content-Length é obrigatório")
+            HTTPMiddleware.send_json_response(self, 411, data)
+            return None
+
+        try:
+            length = int(raw_len.strip())
+        except (ValueError, TypeError):
+            status, data = ResponseFormatter.bad_request("Content-Length inválido")
+            HTTPMiddleware.send_json_response(self, 400, data)
+            return None
+
+        if length <= 0:
+            status, data = ResponseFormatter.bad_request("Corpo da requisição vazio ou tamanho inválido")
+            HTTPMiddleware.send_json_response(self, 400, data)
+            return None
+
+        if length > max_bytes:
+            status, data = ResponseFormatter.bad_request("Corpo da requisição muito grande")
+            HTTPMiddleware.send_json_response(self, 413, data)
+            return None
+
+        try:
+            return self.rfile.read(length)
+        except Exception:
+            status, data = ResponseFormatter.bad_request("Falha ao ler dados da conexão")
+            HTTPMiddleware.send_json_response(self, 400, data)
+            return None
+
+    def _read_json_body(self, max_bytes: int = MAX_JSON_BYTES) -> dict | None:
+        """Lê e faz parse de JSON do corpo da requisição com validação rigorosa."""
+        body = self._read_body_bytes(max_bytes)
+        if body is None:
+            return None
+        try:
+            return json.loads(body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            status, data = ResponseFormatter.bad_request("JSON inválido")
+            HTTPMiddleware.send_json_response(self, 400, data)
+            return None
+
     def _get_request_url(self):
-        """Obtém o path da requisição, compatível com rewrites e proxies da Vercel."""
-        raw_path = (
-            self.headers.get("x-forwarded-uri")
-            or self.headers.get("x-matched-path")
-            or self.headers.get("x-original-url")
-            or self.headers.get("x-rewrite-url")
-            or self.headers.get("x-invoke-path")
-            or self.path
-        )
+        """Obtém o path da requisição de forma segura, compatível com rewrites da Vercel."""
+        raw_path = self.path or "/"
+
+        # Só confia em headers de reescrita se explicitamente configurado no ambiente Vercel
+        if os.getenv("VERCEL") == "1":
+            for h in ("x-matched-path", "x-forwarded-uri"):
+                val = self.headers.get(h)
+                if val and val.startswith("/"):
+                    raw_path = val
+                    break
+
         parsed_path = urlparse(raw_path)
         forwarded_path = parse_qs(parsed_path.query).get("__path", [None])[0]
         if forwarded_path:
@@ -385,17 +446,19 @@ class QuizHandler(BaseHTTPRequestHandler):
                 if not allowed:
                     _rate_limited_response(self, retry_after)
                     return
-                length = int(self.headers.get("Content-Length", 0))
-                if length > MAX_JSON_BYTES:
-                    status, data = ResponseFormatter.bad_request("Corpo da requisição muito grande")
-                    HTTPMiddleware.send_json_response(self, 413, data)
+
+                payload = self._read_json_body()
+                if payload is None:
                     return
-                try:
-                    payload = json.loads(self.rfile.read(length)) if length > 0 else {}
-                except json.JSONDecodeError:
-                    status, data = ResponseFormatter.bad_request("JSON inválido")
-                    HTTPMiddleware.send_json_response(self, status, data)
-                    return
+
+                # Rate-limit adicional por nome de usuário para mitigar força bruta mesmo com IP dinâmico
+                username = str(payload.get("username", "")).strip().lower()
+                if username:
+                    user_allowed, user_retry = _rl_auth.is_allowed(f"POST:/api/auth/login:user:{username}")
+                    if not user_allowed:
+                        _rate_limited_response(self, user_retry)
+                        return
+
                 response = self.auth_controller.login(payload)
                 token = response["data"].get("token")
                 status, data = ResponseFormatter.success(response["data"], response["message"])
@@ -408,17 +471,11 @@ class QuizHandler(BaseHTTPRequestHandler):
                 if not allowed:
                     _rate_limited_response(self, retry_after)
                     return
-                length = int(self.headers.get("Content-Length", 0))
-                if length > MAX_JSON_BYTES:
-                    status, data = ResponseFormatter.bad_request("Corpo da requisição muito grande")
-                    HTTPMiddleware.send_json_response(self, 413, data)
+
+                payload = self._read_json_body()
+                if payload is None:
                     return
-                try:
-                    payload = json.loads(self.rfile.read(length)) if length > 0 else {}
-                except json.JSONDecodeError:
-                    status, data = ResponseFormatter.bad_request("JSON inválido")
-                    HTTPMiddleware.send_json_response(self, status, data)
-                    return
+
                 response = self.auth_controller.register(payload)
                 status, data = ResponseFormatter.created(response["data"], response["message"])
                 HTTPMiddleware.send_json_response(self, status, data)
@@ -447,20 +504,12 @@ class QuizHandler(BaseHTTPRequestHandler):
                 if not allowed:
                     _rate_limited_response(self, retry_after)
                     return
-                user = self._get_current_user_or_none()
-                is_guest = (query.get("guest", ["0"])[0] == "1") or (user is None)
 
-                length = int(self.headers.get("Content-Length", 0))
-                if length > MAX_JSON_BYTES:
-                    status, data = ResponseFormatter.bad_request("Corpo da requisição muito grande")
-                    HTTPMiddleware.send_json_response(self, 413, data)
-                    return
+                # Recurso de IA exige login obrigatório para proteger cotas
+                user = self._require_authenticated_user()
 
-                try:
-                    payload = json.loads(self.rfile.read(length)) if length > 0 else {}
-                except json.JSONDecodeError:
-                    status, data = ResponseFormatter.bad_request("JSON inválido")
-                    HTTPMiddleware.send_json_response(self, status, data)
+                payload = self._read_json_body()
+                if payload is None:
                     return
 
                 topic = payload.get("topic", "").strip()
@@ -475,14 +524,16 @@ class QuizHandler(BaseHTTPRequestHandler):
                 requested_public = payload.get("is_public", False) is True
                 is_public = requested_public and user and user.get("role") == "admin"
 
+                client_ip = HTTPMiddleware.get_client_ip(self)
                 response = self.quiz_controller.generate_quiz_by_topic(
                     topic=topic,
                     num_questions=num_questions,
                     difficulty=difficulty,
                     context=context,
-                    user_id=user["id"] if user else None,
+                    user_id=user["id"],
                     is_public=bool(is_public),
-                    persist=not is_guest,
+                    persist=True,
+                    client_ip=client_ip,
                 )
                 status, data = ResponseFormatter.created(
                     response["data"],
@@ -499,21 +550,9 @@ class QuizHandler(BaseHTTPRequestHandler):
                     return
                 user = self._get_current_user_or_none()
                 user_id = user["id"] if user else None
-                length = int(self.headers.get("Content-Length", 0))
-                if length > MAX_JSON_BYTES:
-                    status, data = ResponseFormatter.bad_request("Corpo da requisição muito grande")
-                    HTTPMiddleware.send_json_response(self, 413, data)
-                    return
-                if length == 0:
-                    status, data = ResponseFormatter.bad_request("Corpo da requisição vazio")
-                    HTTPMiddleware.send_json_response(self, status, data)
-                    return
 
-                try:
-                    payload = json.loads(self.rfile.read(length))
-                except json.JSONDecodeError:
-                    status, data = ResponseFormatter.bad_request("JSON inválido")
-                    HTTPMiddleware.send_json_response(self, status, data)
+                payload = self._read_json_body()
+                if payload is None:
                     return
 
                 is_valid, error_msg = AnswerValidator.validate_submit_payload(payload)
@@ -533,21 +572,12 @@ class QuizHandler(BaseHTTPRequestHandler):
                 if not allowed:
                     _rate_limited_response(self, retry_after)
                     return
-                length = int(self.headers.get("Content-Length", 0))
-                if length > MAX_JSON_BYTES:
-                    status, data = ResponseFormatter.bad_request("Corpo da requisição muito grande")
-                    HTTPMiddleware.send_json_response(self, 413, data)
-                    return
-                if length == 0:
-                    status, data = ResponseFormatter.bad_request("Corpo da requisição vazio")
-                    HTTPMiddleware.send_json_response(self, status, data)
-                    return
 
-                try:
-                    payload = json.loads(self.rfile.read(length))
-                except json.JSONDecodeError:
-                    status, data = ResponseFormatter.bad_request("JSON inválido")
-                    HTTPMiddleware.send_json_response(self, status, data)
+                # Remix via IA exige usuário autenticado para proteger cota
+                self._require_authenticated_user()
+
+                payload = self._read_json_body()
+                if payload is None:
                     return
 
                 questions = payload.get("questions", [])
@@ -556,7 +586,8 @@ class QuizHandler(BaseHTTPRequestHandler):
                     HTTPMiddleware.send_json_response(self, status, data)
                     return
 
-                response = self.quiz_controller.remix_mistakes(questions)
+                client_ip = HTTPMiddleware.get_client_ip(self)
+                response = self.quiz_controller.remix_mistakes(questions, client_ip=client_ip)
                 status, data = ResponseFormatter.success(response["data"])
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
@@ -582,15 +613,6 @@ class QuizHandler(BaseHTTPRequestHandler):
         user = None if guest else self._require_authenticated_user()
 
         content_type = self.headers.get("Content-Type", "")
-        content_length = int(self.headers.get("Content-Length", 0))
-
-        if content_length > MAX_UPLOAD_BYTES:
-            status, data = ResponseFormatter.bad_request(
-                f"Arquivo muito grande. Limite: {MAX_UPLOAD_BYTES // (1024*1024)} MB"
-            )
-            HTTPMiddleware.send_json_response(self, status, data)
-            return
-
         if "multipart/form-data" not in content_type:
             status, data = ResponseFormatter.bad_request(
                 "Content-Type deve ser multipart/form-data"
@@ -598,7 +620,9 @@ class QuizHandler(BaseHTTPRequestHandler):
             HTTPMiddleware.send_json_response(self, status, data)
             return
 
-        body = self.rfile.read(content_length)
+        body = self._read_body_bytes(MAX_UPLOAD_BYTES)
+        if body is None:
+            return
 
         # Extrair boundary do Content-Type
         boundary_match = re.search(r"boundary=([^;\s]+)", content_type)
@@ -631,6 +655,7 @@ class QuizHandler(BaseHTTPRequestHandler):
         # Delegar ao controller
         requested_public = fields.get("is_public", "false").lower() == "true"
         is_public = requested_public and user and user.get("role") == "admin"
+        client_ip = HTTPMiddleware.get_client_ip(self)
         response = self.upload_controller.upload_file(
             filename,
             file_content,
@@ -638,6 +663,7 @@ class QuizHandler(BaseHTTPRequestHandler):
             user["id"] if user else None,
             bool(is_public),
             persist=not guest,
+            client_ip=client_ip,
         )
         status, data = ResponseFormatter.created(
             response["data"],

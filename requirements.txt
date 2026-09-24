@@ -1,16 +1,16 @@
-# IFuture Study - Dependências Python
+# IFuture Study - Dependências Python (Versões fixadas para estabilidade e reprodutibilidade)
 
 # Banco de dados PostgreSQL
-psycopg2-binary>=2.9.9
+psycopg2-binary==2.9.10
 
 # Variáveis de ambiente
-python-dotenv>=1.0.0
+python-dotenv==1.0.1
 
 # Extração de texto de PDF
-pdfplumber>=0.11.0
+pdfplumber==0.11.4
 
 # Extração de texto de DOCX
-python-docx>=1.1.0
+python-docx==1.1.2
 
-# Cliente HTTP para integrações externas (OpenRouter AI)
-requests>=2.31.0
+# Cliente HTTP para integrações externas (Gemini / OpenRouter AI)
+requests==2.32.3

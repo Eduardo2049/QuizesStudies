@@ -64,6 +64,7 @@ ALLOWED_ORIGINS = [
     if origin.strip() and origin.strip() != "*"
 ]
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
+TRUST_PROXY = os.getenv("TRUST_PROXY", "false").lower() == "true" or os.getenv("VERCEL") == "1"
 
 # Cloudflare Tunnel
 CLOUDFLARE_TUNNEL_TOKEN = os.getenv("CLOUDFLARE_TUNNEL_TOKEN", "")

@@ -5,7 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Quiz Study — Treino de Raciocínio</title>
   <meta name="description" content="Plataforma de simulados e treino de raciocínio lógico. Faça upload de provas em PDF, DOCX ou TXT e treine com gabarito automático.">
-  <link rel="stylesheet" href="/web/styles.css?v=2">
+  <link rel="stylesheet" href="/web/styles.css?v=3">
+  <!-- Script de prevenção de FOUC de tema (execução imediata) -->
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('quiz_theme_preference') || 'system';
+        var r = t === 'system' ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : t;
+        document.documentElement.setAttribute('data-theme', r);
+        document.documentElement.setAttribute('data-theme-mode', t);
+      } catch (_) {}
+    })();
+  </script>
   <!-- Vercel Web Analytics -->
   <script>
     window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -28,6 +39,10 @@
           Questionário <select id="quizSelector"></select>
         </label>
         <div class="hero-top-buttons">
+          <button id="themeToggle" class="btn-theme-toggle" type="button" title="Alternar tema (Sistema / Escuro / Claro)">
+            <span class="theme-icon">💻</span>
+            <span class="theme-label">Tema</span>
+          </button>
           <button id="btnOpenCatalog" class="btn-catalog" type="button" title="Explorar todos os simulados disponíveis">
             📚 Explorar Simulados
           </button>
@@ -98,13 +113,17 @@
     <form id="quiz" class="quiz" novalidate></form>
 
     <div id="focusNavigation" class="focus-navigation" hidden>
-      <button type="button" id="btnPrevQuestion" class="secondary nav-btn" disabled>
+      <button type="button" id="btnPrevQuestion" class="secondary nav-btn" disabled title="Atalho: Seta Esquerda (←)">
         ← Anterior
       </button>
       <span id="focusIndicator" class="focus-indicator">Questão 1 de 5</span>
-      <button type="button" id="btnNextQuestion" class="primary nav-btn">
+      <button type="button" id="btnNextQuestion" class="primary nav-btn" title="Atalho: Seta Direita (→)">
         Próxima →
       </button>
+    </div>
+
+    <div class="shortcuts-hint" id="shortcutsHint">
+      <span>⌨️ <strong>Produtividade:</strong> Use teclas <strong>A–D</strong> ou <strong>1–4</strong> para marcar · <strong>← →</strong> para navegar · <strong>Ctrl+Enter</strong> para finalizar</span>
     </div>
 
     <div class="actions">
@@ -219,6 +238,9 @@
         </div>
         <p class="results-summary-text" id="resultSummaryText">Revise detalhadamente o seu desempenho em cada questão abaixo.</p>
       </div>
+
+      <!-- Container dinâmico de Analytics e Estatísticas Pedagógicas -->
+      <div id="resultStatsContainer" class="results-stats-container"></div>
 
       <div class="results-list" id="resultQuestionsList"></div>
 
@@ -370,6 +392,6 @@
     </div>
   </div>
 
-  <script src="/web/app.js?v=2"></script>
+  <script type="module" src="/web/app.js?v=3"></script>
 </body>
 </html>

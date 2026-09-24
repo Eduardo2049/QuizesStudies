@@ -12,7 +12,7 @@ from api.utils.config import ADMIN_USERNAME, ADMIN_PASSWORD, DEBUG
 
 def hash_password(password: str, salt: str = None) -> tuple[str, str]:
     """
-    Gera hash seguro da senha usando PBKDF2-HMAC-SHA256.
+    Gera hash seguro da senha usando PBKDF2-HMAC-SHA256 (600.000 iterações recomendadas pela OWASP).
     Retorna (hash_hex, salt_hex).
     """
     if salt is None:
@@ -22,9 +22,14 @@ def hash_password(password: str, salt: str = None) -> tuple[str, str]:
         "sha256",
         password.encode("utf-8"),
         salt.encode("utf-8"),
-        iterations=100_000,
+        iterations=600_000,
     )
     return key.hex(), salt
+
+
+def _hash_token(token: str) -> str:
+    """Gera hash SHA-256 do token de sessão para armazenamento seguro no banco."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def verify_password(password: str, salt: str, password_hash: str) -> bool:
@@ -43,10 +48,10 @@ class AuthService:
         """Garante a existência do usuário administrador e sincroniza sua senha com ADMIN_PASSWORD."""
         try:
             admin_pwd = ADMIN_PASSWORD
-            if not admin_pwd:
+            if not admin_pwd or len(admin_pwd) < 8:
                 raise RuntimeError(
-                    "ADMIN_PASSWORD não definido no ambiente. "
-                    "Adicione ao .env antes de iniciar o servidor."
+                    "ADMIN_PASSWORD não definido ou com menos de 8 caracteres. "
+                    "Configure uma senha forte no ambiente/Vercel antes de iniciar."
                 )
             pwd_hash, salt = hash_password(admin_pwd)
 
@@ -85,10 +90,11 @@ class AuthService:
 
         # Gerar token seguro de sessão (48 bytes URL-safe = 64 caracteres)
         token = secrets.token_urlsafe(48)
-        session = self.repo.create_session(token, user["id"], duration_days=7)
+        token_hash = _hash_token(token)
+        session = self.repo.create_session(token_hash, user["id"], duration_days=7)
 
         return {
-            "token": session["token"],
+            "token": token,
             "expires_at": session["expires_at"].isoformat(),
             "user": {
                 "id": user["id"],
@@ -99,7 +105,7 @@ class AuthService:
         }
 
     def register(self, username: str, email: str, password: str) -> dict:
-        """Registra um novo estudante."""
+        """Registra um novo estudante com proteções de segurança."""
         username = username.strip()
         email = email.strip().lower()
 
@@ -107,13 +113,12 @@ class AuthService:
             raise QuizAPIException("Nome de usuário deve ter pelo menos 3 caracteres", 400)
         if "@" not in email:
             raise QuizAPIException("E-mail inválido", 400)
-        if len(password) < 6:
-            raise QuizAPIException("Senha deve ter pelo menos 6 caracteres", 400)
+        if len(password) < 8:
+            raise QuizAPIException("Senha deve ter pelo menos 8 caracteres", 400)
 
-        if self.repo.find_by_username(username):
-            raise QuizAPIException("Nome de usuário já está em uso", 409)
-        if self.repo.find_by_email(email):
-            raise QuizAPIException("E-mail já está em uso", 409)
+        # Mensagem uniforme contra enumeração de contas
+        if self.repo.find_by_username(username) or self.repo.find_by_email(email):
+            raise QuizAPIException("Nome de usuário ou e-mail já cadastrado", 409)
 
         pwd_hash, salt = hash_password(password)
         user = self.repo.create_user(username, email, pwd_hash, salt, role="student")
@@ -126,13 +131,15 @@ class AuthService:
         }
 
     def validate_token(self, token: str) -> dict | None:
-        """Valida se o token de sessão é válido e retorna o usuário."""
+        """Valida se o token de sessão é válido e retorna o usuário consultando pelo hash."""
         if not token:
             return None
-        return self.repo.find_session_user(token)
+        token_hash = _hash_token(token)
+        return self.repo.find_session_user(token_hash)
 
     def logout(self, token: str) -> bool:
-        """Encerra a sessão removendo o token."""
+        """Encerra a sessão removendo o token correspondente por hash."""
         if not token:
             return False
-        return self.repo.delete_session(token)
+        token_hash = _hash_token(token)
+        return self.repo.delete_session(token_hash)

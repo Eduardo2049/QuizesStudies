@@ -15,7 +15,7 @@ import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -204,13 +204,19 @@ class TestLoadSimulation(unittest.TestCase):
         return results
 
     def _print_report(self, label, results):
+        # Relatórios em stdout desativados por padrão para não poluir o unittest
+        # nem gerar falsa impressão de consumo real de tokens.
+        # Ative apenas com a variável de ambiente VERBOSE_TESTS=1.
+        import os
+        if os.getenv("VERBOSE_TESTS") != "1":
+            return
         ok = [r for r in results if r["status"] == "ok"]
         blocked = [r for r in results if r["status"] == "quota_exceeded"]
         latencies = sorted(r["latency_ms"] for r in ok) if ok else [0]
         total_tokens = sum(r.get("tokens", 0) for r in ok)
         sep = "=" * 60
         print(f"\n{sep}")
-        print(f"[REPORT] {label}")
+        print(f"[MOCK REPORT] {label}")
         print(f"  Total    : {len(results)}")
         print(f"  OK       : {len(ok)}")
         print(f"  Blocked  : {len(blocked)}")
@@ -219,7 +225,7 @@ class TestLoadSimulation(unittest.TestCase):
         if len(latencies) >= 20:
             print(f"  p95 (ms) : {latencies[int(len(latencies)*0.95)]:.2f}")
             print(f"  p99 (ms) : {latencies[int(len(latencies)*0.99)]:.2f}")
-        print(f"  Tokens   : {total_tokens:,} / 200,000")
+        print(f"  Tokens simulados (Mock): {total_tokens:,}")
         print(sep)
 
     def test_low_concurrency_all_pass(self):
@@ -239,17 +245,16 @@ class TestLoadSimulation(unittest.TestCase):
         self.assertGreater(len(blocked), 70)
 
     def test_high_concurrency_200k_tokens(self):
-        """500 chamadas x 50 workers, quota 200k -- 500*200=100k tokens usados."""
+        """500 chamadas x 50 workers, quota 200k -- simulação em mock."""
         results = self._run_load(num_calls=500, workers=50, prompt_size=800, token_quota=200_000)
         ok = [r for r in results if r["status"] == "ok"]
         total_tokens = sum(r.get("tokens", 0) for r in ok)
         self._print_report("Alta Carga 500 chamadas x 200 tokens (meta: 200k)", results)
         self.assertGreater(len(ok), 0)
         self.assertLessEqual(total_tokens, 200_000)
-        print(f"  >> {len(ok)} chamadas usaram {total_tokens:,} de 200,000 tokens estimados")
 
     def test_200k_token_limit_exact(self):
-        """Verifica que 200k tokens sao atingidos e bloqueados exatamente."""
+        """Verifica que 200k tokens sao atingidos e bloqueados exatamente via mock."""
         from api.services.ai_service import _TokenQuota
         quota = _TokenQuota(quota=200_000, window_seconds=3600)
         ip = "192.168.1.100"
@@ -263,20 +268,12 @@ class TestLoadSimulation(unittest.TestCase):
                 break
 
         ok = [r for r in results if r["status"] == "ok"]
-        blocked = [r for r in results if r["status"] == "blocked"]
-        sep = "=" * 60
-        print(f"\n{sep}")
-        print("[LIMITE] Teste exato de 200k Tokens")
-        print(f"  Chamadas OK    : {len(ok)}")
-        print(f"  Tokens no bloqueio: {ok[-1]['used']:,}" if ok else "  N/A")
-        print(f"  Bloqueios      : {len(blocked)}")
-        print(sep)
         self.assertGreater(len(ok), 0)
         if ok:
             self.assertLessEqual(ok[-1]["used"], 200_000)
 
     def test_ddos_many_ips(self):
-        """DDoS: 50 IPs distintos x 10 chamadas cada, quota/IP=1000 tokens."""
+        """DDoS: 50 IPs distintos x 10 chamadas cada, quota/IP=1000 tokens (simulação mock)."""
         from api.services.ai_service import _TokenQuota
         per_ip_quota = 1000
         prompt_size = 800  # ~200 tokens
@@ -299,12 +296,6 @@ class TestLoadSimulation(unittest.TestCase):
                 results_per_ip[ip] = res
 
         max_ok_per_ip = per_ip_quota // (prompt_size // 4)
-        ok_counts = [r.count("ok") for r in results_per_ip.values()]
-        sep = "=" * 60
-        print(f"\n{sep}")
-        print(f"[DDOS] {num_ips} IPs x {calls_per_ip} chamadas (quota/IP={per_ip_quota})")
-        print(f"  Media OK/IP: {sum(ok_counts)/len(ok_counts):.1f} (max: {max_ok_per_ip})")
-        print(sep)
         for ip, res in results_per_ip.items():
             self.assertLessEqual(res.count("ok"), max_ok_per_ip + 1,
                                  f"IP {ip} ultrapassou a cota individual")
@@ -355,20 +346,31 @@ class TestSecurityHeaders(unittest.TestCase):
         self.assertEqual(sent.get("X-Content-Type-Options"), "nosniff")
 
     def test_get_client_ip_cloudflare(self):
-        """CF-Connecting-IP deve ter prioridade."""
+        """CF-Connecting-IP deve ter prioridade quando TRUST_PROXY está ativo."""
         from api.middleware.http_middleware import HTTPMiddleware
         handler = MagicMock()
         handler.headers = {"CF-Connecting-IP": "203.0.113.42"}
         handler.client_address = ("127.0.0.1", 1234)
-        self.assertEqual(HTTPMiddleware.get_client_ip(handler), "203.0.113.42")
+        with patch("api.utils.config.TRUST_PROXY", True):
+            self.assertEqual(HTTPMiddleware.get_client_ip(handler), "203.0.113.42")
 
     def test_get_client_ip_x_forwarded_for(self):
-        """X-Forwarded-For deve ser usado quando CF header ausente."""
+        """X-Forwarded-For deve ser usado quando CF header ausente e TRUST_PROXY ativo."""
         from api.middleware.http_middleware import HTTPMiddleware
         handler = MagicMock()
         handler.headers = {"X-Forwarded-For": "198.51.100.1, 10.0.0.1"}
         handler.client_address = ("127.0.0.1", 1234)
-        self.assertEqual(HTTPMiddleware.get_client_ip(handler), "198.51.100.1")
+        with patch("api.utils.config.TRUST_PROXY", True):
+            self.assertEqual(HTTPMiddleware.get_client_ip(handler), "198.51.100.1")
+
+    def test_get_client_ip_spoofing_prevented_when_untrusted(self):
+        """Headers forjados de IP devem ser ignorados quando o proxy não é confiável."""
+        from api.middleware.http_middleware import HTTPMiddleware
+        handler = MagicMock()
+        handler.headers = {"CF-Connecting-IP": "203.0.113.42", "X-Forwarded-For": "198.51.100.1"}
+        handler.client_address = ("10.0.0.99", 1234)
+        with patch("api.utils.config.TRUST_PROXY", False):
+            self.assertEqual(HTTPMiddleware.get_client_ip(handler), "10.0.0.99")
 
     def test_get_client_ip_fallback_socket(self):
         """Deve usar endereco do socket como fallback."""

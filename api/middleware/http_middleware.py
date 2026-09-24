@@ -87,9 +87,16 @@ class HTTPMiddleware:
     @staticmethod
     def get_client_ip(handler) -> str:
         """
-        Obtém o IP real do cliente, priorizando o cabeçalho Cloudflare (CF-Connecting-IP),
-        seguido de X-Forwarded-For e por fim o socket local.
+        Obtém o IP real do cliente.
+        Se TRUST_PROXY estiver ativo (ou em ambiente Vercel), confia em CF-Connecting-IP
+        e X-Forwarded-For. Caso contrário, utiliza estritamente o endereço de socket direto
+        para impedir spoofing de cabeçalhos por clientes não autenticados.
         """
+        from api.utils.config import TRUST_PROXY
+        socket_ip = getattr(handler, "client_address", ("unknown",))[0]
+        if not TRUST_PROXY:
+            return socket_ip
+
         cf_ip = handler.headers.get("CF-Connecting-IP")
         if cf_ip:
             return cf_ip.strip()
@@ -98,7 +105,7 @@ class HTTPMiddleware:
         if x_forwarded:
             return x_forwarded.split(",")[0].strip()
 
-        return getattr(handler, "client_address", ("unknown",))[0]
+        return socket_ip
 
     @staticmethod
     def send_json_response(
