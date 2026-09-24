@@ -1,6 +1,10 @@
 {
   "version": 2,
   "rewrites": [
+    { "source": "/favicon.ico", "destination": "/web/favicon.ico" },
+    { "source": "/favicon.svg", "destination": "/web/favicon.svg" },
+    { "source": "/favicon.png", "destination": "/web/favicon.png" },
+    { "source": "/apple-touch-icon.png", "destination": "/web/apple-touch-icon.png" },
     { "source": "/login", "destination": "/web/login.html" },
     { "source": "/register", "destination": "/web/register.html" },
     { "source": "/guest", "destination": "/web/index.html" },

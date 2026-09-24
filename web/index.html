@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Quiz Study — Treino de Raciocínio</title>
   <meta name="description" content="Plataforma de simulados e treino de raciocínio lógico. Faça upload de provas em PDF, DOCX ou TXT e treine com gabarito automático.">
+  <link rel="icon" type="image/svg+xml" href="/web/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/web/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/web/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/web/apple-touch-icon.png">
+  <link rel="shortcut icon" href="/web/favicon.ico">
   <link rel="stylesheet" href="/web/styles.css?v=3">
   <!-- Script de prevenção de FOUC de tema (execução imediata) -->
   <script>
@@ -32,7 +37,10 @@
 <body>
   <main class="shell">
     <header class="hero">
-      <p class="eyebrow">Quiz Study · prática guiada</p>
+      <div class="hero-brand">
+        <img src="/web/favicon.svg" alt="" class="hero-brand-icon" width="22" height="22" aria-hidden="true">
+        <p class="eyebrow">Quiz Study · prática guiada</p>
+      </div>
 
       <div class="hero-top">
         <label class="quiz-picker" for="quizSelector">
@@ -389,6 +397,58 @@
       </div>
 
       <div id="catalogList" class="catalog-grid"></div>
+    </div>
+  </div>
+
+  <!-- ── Modal Genérico de Notificação / Alerta (substitui alert() nativo) ── -->
+  <div id="noticeModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="noticeModalTitle">
+    <div class="modal modal--notice">
+      <div class="notice-icon" id="noticeIcon">ℹ️</div>
+      <h2 id="noticeModalTitle" class="notice-title">Aviso</h2>
+      <p id="noticeModalMessage" class="notice-msg"></p>
+      <div class="modal-actions modal-actions--notice">
+        <button id="btnNoticeClose" class="primary btn-notice-close" type="button">Entendi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal de Configuração de Tempo (substitui prompt() nativo) ──────── -->
+  <div id="customTimerModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="customTimerTitle">
+    <div class="modal modal--timer">
+      <button class="modal-close" id="closeCustomTimerModal" aria-label="Fechar">&times;</button>
+      <div class="timer-modal-header">
+        <span class="timer-modal-icon">⏱️</span>
+        <h2 id="customTimerTitle" class="timer-modal-title">Definir Tempo do Simulado</h2>
+        <p class="timer-modal-subtitle">Escolha um tempo pré-definido ou digite a duração em minutos.</p>
+      </div>
+
+      <div class="timer-presets-label">Opções Rápidas:</div>
+      <div class="timer-presets-grid" id="timerPresetsGrid">
+        <button type="button" class="timer-chip" data-mins="auto">Automático</button>
+        <button type="button" class="timer-chip" data-mins="5">5 min</button>
+        <button type="button" class="timer-chip" data-mins="10">10 min</button>
+        <button type="button" class="timer-chip" data-mins="15">15 min</button>
+        <button type="button" class="timer-chip" data-mins="20">20 min</button>
+        <button type="button" class="timer-chip" data-mins="24">24 min</button>
+        <button type="button" class="timer-chip" data-mins="30">30 min</button>
+        <button type="button" class="timer-chip" data-mins="45">45 min</button>
+        <button type="button" class="timer-chip" data-mins="60">60 min</button>
+      </div>
+
+      <form id="customTimerForm" class="timer-custom-form">
+        <div class="form-group">
+          <label for="customTimerMinutesInput">Tempo personalizado (1 a 300 minutos)</label>
+          <div class="timer-input-wrap">
+            <input type="number" id="customTimerMinutesInput" min="1" max="300" placeholder="Ex: 35" autocomplete="off">
+            <span class="timer-input-suffix">min</span>
+          </div>
+        </div>
+        <div id="customTimerFeedback" class="form-feedback feedback-error" hidden></div>
+        <div class="modal-actions modal-actions--timer">
+          <button id="cancelCustomTimer" class="secondary" type="button">Cancelar</button>
+          <button id="applyCustomTimer" class="primary" type="submit">Definir Tempo</button>
+        </div>
+      </form>
     </div>
   </div>
 

@@ -383,6 +383,28 @@ class QuizHandler(BaseHTTPRequestHandler):
                     HTTPMiddleware.send_json_response(self, status, data)
                 return
 
+            # 3.3 Servir Favicon na raiz (/favicon.ico, /favicon.svg, /favicon.png, /apple-touch-icon.png)
+            if request.path in ("/favicon.ico", "/favicon.svg", "/favicon.png", "/apple-touch-icon.png"):
+                fav_name = request.path.lstrip("/").split("?", 1)[0]
+                fav_file = (WEB_DIR / fav_name).resolve()
+                if fav_file.is_file():
+                    content = fav_file.read_bytes()
+                    mime = (
+                        "image/svg+xml" if fav_file.suffix == ".svg" else
+                        "image/png" if fav_file.suffix == ".png" else
+                        "image/x-icon" if fav_file.suffix == ".ico" else
+                        "application/octet-stream"
+                    )
+                    self.send_response(200)
+                    self.send_header("Content-Type", mime)
+                    self.send_header("Content-Length", str(len(content)))
+                    HTTPMiddleware.add_cors_headers(self)
+                    HTTPMiddleware.add_security_headers(self)
+                    HTTPMiddleware.add_cache_headers(self, cache=True)
+                    self.end_headers()
+                    self.wfile.write(content)
+                    return
+
             # 4. Servir arquivos estáticos /web/*
             if request.path.startswith("/web/"):
                 relative_path = request.path.removeprefix("/web/").split("?", 1)[0]
@@ -396,6 +418,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                         "text/html; charset=utf-8" if static_file.suffix == ".html" else
                         "image/svg+xml" if static_file.suffix == ".svg" else
                         "image/png" if static_file.suffix == ".png" else
+                        "image/x-icon" if static_file.suffix == ".ico" else
                         "application/octet-stream"
                     )
                     try:

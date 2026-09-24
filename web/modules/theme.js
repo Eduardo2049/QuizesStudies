@@ -34,7 +34,7 @@ export function applyTheme(theme = currentTheme) {
     metaTheme.name = 'theme-color';
     document.head.appendChild(metaTheme);
   }
-  metaTheme.content = resolved === 'dark' ? '#0d1315' : '#f4f0e8';
+  metaTheme.content = resolved === 'dark' ? '#282a36' : '#f4f0e8';
 
   updateThemeButtonUI();
 }

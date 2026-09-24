@@ -88,6 +88,175 @@ function openConfirmSubmitModal(answeredCount, totalCount) {
   });
 }
 
+// ─── Modal Genérico de Notificação (substitui alert() nativo) ───────────────
+export function showNotice(message, title = 'Aviso', icon = 'ℹ️') {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('noticeModal');
+    const titleEl = document.getElementById('noticeModalTitle');
+    const msgEl = document.getElementById('noticeModalMessage');
+    const iconEl = document.getElementById('noticeIcon');
+    const closeBtn = document.getElementById('btnNoticeClose');
+
+    if (!modal) {
+      alert(message);
+      resolve();
+      return;
+    }
+
+    if (titleEl) titleEl.textContent = title;
+    if (msgEl) msgEl.textContent = message;
+    if (iconEl) iconEl.textContent = icon;
+
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+
+    function onClose() {
+      cleanup();
+      resolve();
+    }
+    function onOverlayClick(e) {
+      if (e.target === modal) onClose();
+    }
+    function onKeyDown(e) {
+      if (e.key === 'Escape' || e.key === 'Enter') onClose();
+    }
+    function cleanup() {
+      modal.hidden = true;
+      document.body.style.overflow = '';
+      closeBtn?.removeEventListener('click', onClose);
+      modal.removeEventListener('click', onOverlayClick);
+      document.removeEventListener('keydown', onKeyDown);
+    }
+
+    closeBtn?.addEventListener('click', onClose);
+    modal.addEventListener('click', onOverlayClick);
+    document.addEventListener('keydown', onKeyDown);
+    setTimeout(() => closeBtn?.focus(), 50);
+  });
+}
+
+// ─── Modal de Configuração de Tempo (substitui prompt() nativo) ─────────────
+export function openCustomTimerModal() {
+  const modal = document.getElementById('customTimerModal');
+  const closeBtn = document.getElementById('closeCustomTimerModal');
+  const cancelBtn = document.getElementById('cancelCustomTimer');
+  const form = document.getElementById('customTimerForm');
+  const input = document.getElementById('customTimerMinutesInput');
+  const feedback = document.getElementById('customTimerFeedback');
+  const presetsGrid = document.getElementById('timerPresetsGrid');
+
+  if (!modal) return;
+
+  hideTimerConfig(0);
+  if (feedback) {
+    feedback.hidden = true;
+    feedback.textContent = '';
+  }
+
+  // Preencher input com o valor atual ou vazio
+  const currentMins = customTimerSeconds ? Math.round(customTimerSeconds / 60) : '';
+  if (input) input.value = currentMins;
+
+  // Destacar chip ativo se coincidir
+  const currentVal = customTimerSeconds ? String(Math.round(customTimerSeconds / 60)) : 'auto';
+  presetsGrid?.querySelectorAll('.timer-chip').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mins === currentVal);
+  });
+
+  modal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  if (input) setTimeout(() => input.focus(), 100);
+
+  function applyPreset(mins) {
+    if (mins === 'auto') {
+      customTimerSeconds = null;
+      if (timerPreset) {
+        const existingCustom = timerPreset.querySelector('[value="custom-set"]');
+        if (existingCustom) existingCustom.remove();
+        timerPreset.value = 'auto';
+      }
+    } else {
+      const num = parseInt(mins, 10);
+      if (!isNaN(num) && num > 0) {
+        customTimerSeconds = num * 60;
+        setPresetOption(num);
+      }
+    }
+    if (!timerInterval) resetTimer();
+    closeModal();
+  }
+
+  function setPresetOption(num) {
+    if (!timerPreset) return;
+    const existing = timerPreset.querySelector(`[value="${num * 60}"]`);
+    if (existing) {
+      timerPreset.value = String(num * 60);
+    } else {
+      const existingCustom = timerPreset.querySelector('[value="custom-set"]');
+      if (existingCustom) existingCustom.remove();
+      const opt = document.createElement('option');
+      opt.value = 'custom-set';
+      opt.textContent = `${num} min ✎`;
+      timerPreset.insertBefore(opt, timerPreset.querySelector('[value="custom"]'));
+      timerPreset.value = 'custom-set';
+    }
+  }
+
+  function onChipClick(e) {
+    const chip = e.target.closest('.timer-chip');
+    if (!chip) return;
+    applyPreset(chip.dataset.mins);
+  }
+
+  function onSubmit(e) {
+    e.preventDefault();
+    const raw = input?.value?.trim();
+    const mins = parseInt(raw, 10);
+    if (isNaN(mins) || mins < 1 || mins > 300) {
+      if (feedback) {
+        feedback.hidden = false;
+        feedback.textContent = 'Por favor, informe um número entre 1 e 300 minutos.';
+      }
+      input?.focus();
+      return;
+    }
+    applyPreset(String(mins));
+  }
+
+  function closeModal() {
+    modal.hidden = true;
+    document.body.style.overflow = '';
+    if (timerPreset && timerPreset.value === 'custom') {
+      timerPreset.value = customTimerSeconds !== null ? 'custom-set' : 'auto';
+    }
+    cleanup();
+  }
+
+  function onOverlayClick(e) {
+    if (e.target === modal) closeModal();
+  }
+
+  function onKeyDown(e) {
+    if (e.key === 'Escape') closeModal();
+  }
+
+  function cleanup() {
+    closeBtn?.removeEventListener('click', closeModal);
+    cancelBtn?.removeEventListener('click', closeModal);
+    modal.removeEventListener('click', onOverlayClick);
+    form?.removeEventListener('submit', onSubmit);
+    presetsGrid?.removeEventListener('click', onChipClick);
+    document.removeEventListener('keydown', onKeyDown);
+  }
+
+  closeBtn?.addEventListener('click', closeModal);
+  cancelBtn?.addEventListener('click', closeModal);
+  modal.addEventListener('click', onOverlayClick);
+  form?.addEventListener('submit', onSubmit);
+  presetsGrid?.addEventListener('click', onChipClick);
+  document.addEventListener('keydown', onKeyDown);
+}
+
 function openCatalogModal() {
   if (catalogModal) {
     catalogModal.hidden = false;
@@ -288,33 +457,23 @@ timerConfig?.addEventListener('mouseenter', showTimerConfig);
 timerConfig?.addEventListener('mouseleave', () => hideTimerConfig());
 timer?.addEventListener('focus', showTimerConfig);
 timer?.addEventListener('blur', () => hideTimerConfig());
+timer?.addEventListener('click', () => openCustomTimerModal());
+document.querySelector('.timer-config-label')?.addEventListener('click', () => openCustomTimerModal());
 
 timerPreset?.addEventListener('change', () => {
   const val = timerPreset.value;
 
   if (val === 'auto') {
     customTimerSeconds = null;
+    const existingCustom = timerPreset.querySelector('[value="custom-set"]');
+    if (existingCustom) existingCustom.remove();
   } else if (val === 'custom') {
-    const raw = prompt('Informe o tempo desejado em minutos (ex: 35):');
-    const mins = parseInt(raw, 10);
-    if (!isNaN(mins) && mins > 0 && mins <= 300) {
-      customTimerSeconds = mins * 60;
-      // Adiciona opção temporária para mostrar o valor escolhido
-      const existingCustom = timerPreset.querySelector('[value="custom-set"]');
-      if (existingCustom) existingCustom.remove();
-      const opt = document.createElement('option');
-      opt.value = 'custom-set';
-      opt.textContent = `${mins} min ✎`;
-      timerPreset.insertBefore(opt, timerPreset.querySelector('[value="custom"]'));
-      timerPreset.value = 'custom-set';
-    } else {
-      if (raw !== null) alert('Por favor, informe um número entre 1 e 300 minutos.');
-      // Reverter para a seleção anterior
-      timerPreset.value = customTimerSeconds !== null ? 'custom-set' : 'auto';
-      return;
-    }
+    openCustomTimerModal();
+    return;
   } else {
     customTimerSeconds = parseInt(val, 10);
+    const existingCustom = timerPreset.querySelector('[value="custom-set"]');
+    if (existingCustom) existingCustom.remove();
   }
 
   // Aplicar imediatamente se o timer não estiver rodando
@@ -566,7 +725,7 @@ async function handleSubmitQuiz(event) {
   const answeredCount = Object.keys(answers).length;
 
   if (answeredCount === 0) {
-    alert('Por favor, marque pelo menos uma resposta antes de conferir.');
+    showNotice('Por favor, marque pelo menos uma resposta antes de conferir.', 'Simulado Incompleto', '⚠️');
     return;
   }
 
@@ -634,7 +793,7 @@ async function handleSubmitQuiz(event) {
     renderResultModal(data);
     openResultModal();
   } catch (err) {
-    alert('Erro ao conferir respostas. Verifique a conexão com o servidor.');
+    showNotice('Erro ao conferir respostas. Verifique a conexão com o servidor.', 'Erro de Conexão', '❌');
   } finally {
     if (submitBtn) {
       submitBtn.disabled = false;
@@ -847,7 +1006,7 @@ btnRemixMistakes?.addEventListener('click', async () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   } catch (err) {
-    alert(`Erro ao gerar variações com IA: ${err.message}`);
+    showNotice(`Erro ao gerar variações com IA: ${err.message}`, 'Falha na IA', '❌');
   } finally {
     btnRemixMistakes.disabled = false;
     btnRemixMistakes.innerHTML = originalContent;
@@ -1021,7 +1180,7 @@ catalogList?.addEventListener('click', async (e) => {
       firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   } catch (err) {
-    alert('Erro ao carregar o simulado selecionado.');
+    showNotice('Erro ao carregar o simulado selecionado.', 'Erro de Carregamento', '❌');
   }
 });
 
