@@ -52,7 +52,7 @@ Ao receber uma demanda, consulte esta tabela para abrir diretamente os arquivos 
 | **IA: Geração por tema, estruturação de arquivo, gabaritos** | `api/services/ai_service.py` | `api/utils/config.py` |
 | **Upload: Extração de texto de TXT, PDF, DOCX e corte** | `api/services/upload_service.py` | `api/utils/file_parser.py` |
 | **Roteamento de URLs, endpoints da API, rate limit** | `api/handlers/quiz_handler.py` | `api/middleware/http_middleware.py` |
-| **Autenticação, hash de senhas PBKDF2, JWT de sessão** | `api/services/auth_service.py` | `api/controllers/auth_controller.py` |
+| **Autenticação, hash de senhas PBKDF2, tokens de sessão (hash SHA-256)** | `api/services/auth_service.py` | `api/controllers/auth_controller.py` |
 | **Banco de dados, tabelas, migrações e persistência** | `api/database/migrations.py` | `api/repositories/quiz_repository.py` |
 | **Servidor HTTP nativo e inicialização** | `quiz_api.py` | `api/utils/config.py` |
 

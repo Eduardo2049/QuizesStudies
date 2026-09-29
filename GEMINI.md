@@ -17,7 +17,7 @@ Este documento é a referência primária e fixa de arquitetura, permissões, li
 | **IA (Google Gemini / OpenRouter, prompts, limites)** | `api/services/ai_service.py` | `web/styles.css`<br>`api/repositories/` |
 | **Upload e leitura de arquivos (TXT, PDF, DOCX)** | `api/services/upload_service.py`<br>`api/utils/file_parser.py` | `api/services/auth_service.py`<br>`web/modules/` |
 | **Rotas da API, endpoints, cookies, rate limits** | `api/handlers/quiz_handler.py`<br>`api/middleware/http_middleware.py` | Frontend `web/styles.css`<br>Migrations |
-| **Autenticação, login, cadastro, senhas, JWT** | `api/services/auth_service.py`<br>`api/controllers/auth_controller.py`<br>`api/repositories/user_repository.py` | `api/utils/file_parser.py`<br>`api/services/ai_service.py` |
+| **Autenticação, login, cadastro, senhas, tokens de sessão** | `api/services/auth_service.py`<br>`api/controllers/auth_controller.py`<br>`api/repositories/user_repository.py` | `api/utils/file_parser.py`<br>`api/services/ai_service.py` |
 | **Banco de dados, tabelas, consultas SQL, migrations** | `api/database/migrations.py`<br>`api/repositories/quiz_repository.py`<br>`api/repositories/user_repository.py` | Toda a pasta `web/` |
 | **Configuração de ambiente, portas, chaves de API** | `api/utils/config.py`<br>`.env.example` | Código de regras de negócio |
 | **Testes unitários e de integração** | `tests/` (execute o teste específico ou a suíte) | `web/` |

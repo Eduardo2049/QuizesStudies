@@ -98,6 +98,17 @@ export function calculateQuizStats(questions, results, totalSeconds = 0) {
   };
 }
 
+/** Escapa caracteres especiais de HTML para evitar XSS ao injetar texto dinâmico. */
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[character]));
+}
+
 /** Formata segundos em texto amigável (ex: 2m 15s) */
 function formatDuration(seconds) {
   if (!seconds || seconds <= 0) return '0s';
@@ -168,13 +179,13 @@ export function renderStatsHtml(stats) {
             return `
               <div class="section-item">
                 <div class="section-item-head">
-                  <span class="section-name" title="${sec.section}">${sec.section}</span>
+                  <span class="section-name" title="${escapeHtml(sec.section)}">${escapeHtml(sec.section)}</span>
                   <span class="section-score">
                     <strong>${sec.correct}/${sec.total}</strong> (${sec.percentage}%)
                   </span>
                 </div>
                 <div class="section-progress-track">
-                  <div class="section-progress-fill ${barColorClass}" style="width: ${sec.percentage}%"></div>
+                  <div class="section-progress-fill ${barColorClass}" data-percentage="${sec.percentage}"></div>
                 </div>
               </div>
             `;

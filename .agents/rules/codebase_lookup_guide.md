@@ -23,7 +23,7 @@ Este documento foi criado para evitar a varredura completa do repositório a cad
   - `POST /api/quiz/generate` (geração de simulado por tema via IA)
   - `POST /api/quiz/submit` (correção e validação de gabarito)
   - `POST /api/quiz/remix-mistakes` (variação de questões erradas via IA)
-- **`api/middleware/http_middleware.py`**: Utilitários para extração de token JWT/sessão dos cookies, parsing de IP do cliente e formatação de respostas JSON padronizadas.
+- **`api/middleware/http_middleware.py`**: Utilitários para extração de token de sessão dos cookies, parsing de IP do cliente e formatação de respostas JSON padronizadas.
 
 ### 3. Camada de Controle e Negócio (Controllers & Services)
 - **`api/controllers/quiz_controller.py`**: Recebe chamadas do handler, orquestra serviços e formata respostas de quizzes e uploads.
@@ -34,7 +34,7 @@ Este documento foi criado para evitar a varredura completa do repositório a cad
   - `generate_answer_key(questions, client_ip)`: Resolve e cria gabarito fundamentado para questões sem resposta.
   - `remix_mistakes_with_ai(questions, client_ip)`: Gera novas questões mutadas com base nos erros do aluno.
 - **`api/services/upload_service.py`**: Validação de peso, extração de texto (via `file_parser.py`), detecção de gabarito, corte pela quantidade escolhida (`num_questions`) e persistência.
-- **`api/services/auth_service.py`**: Criação de hash seguro de senhas com PBKDF2, geração e validação de tokens JWT de sessão.
+- **`api/services/auth_service.py`**: Criação de hash seguro de senhas com PBKDF2 (600k iterações), geração e validação de tokens de sessão opacos (armazenados como hash SHA-256 no banco).
 
 ### 4. Camada de Dados e Persistência (Repositories & Database)
 - **`api/database/migrations.py`**: Migrações do schema PostgreSQL (tabelas `users`, `quizzes`, `sessions`) com fallback em memória SQLite.

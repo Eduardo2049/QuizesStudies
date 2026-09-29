@@ -53,6 +53,6 @@ As seguintes regras são restrições inegociáveis:
 ### 🚫 Práticas e Ações Proibidas
 - **Proibido usar Frameworks CSS Externos:** Não importe Tailwind, Bootstrap ou bibliotecas semelhantes via CDN ou npm.
 - **Proibido Destruição de Banco:** NUNCA execute `DROP TABLE`, `TRUNCATE` ou comandos SQL destrutivos em `api/database/migrations.py`. As migrações devem ser sempre incrementais e compatíveis com dados legados.
-- **Proibido Remover Rate Limits ou Controles de Autenticação:** A aplicação protege recursos custosos de IA e endpoints com limitadores de requisição (`RateLimiter`) e validação de tokens JWT; eles nunca devem ser desativados.
+- **Proibido Remover Rate Limits ou Controles de Autenticação:** A aplicação protege recursos custosos de IA e endpoints com limitadores de requisição (`RateLimiter`) e validação de tokens de sessão (armazenados como hash SHA-256 no banco); eles nunca devem ser desativados.
 - **Proibido Quebrar o Protocolo JSON:** Todos os endpoints sob `/api/` devem responder com a estrutura unificada de resposta (`{"status": "success", "data": ...}` ou `{"status": "error", "error": ...}`).
 - **Proibido Varreduras Cegas no Repositório:** Não execute `list_dir` de toda a árvore de diretórios ou greps sem filtro quando os arquivos já estiverem mapeados no Guia de Busca.

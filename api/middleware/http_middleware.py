@@ -50,7 +50,7 @@ class HTTPMiddleware:
         handler.send_header("X-Frame-Options", "DENY")
         handler.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
         handler.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-        handler.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+        handler.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' https://va.vercel-scripts.com; style-src 'self'; img-src 'self' data:; connect-src 'self' https://vitals.vercel-insights.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
         handler.send_header("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
 
     @staticmethod

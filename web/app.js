@@ -1101,6 +1101,12 @@ function renderResultModal(data) {
     const statsContainer = document.querySelector('#resultStatsContainer');
     if (statsContainer && stats) {
       statsContainer.innerHTML = renderStatsHtml(stats);
+      // Aplica a largura das barras via CSSOM (não via atributo style inline),
+      // compatível com CSP style-src sem 'unsafe-inline'.
+      statsContainer.querySelectorAll('.section-progress-fill[data-percentage]').forEach((el) => {
+        const pct = Math.max(0, Math.min(100, Number(el.dataset.percentage) || 0));
+        el.style.width = `${pct}%`;
+      });
     }
   } catch (err) {
     console.error('Erro ao renderizar estatísticas:', err);

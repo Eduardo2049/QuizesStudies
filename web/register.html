@@ -11,26 +11,11 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/web/apple-touch-icon.png">
   <link rel="shortcut icon" href="/web/favicon.ico">
   <link rel="stylesheet" href="/web/styles.css?v=3">
-  <!-- Script de prevenção de FOUC de tema (execução imediata) -->
-  <script>
-    (function() {
-      try {
-        var t = localStorage.getItem('quiz_theme_preference') || 'system';
-        var r = t === 'system' ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : t;
-        document.documentElement.setAttribute('data-theme', r);
-        document.documentElement.setAttribute('data-theme-mode', t);
-      } catch (_) {}
-    })();
-  </script>
-  <script>
-    window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-  </script>
+  <!-- Script de prevenção de FOUC de tema (execução imediata, bloqueante) -->
+  <script src="/web/modules/theme-boot.js"></script>
+  <!-- Vercel Web Analytics + Speed Insights (stubs de fila, bloqueantes, antes dos loaders) -->
+  <script src="/web/modules/analytics-boot.js"></script>
   <script defer src="/_vercel/insights/script.js"></script>
-
-  <!-- Vercel Speed Insights -->
-  <script>
-    window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
-  </script>
   <script defer src="/_vercel/speed-insights/script.js"></script>
 </head>
 <body class="login-body">
