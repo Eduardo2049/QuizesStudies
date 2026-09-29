@@ -232,10 +232,20 @@ class UploadController:
         is_public: bool,
         persist: bool = True,
         client_ip: str = None,
+        num_questions: str | int = "auto",
+        context: str = "",
     ) -> dict:
         """POST /api/upload - Processa arquivo e cria quiz no banco"""
         result = self.upload_service.process_upload(
-            filename, content, file_type, created_by, is_public, persist, client_ip=client_ip
+            filename,
+            content,
+            file_type,
+            created_by,
+            is_public,
+            persist,
+            client_ip=client_ip,
+            num_questions=num_questions,
+            context=context,
         )
         return {
             "status": "success",

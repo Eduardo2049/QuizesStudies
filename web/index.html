@@ -43,9 +43,17 @@
       </div>
 
       <div class="hero-top">
-        <label class="quiz-picker" for="quizSelector">
-          Questionário <select id="quizSelector"></select>
-        </label>
+        <div class="quiz-picker">
+          <label class="quiz-picker-label" for="quizSelector">Questionário</label>
+          <div class="custom-select-wrap" id="customQuizSelectorWrap">
+            <button type="button" class="custom-select-trigger" id="customQuizTrigger" aria-haspopup="listbox" aria-expanded="false" title="Selecionar questionário">
+              <span class="custom-select-value" id="customQuizValue">Carregando simulados…</span>
+              <span class="custom-select-arrow" aria-hidden="true">▾</span>
+            </button>
+            <div class="custom-select-dropdown" id="customQuizDropdown" role="listbox" hidden></div>
+            <select id="quizSelector" class="sr-only" tabindex="-1" aria-label="Questionário"></select>
+          </div>
+        </div>
         <div class="hero-top-buttons">
           <button id="themeToggle" class="btn-theme-toggle" type="button" title="Alternar tema (Sistema / Escuro / Claro)">
             <span class="theme-icon">💻</span>
@@ -121,17 +129,17 @@
     <form id="quiz" class="quiz" novalidate></form>
 
     <div id="focusNavigation" class="focus-navigation" hidden>
-      <button type="button" id="btnPrevQuestion" class="secondary nav-btn" disabled title="Atalho: Seta Esquerda (←)">
+      <button type="button" id="btnPrevQuestion" class="secondary nav-btn" disabled title="Atalho: A, W ou Seta Esquerda (←)">
         ← Anterior
       </button>
       <span id="focusIndicator" class="focus-indicator">Questão 1 de 5</span>
-      <button type="button" id="btnNextQuestion" class="primary nav-btn" title="Atalho: Seta Direita (→)">
+      <button type="button" id="btnNextQuestion" class="primary nav-btn" title="Atalho: D, S ou Seta Direita (→)">
         Próxima →
       </button>
     </div>
 
     <div class="shortcuts-hint" id="shortcutsHint">
-      <span>⌨️ <strong>Produtividade:</strong> Use teclas <strong>A–D</strong> ou <strong>1–4</strong> para marcar · <strong>← →</strong> para navegar · <strong>Ctrl+Enter</strong> para finalizar</span>
+      <span>⌨️ <strong>Produtividade:</strong> Use <strong>W A S D</strong> ou <strong>← →</strong> para mover · <strong>1–4</strong> para marcar · <strong>Ctrl+Enter</strong> para finalizar</span>
     </div>
 
     <div class="actions">
@@ -158,7 +166,7 @@
 
       <!-- Painel 1: Upload de Arquivo -->
       <div id="panelUpload" class="modal-panel">
-        <p class="modal-subtitle">Envie um arquivo <strong>TXT</strong>, <strong>PDF</strong> ou <strong>DOCX</strong> com questões. Se não houver gabarito, ele será gerado automaticamente por IA.</p>
+        <p class="modal-subtitle">Envie um arquivo <strong>TXT</strong>, <strong>PDF</strong> ou <strong>DOCX</strong> com questões ou material de estudo. A IA estrutura as questões, gera o gabarito e adapta na quantidade desejada.</p>
 
         <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="Arraste ou clique para selecionar arquivo">
           <div class="drop-zone-icon">📄</div>
@@ -173,6 +181,33 @@
           <span id="filePreviewName" class="file-preview-name"></span>
           <button class="file-preview-remove" id="removeFile" aria-label="Remover arquivo">&times;</button>
         </div>
+
+        <div class="form-row modal-form-row modal-form-row--spacing">
+          <div class="form-group flex-1">
+            <label for="uploadNumQuestions">Quantidade de Questões</label>
+            <select id="uploadNumQuestions">
+              <option value="auto" selected>Todas do arquivo (Automático)</option>
+              <option value="3">3 questões (rápido)</option>
+              <option value="5">5 questões (padrão)</option>
+              <option value="8">8 questões (prática)</option>
+              <option value="10">10 questões (completo)</option>
+              <option value="15">15 questões (aprofundado)</option>
+              <option value="20">20 questões (extenso)</option>
+              <option value="25">25 questões (simulado)</option>
+              <option value="30">30 questões (oficial)</option>
+              <option value="custom">Personalizado…</option>
+            </select>
+          </div>
+          <div class="form-group flex-1" id="uploadCustomQtyWrap" hidden>
+            <label for="uploadCustomQty">Qtd. personalizada (1 a 30)</label>
+            <input type="number" id="uploadCustomQty" min="1" max="30" placeholder="Ex: 7" value="5">
+          </div>
+        </div>
+
+        <div class="form-group modal-form-group">
+          <label for="uploadContext">Foco ou Instruções para a IA (Opcional)</label>
+          <input type="text" id="uploadContext" placeholder="Ex: Adaptar texto em questões de concurso, focar em conceitos centrais...">
+        </div>
       </div>
 
       <!-- Painel 2: Gerar por Tema (IA) -->
@@ -186,12 +221,23 @@
 
         <div class="form-row modal-form-row">
           <div class="form-group flex-1">
-            <label for="topicNumQuestions">Quantidade</label>
+            <label for="topicNumQuestions">Quantidade de Questões</label>
             <select id="topicNumQuestions">
               <option value="3">3 questões (rápido)</option>
               <option value="5" selected>5 questões (padrão)</option>
+              <option value="8">8 questões (prática)</option>
               <option value="10">10 questões (completo)</option>
+              <option value="15">15 questões (aprofundado)</option>
+              <option value="20">20 questões (extenso)</option>
+              <option value="25">25 questões (simulado)</option>
+              <option value="30">30 questões (oficial)</option>
+              <option value="custom">Personalizado…</option>
             </select>
+          </div>
+
+          <div class="form-group flex-1" id="topicCustomQtyWrap" hidden>
+            <label for="topicCustomQty">Qtd. personalizada (1 a 30)</label>
+            <input type="number" id="topicCustomQty" min="1" max="30" placeholder="Ex: 12" value="5">
           </div>
 
           <div class="form-group flex-1">

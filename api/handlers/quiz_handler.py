@@ -678,6 +678,8 @@ class QuizHandler(BaseHTTPRequestHandler):
         # Delegar ao controller
         requested_public = fields.get("is_public", "false").lower() == "true"
         is_public = requested_public and user and user.get("role") == "admin"
+        num_questions = fields.get("num_questions", "auto")
+        context = fields.get("context", "")
         client_ip = HTTPMiddleware.get_client_ip(self)
         response = self.upload_controller.upload_file(
             filename,
@@ -687,6 +689,8 @@ class QuizHandler(BaseHTTPRequestHandler):
             bool(is_public),
             persist=not guest,
             client_ip=client_ip,
+            num_questions=num_questions,
+            context=context,
         )
         status, data = ResponseFormatter.created(
             response["data"],

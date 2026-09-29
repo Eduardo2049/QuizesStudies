@@ -55,6 +55,8 @@ class UploadService:
         is_public: bool,
         persist: bool = True,
         client_ip: str = None,
+        num_questions: str | int = "auto",
+        context: str = "",
     ) -> dict:
         """
         Processa upload de arquivo e cria quiz no banco.
@@ -63,6 +65,12 @@ class UploadService:
             filename: Nome original do arquivo (ex: 'prova_2024.pdf')
             content: Bytes do arquivo
             file_type: 'txt', 'pdf' ou 'docx'
+            created_by: ID do usuário (ou None para guest)
+            is_public: Se o quiz deve ser público
+            persist: Se deve salvar no banco ou retornar apenas em memória
+            client_ip: IP do cliente
+            num_questions: Quantidade de questões desejada ('auto' ou 1 a 30)
+            context: Diretrizes/foco adicional para adaptação por IA
 
         Returns:
             dict: {quiz_id, name, label, question_count, ai_generated}
@@ -84,6 +92,13 @@ class UploadService:
                 413
             )
 
+        target_qty = None
+        if num_questions and str(num_questions).lower() != "auto":
+            try:
+                target_qty = max(1, min(int(num_questions), 30))
+            except (ValueError, TypeError):
+                target_qty = None
+
         # 1. Extrair texto
         try:
             text = extract_text(content, file_type)
@@ -104,7 +119,7 @@ class UploadService:
         ai_generated = False
 
         # Camada 2: Fallback para IA se o regex não encontrar questões válidas
-        # (ex: TXT sem numeração, perguntas e respostas sem separação clássica, formato livre)
+        # (ex: TXT sem numeração, texto de estudo/resumo, perguntas livres)
         if not is_valid:
             if created_by is None:
                 raise QuizAPIException(
@@ -115,7 +130,9 @@ class UploadService:
             has_ai_key = bool(GEMINI_API_KEY or OPENROUTER_API_KEY)
             if has_ai_key:
                 try:
-                    questions = parse_and_structure_questions_with_ai(text, client_ip=client_ip)
+                    questions = parse_and_structure_questions_with_ai(
+                        text, client_ip=client_ip, num_questions=target_qty, context=context
+                    )
                     is_valid, error_msg = validate_questions(questions)
                     if is_valid:
                         ai_generated = True
@@ -136,6 +153,13 @@ class UploadService:
                     "Verifique se o arquivo possui questões e alternativas ou configure a IA (GEMINI_API_KEY / OPENROUTER_API_KEY) para interpretação automática.",
                     400
                 )
+
+        # Aplicar corte para a quantidade solicitada se o arquivo tiver mais questões
+        if target_qty and len(questions) > target_qty:
+            questions = questions[:target_qty]
+            for i, q in enumerate(questions, start=1):
+                q["id"] = i
+                q["question_number"] = i
 
         if len(questions) > self.MAX_QUESTIONS:
             raise QuizAPIException(

@@ -9,6 +9,10 @@ const progress = document.querySelector('#progress');
 const percent = document.querySelector('#percent');
 const progressBar = document.querySelector('#progressBar');
 const quizSelector = document.querySelector('#quizSelector');
+const customQuizSelectorWrap = document.querySelector('#customQuizSelectorWrap');
+const customQuizTrigger = document.querySelector('#customQuizTrigger');
+const customQuizValue = document.querySelector('#customQuizValue');
+const customQuizDropdown = document.querySelector('#customQuizDropdown');
 const timer = document.querySelector('#timer');
 const startBtn = document.querySelector('#startBtn');
 
@@ -43,6 +47,69 @@ const confirmSubmitMissingEl = document.querySelector('#confirmSubmitMissing');
 const confirmSubmitWarning = document.querySelector('#confirmSubmitWarning');
 
 /** Abre o modal de confirmação de finalização e retorna uma Promise<boolean> */
+// ─── Acessibilidade: Confinamento e Gerenciamento de Foco em Modais (WAI-ARIA) ──
+function trapFocus(modalElement, initialFocusElement = null) {
+  if (!modalElement) return () => {};
+
+  const previousActive = document.activeElement;
+  const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  function getFocusableElements() {
+    return Array.from(modalElement.querySelectorAll(focusableSelector))
+      .filter(el => el.offsetParent !== null && !el.hidden && window.getComputedStyle(el).visibility !== 'hidden');
+  }
+
+  const timer = setTimeout(() => {
+    if (initialFocusElement && typeof initialFocusElement.focus === 'function' && !initialFocusElement.disabled) {
+      initialFocusElement.focus();
+    } else {
+      const focusables = getFocusableElements();
+      if (focusables.length) {
+        focusables[0].focus();
+      } else {
+        modalElement.focus();
+      }
+    }
+  }, 40);
+
+  function handleKeyDown(e) {
+    if (e.key !== 'Tab') return;
+
+    const focusables = getFocusableElements();
+    if (!focusables.length) {
+      e.preventDefault();
+      return;
+    }
+
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+
+    if (e.shiftKey) {
+      if (document.activeElement === first || !modalElement.contains(document.activeElement)) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last || !modalElement.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
+
+  modalElement.addEventListener('keydown', handleKeyDown);
+
+  return function releaseFocus() {
+    clearTimeout(timer);
+    modalElement.removeEventListener('keydown', handleKeyDown);
+    if (previousActive && typeof previousActive.focus === 'function' && document.body.contains(previousActive)) {
+      try {
+        previousActive.focus();
+      } catch (_) {}
+    }
+  };
+}
+
 function openConfirmSubmitModal(answeredCount, totalCount) {
   return new Promise((resolve) => {
     if (confirmSubmitAnsweredEl) confirmSubmitAnsweredEl.textContent = answeredCount;
@@ -61,6 +128,9 @@ function openConfirmSubmitModal(answeredCount, totalCount) {
       document.body.style.overflow = 'hidden';
     }
 
+    // Gerenciador acessível de foco: foca inicialmente o botão principal de confirmação
+    const releaseFocus = trapFocus(confirmSubmitModal, confirmSubmitConfirm);
+
     function onConfirm() {
       cleanup();
       resolve(true);
@@ -77,14 +147,51 @@ function openConfirmSubmitModal(answeredCount, totalCount) {
       confirmSubmitConfirm?.removeEventListener('click', onConfirm);
       confirmSubmitCancel?.removeEventListener('click', onCancel);
       confirmSubmitModal?.removeEventListener('click', onOverlayClick);
+      document.removeEventListener('keydown', onKeyDown);
+      releaseFocus();
     }
     function onOverlayClick(e) {
       if (e.target === confirmSubmitModal) onCancel();
     }
 
+    function onKeyDown(e) {
+      if (confirmSubmitModal && confirmSubmitModal.hidden) return;
+
+      // Navegação por setas: ← ou ↑ foca Cancelar; → ou ↓ foca Confirmar
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        confirmSubmitCancel?.focus();
+        return;
+      }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        confirmSubmitConfirm?.focus();
+        return;
+      }
+
+      // Enter aciona a ação do botão selecionado ou confirma diretamente
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (document.activeElement === confirmSubmitCancel) {
+          onCancel();
+        } else {
+          onConfirm();
+        }
+        return;
+      }
+
+      // Escape fecha o modal cancelando
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCancel();
+        return;
+      }
+    }
+
     confirmSubmitConfirm?.addEventListener('click', onConfirm);
     confirmSubmitCancel?.addEventListener('click', onCancel);
     confirmSubmitModal?.addEventListener('click', onOverlayClick);
+    document.addEventListener('keydown', onKeyDown);
   });
 }
 
@@ -110,6 +217,8 @@ export function showNotice(message, title = 'Aviso', icon = 'ℹ️') {
     modal.hidden = false;
     document.body.style.overflow = 'hidden';
 
+    const releaseFocus = trapFocus(modal, closeBtn);
+
     function onClose() {
       cleanup();
       resolve();
@@ -126,12 +235,12 @@ export function showNotice(message, title = 'Aviso', icon = 'ℹ️') {
       closeBtn?.removeEventListener('click', onClose);
       modal.removeEventListener('click', onOverlayClick);
       document.removeEventListener('keydown', onKeyDown);
+      releaseFocus();
     }
 
     closeBtn?.addEventListener('click', onClose);
     modal.addEventListener('click', onOverlayClick);
     document.addEventListener('keydown', onKeyDown);
-    setTimeout(() => closeBtn?.focus(), 50);
   });
 }
 
@@ -165,7 +274,8 @@ export function openCustomTimerModal() {
 
   modal.hidden = false;
   document.body.style.overflow = 'hidden';
-  if (input) setTimeout(() => input.focus(), 100);
+
+  const releaseFocus = trapFocus(modal, input);
 
   function applyPreset(mins) {
     if (mins === 'auto') {
@@ -247,6 +357,7 @@ export function openCustomTimerModal() {
     form?.removeEventListener('submit', onSubmit);
     presetsGrid?.removeEventListener('click', onChipClick);
     document.removeEventListener('keydown', onKeyDown);
+    releaseFocus();
   }
 
   closeBtn?.addEventListener('click', closeModal);
@@ -257,14 +368,13 @@ export function openCustomTimerModal() {
   document.addEventListener('keydown', onKeyDown);
 }
 
+let releaseCatalogFocus = null;
 function openCatalogModal() {
   if (catalogModal) {
     catalogModal.hidden = false;
     document.body.style.overflow = 'hidden';
     renderCatalogList();
-    if (catalogSearchInput) {
-      setTimeout(() => catalogSearchInput.focus(), 100);
-    }
+    releaseCatalogFocus = trapFocus(catalogModal, catalogSearchInput);
   }
 }
 
@@ -272,6 +382,8 @@ function closeCatalogModal() {
   if (catalogModal) {
     catalogModal.hidden = true;
     document.body.style.overflow = '';
+    releaseCatalogFocus?.();
+    releaseCatalogFocus = null;
   }
 }
 
@@ -293,10 +405,13 @@ const resultScoreNumber = document.querySelector('#resultScoreNumber');
 const resultScorePercent = document.querySelector('#resultScorePercent');
 const resultSummaryText = document.querySelector('#resultSummaryText');
 const resultQuestionsList = document.querySelector('#resultQuestionsList');
+
+let releaseResultFocus = null;
 function openResultModal() {
   if (resultModal) {
     resultModal.hidden = false;
     document.body.style.overflow = 'hidden';
+    releaseResultFocus = trapFocus(resultModal, btnRedoQuiz || btnCloseResultModal);
   }
 }
 
@@ -304,6 +419,8 @@ function closeResultModal() {
   if (resultModal) {
     resultModal.hidden = true;
     document.body.style.overflow = '';
+    releaseResultFocus?.();
+    releaseResultFocus = null;
   }
 }
 
@@ -313,10 +430,12 @@ const btnOpenAboutModal = document.querySelector('#btnOpenAboutModal');
 const closeAboutModalBtn = document.querySelector('#closeAboutModal');
 const btnCloseAbout = document.querySelector('#btnCloseAbout');
 
+let releaseAboutFocus = null;
 function openAboutModal() {
   if (aboutModal) {
     aboutModal.hidden = false;
     document.body.style.overflow = 'hidden';
+    releaseAboutFocus = trapFocus(aboutModal, btnCloseAbout || closeAboutModalBtn);
   }
 }
 
@@ -324,6 +443,8 @@ function closeAboutModal() {
   if (aboutModal) {
     aboutModal.hidden = true;
     document.body.style.overflow = '';
+    releaseAboutFocus?.();
+    releaseAboutFocus = null;
   }
 }
 
@@ -691,7 +812,125 @@ async function loadQuizList() {
     selectedSource = quizSelector.options[0].value;
     quizSelector.value = selectedSource;
   }
+
+  renderCustomQuizOptions(serverQuizzes, localQuizzes);
+  syncCustomQuizSelector();
 }
+
+// ─── Custom Quiz Selector Component ──────────────────────────────────────────
+function renderCustomQuizOptions(serverQuizzes = [], localQuizzes = []) {
+  if (!customQuizDropdown) return;
+
+  if (!serverQuizzes.length && !localQuizzes.length) {
+    customQuizDropdown.innerHTML = '<div class="custom-select-option custom-select-empty">Nenhum quiz disponível</div>';
+    return;
+  }
+
+  let html = '';
+  if (serverQuizzes.length > 0) {
+    html += '<div class="custom-select-group">';
+    html += '<div class="custom-select-group-header">Quizzes da Plataforma</div>';
+    html += serverQuizzes.map((item) => `
+      <div class="custom-select-option" role="option" data-value="${escapeHtml(item.name)}" tabindex="0">
+        <span class="custom-select-option-label">${escapeHtml(item.label)}${item.ai_generated ? ' 🤖' : ''}</span>
+        <span class="custom-select-option-check" aria-hidden="true"></span>
+      </div>
+    `).join('');
+    html += '</div>';
+  }
+
+  if (localQuizzes.length > 0) {
+    html += '<div class="custom-select-group">';
+    html += '<div class="custom-select-group-header">Seus Quizzes Gerados (Convidado)</div>';
+    html += localQuizzes.map((item) => `
+      <div class="custom-select-option" role="option" data-value="${escapeHtml(item.name)}" tabindex="0">
+        <span class="custom-select-option-label">${escapeHtml(item.label)} ✨</span>
+        <span class="custom-select-option-check" aria-hidden="true"></span>
+      </div>
+    `).join('');
+    html += '</div>';
+  }
+
+  customQuizDropdown.innerHTML = html;
+}
+
+function syncCustomQuizSelector() {
+  if (!quizSelector || !customQuizValue) return;
+
+  const currentVal = quizSelector.value;
+  const selectedOpt = quizSelector.selectedOptions?.[0] || quizSelector.querySelector(`option[value="${CSS.escape(currentVal)}"]`);
+  if (selectedOpt) {
+    customQuizValue.textContent = selectedOpt.textContent.trim();
+  } else if (selectedSource) {
+    customQuizValue.textContent = selectedSource;
+  } else {
+    customQuizValue.textContent = 'Selecione um simulado…';
+  }
+
+  if (customQuizDropdown) {
+    customQuizDropdown.querySelectorAll('.custom-select-option').forEach(opt => {
+      const isSel = opt.getAttribute('data-value') === currentVal;
+      opt.classList.toggle('is-selected', isSel);
+      opt.setAttribute('aria-selected', isSel ? 'true' : 'false');
+      const checkSpan = opt.querySelector('.custom-select-option-check');
+      if (checkSpan) checkSpan.textContent = isSel ? '✓' : '';
+    });
+  }
+}
+
+function openCustomQuizDropdown() {
+  if (!customQuizDropdown || !customQuizTrigger) return;
+  customQuizDropdown.removeAttribute('hidden');
+  customQuizTrigger.setAttribute('aria-expanded', 'true');
+  const selectedItem = customQuizDropdown.querySelector('.custom-select-option.is-selected');
+  if (selectedItem) {
+    selectedItem.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function closeCustomQuizDropdown() {
+  if (!customQuizDropdown || !customQuizTrigger) return;
+  customQuizDropdown.setAttribute('hidden', '');
+  customQuizTrigger.setAttribute('aria-expanded', 'false');
+}
+
+customQuizTrigger?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isExpanded = customQuizTrigger.getAttribute('aria-expanded') === 'true';
+  if (isExpanded) {
+    closeCustomQuizDropdown();
+  } else {
+    openCustomQuizDropdown();
+  }
+});
+
+customQuizDropdown?.addEventListener('click', (e) => {
+  const option = e.target.closest('.custom-select-option');
+  if (!option || option.classList.contains('custom-select-empty')) return;
+  const val = option.getAttribute('data-value');
+  if (!val) return;
+
+  closeCustomQuizDropdown();
+  if (quizSelector && quizSelector.value !== val) {
+    selectedSource = val;
+    quizSelector.value = val;
+    syncCustomQuizSelector();
+    quizSelector.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (!customQuizSelectorWrap?.contains(e.target)) {
+    closeCustomQuizDropdown();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && customQuizTrigger?.getAttribute('aria-expanded') === 'true') {
+    closeCustomQuizDropdown();
+    customQuizTrigger?.focus();
+  }
+});
 
 // ─── Progresso ────────────────────────────────────────────────────────────────
 function updateProgress() {
@@ -1062,25 +1301,7 @@ questionPalette?.addEventListener('click', (e) => {
   }
 });
 
-// Navegação rápida por teclado (Setas Esquerda / Direita no Modo Foco)
-document.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-  if (viewMode !== 'focus' || !questions.length) return;
-  if (uploadModal && !uploadModal.hidden) return;
-  if (resultModal && !resultModal.hidden) return;
-  if (aboutModal && !aboutModal.hidden) return;
-  if (catalogModal && !catalogModal.hidden) return;
 
-  if (e.key === 'ArrowRight') {
-    if (currentQuestionIndex < questions.length - 1) {
-      goToQuestion(currentQuestionIndex + 1);
-    }
-  } else if (e.key === 'ArrowLeft') {
-    if (currentQuestionIndex > 0) {
-      goToQuestion(currentQuestionIndex - 1);
-    }
-  }
-});
 
 // ─── Catálogo de Simulados ────────────────────────────────────────────────
 function renderCatalogList() {
@@ -1164,6 +1385,7 @@ catalogList?.addEventListener('click', async (e) => {
   closeCatalogModal();
   selectedSource = source;
   if (quizSelector) quizSelector.value = source;
+  syncCustomQuizSelector();
   resetTimer();
   closeResultModal();
   if (result) {
@@ -1184,9 +1406,16 @@ catalogList?.addEventListener('click', async (e) => {
   }
 });
 
-quiz.addEventListener('change', () => {
+quiz.addEventListener('change', (e) => {
   startTimer();
   updateProgress();
+  const card = e.target?.closest?.('.question');
+  if (card && card.dataset.index !== undefined) {
+    const idx = parseInt(card.dataset.index, 10);
+    if (!Number.isNaN(idx)) {
+      currentQuestionIndex = idx;
+    }
+  }
 });
 
 quizSelector.addEventListener('change', async () => {
@@ -1225,8 +1454,32 @@ const panelUpload = document.querySelector('#panelUpload');
 const panelTopic = document.querySelector('#panelTopic');
 const topicInput = document.querySelector('#topicInput');
 const topicNumQuestions = document.querySelector('#topicNumQuestions');
+const topicCustomQtyWrap = document.querySelector('#topicCustomQtyWrap');
+const topicCustomQty = document.querySelector('#topicCustomQty');
 const topicDifficulty = document.querySelector('#topicDifficulty');
 const topicContext = document.querySelector('#topicContext');
+const uploadNumQuestions = document.querySelector('#uploadNumQuestions');
+const uploadCustomQtyWrap = document.querySelector('#uploadCustomQtyWrap');
+const uploadCustomQty = document.querySelector('#uploadCustomQty');
+const uploadContext = document.querySelector('#uploadContext');
+
+uploadNumQuestions?.addEventListener('change', () => {
+  if (uploadNumQuestions.value === 'custom') {
+    uploadCustomQtyWrap?.removeAttribute('hidden');
+    uploadCustomQty?.focus();
+  } else {
+    uploadCustomQtyWrap?.setAttribute('hidden', '');
+  }
+});
+
+topicNumQuestions?.addEventListener('change', () => {
+  if (topicNumQuestions.value === 'custom') {
+    topicCustomQtyWrap?.removeAttribute('hidden');
+    topicCustomQty?.focus();
+  } else {
+    topicCustomQtyWrap?.setAttribute('hidden', '');
+  }
+});
 
 let selectedFile = null;
 
@@ -1254,17 +1507,21 @@ function switchModalTab(tabName) {
   }
 }
 
+let releaseUploadFocus = null;
+
 function openModal() {
   resetModalState();
   uploadModal.hidden = false;
   document.body.style.overflow = 'hidden';
-  uploadModal.querySelector('.modal').focus?.();
+  releaseUploadFocus = trapFocus(uploadModal, tabUploadFile || fileInput);
 }
 
 function closeModal() {
   uploadModal.hidden = true;
   document.body.style.overflow = '';
   selectedFile = null;
+  releaseUploadFocus?.();
+  releaseUploadFocus = null;
 }
 
 function resetModalState() {
@@ -1280,9 +1537,15 @@ function resetModalState() {
   if (confirmGenerateTopicBtn) confirmGenerateTopicBtn.disabled = false;
   dropZone.classList.remove('drop-zone--active', 'drop-zone--error');
   fileInput.value = '';
+  if (uploadNumQuestions) uploadNumQuestions.value = 'auto';
+  if (uploadCustomQtyWrap) uploadCustomQtyWrap.setAttribute('hidden', '');
+  if (uploadCustomQty) uploadCustomQty.value = '5';
+  if (uploadContext) uploadContext.value = '';
   if (topicInput) topicInput.value = '';
   if (topicContext) topicContext.value = '';
   if (topicNumQuestions) topicNumQuestions.value = '5';
+  if (topicCustomQtyWrap) topicCustomQtyWrap.setAttribute('hidden', '');
+  if (topicCustomQty) topicCustomQty.value = '5';
   if (topicDifficulty) topicDifficulty.value = 'Médio';
   switchModalTab('upload');
 }
@@ -1414,6 +1677,17 @@ async function doUpload() {
   formData.append('file', selectedFile, selectedFile.name);
   formData.append('is_public', document.querySelector('#isPublicQuiz')?.checked ? 'true' : 'false');
 
+  let uploadQty = uploadNumQuestions?.value || 'auto';
+  if (uploadQty === 'custom') {
+    uploadQty = String(Math.max(1, Math.min(Number(uploadCustomQty?.value) || 5, 30)));
+  }
+  formData.append('num_questions', uploadQty);
+
+  const userContext = uploadContext?.value?.trim() || '';
+  if (userContext) {
+    formData.append('context', userContext);
+  }
+
   try {
     uploadStatusText.textContent = 'Processando… (pode levar alguns segundos se usar IA)';
     const response = await fetch(`/api/upload${isGuestMode() ? '?guest=1' : ''}`, {
@@ -1446,6 +1720,7 @@ async function doUpload() {
     await loadQuizList();
     selectedSource = data.name;
     quizSelector.value = data.name;
+    syncCustomQuizSelector();
     resetTimer();
     closeResultModal();
     if (result) {
@@ -1478,9 +1753,14 @@ async function doGenerateTopic() {
   uploadSuccess.hidden = true;
   confirmGenerateTopicBtn.disabled = true;
 
+  let topicQty = Number(topicNumQuestions?.value) || 5;
+  if (topicNumQuestions?.value === 'custom') {
+    topicQty = Math.max(1, Math.min(Number(topicCustomQty?.value) || 5, 30));
+  }
+
   const payload = {
     topic,
-    num_questions: Number(topicNumQuestions?.value) || 5,
+    num_questions: topicQty,
     difficulty: topicDifficulty?.value || 'Médio',
     context: topicContext?.value.trim() || '',
     is_public: document.querySelector('#isPublicQuiz')?.checked || false,
@@ -1516,6 +1796,7 @@ async function doGenerateTopic() {
     await loadQuizList();
     selectedSource = data.name;
     quizSelector.value = data.name;
+    syncCustomQuizSelector();
     resetTimer();
     closeResultModal();
     if (result) {
@@ -1569,11 +1850,6 @@ document.addEventListener('keydown', (e) => {
     if (resultModal && !resultModal.hidden) closeResultModal();
     if (aboutModal && !aboutModal.hidden) closeAboutModal();
     if (catalogModal && !catalogModal.hidden) closeCatalogModal();
-    // Fechar modal de confirmação (= cancelar a finalização)
-    if (confirmSubmitModal && !confirmSubmitModal.hidden) {
-      confirmSubmitModal.hidden = true;
-      document.body.style.overflow = '';
-    }
   }
 });
 
@@ -1611,8 +1887,16 @@ async function init() {
   initTheme();
 
   initShortcuts({
-    onNextQuestion: () => btnNextQuestion?.click(),
-    onPrevQuestion: () => btnPrevQuestion?.click(),
+    onNextQuestion: () => {
+      if (currentQuestionIndex < questions.length - 1) {
+        goToQuestion(currentQuestionIndex + 1);
+      }
+    },
+    onPrevQuestion: () => {
+      if (currentQuestionIndex > 0) {
+        goToQuestion(currentQuestionIndex - 1);
+      }
+    },
     onSelectOption: (qIndex, optIndex) => {
       const card = document.querySelector(`#question-card-${qIndex}`);
       if (!card) return;

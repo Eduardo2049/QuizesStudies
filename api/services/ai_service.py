@@ -523,7 +523,7 @@ def generate_quiz_by_topic(
         raise AIServiceError("Por favor, informe um tema ou assunto para gerar o quiz.")
 
     try:
-        qty = max(1, min(int(num_questions or 5), 20))
+        qty = max(1, min(int(num_questions or 5), 30))
     except (ValueError, TypeError):
         qty = 5
 
@@ -571,12 +571,12 @@ def generate_quiz_by_topic(
     ])
     prompt = "\n".join(prompt_lines)
     check_ai_token_quota(prompt, ip=client_ip)
-    max_tokens = min(3500, max(800, qty * 350))
+    max_tokens = min(4096, max(800, qty * 320))
     call_res = _call_openrouter(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.5,
         max_tokens=max_tokens,
-        timeout=45,  # Geração completa: max 45s antes de retornar erro
+        timeout=75,  # Geração completa: timeout de 75s para suportar volumes maiores
     )
     content, used_model, usage = _unpack_call_result(call_res)
 
@@ -762,15 +762,19 @@ def parse_and_structure_questions_with_ai(
     text: str,
     max_chars: int = 40_000,
     client_ip: str | None = None,
+    num_questions: int | None = None,
+    context: str = "",
 ) -> list[dict]:
     """
-    Analisa texto bruto e despadronizado de uma prova/simulado (TXT, PDF, DOCX)
-    com diferentes padrões ou sem numeração uniforme, usando IA para extrair e estruturar
-    perguntas, alternativas, respostas (detectadas ou resolvidas) e explicações.
+    Analisa texto bruto e despadronizado de uma prova/simulado ou material de estudo (TXT, PDF, DOCX),
+    usando IA para estruturar ou adaptar em questões de múltipla escolha com gabarito e explicações.
 
     Args:
         text: Texto cru extraído do arquivo
         max_chars: Limite seguro de caracteres para análise do LLM
+        client_ip: IP do cliente para controle de cota
+        num_questions: Quantidade desejada de questões (opcional, 1 a 30)
+        context: Instruções adicionais de foco ou adaptação
 
     Returns:
         list[dict]: [{id, question, options, answer, explanation, section, context}]
@@ -786,37 +790,56 @@ def parse_and_structure_questions_with_ai(
     if len(truncated_text) > max_chars:
         truncated_text = truncated_text[:max_chars]
 
+    qty_instruction = ""
+    target_count = None
+    if num_questions and int(num_questions) > 0:
+        target_count = max(1, min(int(num_questions), 30))
+        qty_instruction = f"Você DEVE produzir e retornar exatamente {target_count} questões de múltipla escolha a partir do conteúdo."
+    else:
+        qty_instruction = "Identifique e extraia todas as questões contidas no texto. Se o texto for dissertativo/resumo, elabore entre 5 e 10 questões relevantes."
+
     prompt_lines = [
-        "Você é um especialista em processamento e estruturação de avaliações, simulados e provas acadêmicas e de concursos.",
-        "Sua tarefa é analisar o documento em anexo (que pode ter sido extraído de um TXT, PDF ou DOCX) com formatação livre, questões sem numeração explícita, alternativas em formatos variados ou gabarito em diferentes partes do texto.",
+        "Você é um professor e elaborador sênior de provas e simulados acadêmicos e de concursos.",
+        "Sua tarefa é analisar o documento em anexo (extraído de um TXT, PDF ou DOCX).",
+        "O documento pode ser:",
+        "  A) Um arquivo com questões de prova/simulado já existentes (com ou sem numeração, com ou sem gabarito); OU",
+        "  B) Um texto teórico, resumo, apostila ou anotações de estudo que você DEVE ADAPTAR E TRANSFORMAR em um simulado com questões inéditas de múltipla escolha.",
+        "",
+        f"Instrução de quantidade: {qty_instruction}",
+    ]
+    if context and str(context).strip():
+        prompt_lines.append(f"Diretrizes e foco específico adicional: {str(context).strip()}")
+
+    prompt_lines.extend([
         "",
         "Instruções obrigatórias:",
-        "1. Identifique cada questão individual contida no texto.",
+        "1. O idioma de todas as questões e explicações DEVE ser Português do Brasil (pt-BR).",
         "2. Para cada questão, isole o enunciado limpo no campo 'question'.",
-        "3. Isole cada alternativa no campo 'options' (como lista de strings, sem prefixos como 'a)', 'B.', etc.). Cada questão deve ter pelo menos 2 alternativas (normalmente 4 ou 5).",
+        "3. Isole cada alternativa no campo 'options' (como lista de strings, SEM prefixos como 'a)', 'b)', '1.', etc.). Cada questão deve ter exatamente 4 ou 5 alternativas.",
         "4. Resposta ('answer'):",
-        "   - Se o documento contiver gabarito explícito ou resposta indicada para aquela questão, use-a.",
-        "   - Se o documento NÃO contiver resposta/gabarito para aquela questão, você DEVE analisar e resolver a questão, definindo em 'answer' o índice numérico (base 0) da alternativa correta.",
-        "5. Forneça em 'explanation' uma explicação didática e concisa (1-3 frases) justificando por que aquela alternativa é a correta.",
-        "6. Identifique seções ou temas em 'section' (ex: 'Raciocínio Lógico', 'Português', 'Direito Constitucional', ou 'Geral' se não especificado).",
+        "   - Se o documento contiver gabarito explícito para aquela questão, utilize-o.",
+        "   - Se o documento NÃO contiver resposta/gabarito ou for um texto teórico adaptado, você DEVE resolver a questão com precisão, definindo em 'answer' o índice numérico (base 0) da alternativa correta.",
+        "5. Forneça no campo 'explanation' uma explicação didática detalhada (2 a 4 frases) justificando por que aquela alternativa é a correta.",
+        "6. Identifique a disciplina ou subtema no campo 'section' (ex: 'Raciocínio Lógico', 'Português', 'Direito', ou tema central se for texto geral).",
         "",
-        "IMPORTANTE: Retorne SOMENTE um objeto JSON válido, sem texto adicional, no formato:",
-        '{"questions": [{"id": 1, "section": "Geral", "context": "", "question": "...", "options": ["Opção 1", "Opção 2"], "answer": 0, "explanation": "..."}]}',
+        "IMPORTANTE: Retorne SOMENTE um objeto JSON válido, sem texto adicional, no formato estrito:",
+        '{"questions": [{"id": 1, "section": "Geral", "context": "", "question": "Enunciado da pergunta?", "options": ["Opção A", "Opção B", "Opção C", "Opção D"], "answer": 0, "explanation": "Explicação detalhada."}]}',
         "",
         "--- INÍCIO DO DOCUMENTO ---",
         truncated_text,
         "--- FIM DO DOCUMENTO ---",
-    ]
+    ])
 
     prompt = "\n".join(prompt_lines)
     check_ai_token_quota(prompt, ip=client_ip)
-    max_tokens = 3800
+    needed_tokens = (target_count or 10) * 320
+    max_tokens = min(4096, max(1200, needed_tokens))
 
     call_res = _call_openrouter(
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.2,
+        temperature=0.25,
         max_tokens=max_tokens,
-        timeout=60,
+        timeout=75,
     )
     content, used_model, usage = _unpack_call_result(call_res)
 
@@ -865,9 +888,16 @@ def parse_and_structure_questions_with_ai(
 
     if not structured_questions:
         raise AIServiceError(
-            "A inteligência artificial não conseguiu identificar questões válidas no texto do documento."
+            "A inteligência artificial não conseguiu identificar ou gerar questões válidas para o texto fornecido."
         )
 
+    if target_count and len(structured_questions) > target_count:
+        structured_questions = structured_questions[:target_count]
+        for idx, q in enumerate(structured_questions, start=1):
+            q["id"] = idx
+            q["question_number"] = idx
+
     return structured_questions
+
 
 

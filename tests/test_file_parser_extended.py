@@ -192,6 +192,67 @@ Quarta alternativa: 7
             self.assertEqual(result["question_count"], 1)
             self.assertTrue(result["ai_generated"])
 
+    @patch("api.services.upload_service.generate_answer_key")
+    def test_upload_service_respects_num_questions_limit(self, mock_gen_answer):
+        """Quando o usuário define num_questions, o UploadService fatia adequadamente as questões."""
+        sample_5_questions = (
+            "1. Pergunta 1\na) A\nb) B\nGabarito: A\n\n"
+            "2. Pergunta 2\na) A\nb) B\nGabarito: B\n\n"
+            "3. Pergunta 3\na) A\nb) B\nGabarito: A\n\n"
+            "4. Pergunta 4\na) A\nb) B\nGabarito: B\n\n"
+            "5. Pergunta 5\na) A\nb) B\nGabarito: A\n"
+        ).encode("utf-8")
+
+        service = UploadService(repository=MagicMock())
+        result = service.process_upload(
+            filename="simulado_5q.txt",
+            content=sample_5_questions,
+            file_type="txt",
+            created_by=1,
+            is_public=False,
+            persist=False,
+            num_questions=3,
+        )
+        self.assertEqual(result["question_count"], 3)
+        self.assertEqual(len(result["questions"]), 3)
+        self.assertEqual([q["id"] for q in result["questions"]], [1, 2, 3])
+
+    @patch("api.services.upload_service.parse_and_structure_questions_with_ai")
+    def test_upload_service_passes_num_questions_and_context_to_ai(self, mock_ai_parse):
+        """Passa target_qty e context para parse_and_structure_questions_with_ai quando acionada."""
+        mock_ai_parse.return_value = [
+            {
+                "id": i,
+                "question_number": i,
+                "section": "Lógica",
+                "context": "",
+                "question": f"Pergunta {i}?",
+                "options": ["A", "B"],
+                "answer": 0,
+                "explanation": "Explicação",
+                "ai_generated": True,
+            }
+            for i in range(1, 6)
+        ]
+
+        service = UploadService(repository=MagicMock())
+        with patch("api.services.upload_service.GEMINI_API_KEY", "dummy_key"):
+            result = service.process_upload(
+                filename="estudo_logica.txt",
+                content=b"Apostila de logica sem questoes formatadas",
+                file_type="txt",
+                created_by=1,
+                is_public=False,
+                persist=False,
+                num_questions="5",
+                context="Focar em tabela-verdade",
+            )
+            mock_ai_parse.assert_called_once()
+            _, kwargs = mock_ai_parse.call_args
+            self.assertEqual(kwargs.get("num_questions"), 5)
+            self.assertEqual(kwargs.get("context"), "Focar em tabela-verdade")
+            self.assertEqual(result["question_count"], 5)
+
 
 if __name__ == "__main__":
     unittest.main()
