@@ -482,16 +482,15 @@ h1 em { color: var(--teal); font-style: normal; }
 /* ─── Start Button ───────────────────────────────────────────────────────── */
 .hero-actions { margin-top: 22px; display: flex; align-items: center; gap: 12px; }
 .start-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   gap: 8px;
   font-size: 15px;
-  border-radius: 2px;
-  transition: transform .15s ease, opacity .2s ease, background-color .2s ease;
+  border-radius: 6px;
+  height: 46px;
+  padding: 0 26px;
+  transition: transform .15s ease, opacity .2s ease, background-color .18s ease;
 }
 .start-btn:hover { opacity: .92; transform: translateY(-1px); }
-.start-btn:active { transform: translateY(0); }
+.start-btn:active { transform: translateY(0) scale(0.98); }
 .start-btn span { font-size: 14px; margin-left: 6px; }
 .start-btn.hidden { display: none; }
 
@@ -550,15 +549,31 @@ button {
   border: 0;
   cursor: pointer;
   font: 700 14px Manrope, sans-serif;
-  padding: 15px 20px;
+  padding: 0 20px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }
-.primary { background: var(--coral); color: var(--btn-primary-text); border-radius: 4px; transition: background .2s ease, transform .15s ease; }
+.primary {
+  background: var(--coral);
+  color: var(--btn-primary-text);
+  border-radius: 6px;
+  transition: background .18s ease, transform .15s ease;
+}
 .primary:hover { background: var(--coral-dark); transform: translateY(-1px); }
-.primary:active { transform: translateY(0); }
-.primary span { font-size: 20px; margin-left: 16px; }
-.secondary { background: transparent; border: 1px solid var(--line); color: var(--ink); border-radius: 4px; transition: all .2s ease; }
-.secondary:hover { border-color: var(--teal); color: var(--teal); transform: translateY(-1px); }
-.secondary:active { transform: translateY(0); }
+.primary:active { transform: translateY(0) scale(0.98); }
+.primary span { font-size: 18px; margin-left: 10px; }
+.secondary {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 6px;
+  transition: background .18s ease, border-color .18s ease, color .18s ease, transform .15s ease;
+}
+.secondary:hover { background: var(--card-bg); border-color: var(--muted); color: var(--ink); transform: translateY(-1px); }
+.secondary:active { transform: translateY(0) scale(0.98); }
 
 /* ─── Result ─────────────────────────────────────────────────────────────── */
 .result {
@@ -881,10 +896,11 @@ button {
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
   margin-top: 24px;
+  flex-wrap: wrap;
 }
-.modal-actions button { padding: 12px 22px; }
+.modal-actions button { min-width: 110px; }
 .modal-actions .primary:disabled {
   opacity: .45;
   cursor: not-allowed;
@@ -1229,31 +1245,36 @@ button {
   margin-bottom: 16px;
 }
 
+/* ─── Badge de performance do modal de resultados ────────────────────────── */
 .results-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 14px;
-  border-radius: 999px;
-  font: 700 12px 'DM Mono', monospace;
+  padding: 4px 10px 4px 8px;
+  border-radius: 4px;
+  font: 700 11px 'DM Mono', monospace;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
-  background: rgba(23, 107, 103, 0.15);
+  letter-spacing: 0.6px;
+  margin-bottom: 10px;
+  border-left: 3px solid var(--teal);
+  background: rgba(23, 107, 103, 0.08);
   color: var(--teal);
 }
 
 .results-badge.excellent {
-  background: rgba(80, 250, 123, 0.18);
+  border-left-color: var(--success);
+  background: rgba(29, 122, 78, 0.08);
   color: var(--success);
 }
 
 .results-badge.good {
-  background: rgba(139, 233, 253, 0.18);
+  border-left-color: var(--teal);
+  background: rgba(23, 107, 103, 0.08);
   color: var(--teal);
 }
 
 .results-badge.practice {
+  border-left-color: var(--coral);
   background: var(--coral-glow);
   color: var(--coral);
 }
@@ -1277,8 +1298,13 @@ button {
 }
 
 .results-percent {
-  font: 700 18px 'DM Mono', monospace;
+  font: 600 14px 'DM Mono', monospace;
   color: var(--teal);
+  padding-left: 8px;
+  margin-left: 4px;
+  border-left: 2px solid var(--line);
+  line-height: 1;
+  align-self: center;
 }
 
 .results-summary-text {
@@ -1341,9 +1367,11 @@ button {
 }
 
 .result-card-tag {
-  font: 700 12px 'DM Mono', monospace;
+  font: 700 11px 'DM Mono', monospace;
   padding: 3px 8px;
-  border-radius: 3px;
+  border-radius: 4px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
 }
 
 .result-card.is-correct .result-card-tag {
@@ -1418,62 +1446,93 @@ button {
 
 .results-footer {
   display: flex;
-  gap: 12px;
-  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
   border-top: 1px solid var(--line);
-  padding-top: 16px;
+  padding-top: 20px;
+  margin-top: 4px;
 }
 
-.btn-redo span {
-  font-size: 18px;
-  margin-right: 6px;
-  margin-left: 0;
+.results-footer-left {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-/* ─── Botões de Treino de Erros e Mutação IA ───────────────────────────── */
+.results-footer-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ─── Estilo base compartilhado dos botões do footer ────────────────────── */
+.results-footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 6px;
+  border: none;
+  font: 700 13px/1 Manrope, sans-serif;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background .18s ease, transform .15s ease, box-shadow .18s ease;
+  white-space: nowrap;
+}
+
+/* Botão secundário — Refazer e Fechar */
+.btn-redo,
+.btn-close-result {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line) !important;
+}
+.btn-redo:hover,
+.btn-close-result:hover {
+  background: var(--card-bg);
+  color: var(--ink);
+  border-color: var(--muted) !important;
+}
+.btn-redo:active,
+.btn-close-result:active {
+  transform: scale(0.97);
+}
+
+.btn-redo .icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* ─── Botão Caderno de Erros ────────────────────────────────────────────── */
 .btn-mistakes {
   background: var(--orange);
   color: var(--btn-orange-text);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: none;
-  font: 700 13px Manrope, sans-serif;
-  padding: 10px 18px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all .2s ease;
 }
 .btn-mistakes:hover {
-  filter: brightness(0.92);
+  filter: brightness(0.9);
   transform: translateY(-1px);
 }
 .btn-mistakes:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
 }
 
+/* ─── Botão Gerar Variações — tom primário, sem visual de IA ───────────── */
 .btn-remix {
-  background: linear-gradient(135deg, #bd93f9, #ff79c6);
-  color: #21222c;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: none;
-  font: 800 13px Manrope, sans-serif;
-  padding: 10px 18px;
-  border-radius: 4px;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(189, 147, 249, 0.35);
-  transition: all .2s ease;
+  background: var(--coral);
+  color: var(--btn-primary-text);
 }
 .btn-remix:hover {
-  filter: brightness(1.06);
+  background: var(--coral-dark);
   transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(189, 147, 249, 0.5);
 }
 .btn-remix:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
 }
 
 /* ─── Botão e Modal Explicativo: Por que o Quiz Study? ──────────────────── */
@@ -1481,22 +1540,22 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 16px;
+  padding: 0 16px;
   background: var(--card-bg);
-  color: var(--teal);
+  color: var(--ink);
   border: 1px solid var(--line);
-  font: 700 13px Manrope, sans-serif;
+  font: 600 13px Manrope, sans-serif;
   cursor: pointer;
-  border-radius: 4px;
-  transition: all .2s ease;
+  border-radius: 6px;
+  transition: background .18s ease, border-color .18s ease, transform .15s ease;
 }
 .btn-about:hover {
   background: var(--card-solid);
-  border-color: var(--teal);
+  border-color: var(--muted);
   transform: translateY(-1px);
 }
 .btn-about:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
 }
 
 .modal--about {
@@ -1518,16 +1577,20 @@ button {
   text-align: center;
 }
 
+/* ─── Badge do modal About ───────────────────────────────────────────────── */
 .about-badge {
-  display: inline-block;
-  font: 700 11px 'DM Mono', monospace;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 700 10px 'DM Mono', monospace;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  background: var(--coral-glow);
-  color: var(--coral);
+  letter-spacing: 0.7px;
+  background: var(--card-bg);
+  color: var(--muted);
+  border: 1px solid var(--line);
   padding: 4px 10px;
-  border-radius: 999px;
-  margin-bottom: 8px;
+  border-radius: 4px;
+  margin-bottom: 10px;
 }
 
 .about-title {
@@ -1560,8 +1623,17 @@ button {
 }
 
 .pillar-icon {
-  font-size: 24px;
-  margin-bottom: 8px;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  border-radius: 8px;
+  background: var(--card-solid);
+  border: 1px solid var(--line);
+  margin-bottom: 12px;
+  line-height: 1;
 }
 
 .pillar-card h3 {
@@ -1802,7 +1874,7 @@ button {
 
 .nav-btn {
   min-width: 130px;
-  padding: 10px 18px;
+  padding: 0 20px;
 }
 
 /* ─── Modal de Confirmação: Finalizar Simulado ──────────────────────────── */
@@ -1820,10 +1892,17 @@ button {
 }
 
 .confirm-submit-icon {
-  font-size: 48px;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
   line-height: 1;
-  margin-bottom: 14px;
-  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.12));
+  border-radius: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  margin: 0 auto 16px;
 }
 
 .confirm-submit-title {
@@ -1846,22 +1925,36 @@ button {
 }
 
 .confirm-submit-warning {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  background: rgba(255, 184, 108, 0.15);
-  border: 1px solid rgba(255, 184, 108, 0.35);
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 10px;
+  align-items: start;
+  background: rgba(255, 184, 108, 0.10);
+  border: 1px solid rgba(255, 184, 108, 0.30);
+  border-left: 3px solid var(--orange);
   border-radius: 6px;
   padding: 12px 14px;
   font-size: 13px;
-  color: var(--orange);
-  line-height: 1.45;
+  color: var(--ink);
+  line-height: 1.55;
   margin: 0 0 20px;
   text-align: left;
 }
 
+.confirm-submit-warning .warn-icon {
+  color: var(--orange);
+  font-size: 14px;
+  line-height: 1.55;
+  flex-shrink: 0;
+}
+
+.confirm-submit-warning .warn-text {
+  color: var(--muted);
+}
+
 .confirm-submit-warning strong {
   font-weight: 700;
+  color: var(--ink);
 }
 
 .confirm-submit-actions {
@@ -1875,22 +1968,21 @@ button {
 .confirm-submit-actions .secondary {
   flex: 1;
   min-width: 140px;
+  border-radius: 6px;
 }
 
 .btn-confirm-finish {
   flex: 1;
   min-width: 180px;
-  background: var(--teal);
-  color: var(--btn-teal-text);
-  border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(23, 107, 103, 0.3);
-  transition: all .2s ease;
+  background: var(--coral);
+  color: var(--btn-primary-text);
+  border-radius: 6px;
+  transition: background .18s ease, transform .15s ease;
 }
 
 .btn-confirm-finish:hover {
-  background: var(--teal-dark);
+  background: var(--coral-dark);
   transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(23, 107, 103, 0.4);
 }
 
 .confirm-submit-actions button:focus-visible {
@@ -1901,7 +1993,7 @@ button {
 }
 
 .btn-confirm-finish:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
 }
 
 /* ─── Modal Catálogo de Simulados ───────────────────────────────────────── */
@@ -1915,16 +2007,20 @@ button {
   margin-bottom: 20px;
 }
 
+/* ─── Badge do modal Catálogo ──────────────────────────────────────────────── */
 .catalog-badge {
-  display: inline-block;
-  font: 700 11px 'DM Mono', monospace;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 700 10px 'DM Mono', monospace;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  background: rgba(23, 107, 103, 0.12);
-  color: var(--teal);
+  letter-spacing: 0.7px;
+  background: var(--card-bg);
+  color: var(--muted);
+  border: 1px solid var(--line);
   padding: 4px 10px;
-  border-radius: 999px;
-  margin-bottom: 8px;
+  border-radius: 4px;
+  margin-bottom: 10px;
 }
 
 .catalog-title {
@@ -2042,19 +2138,21 @@ button {
 }
 
 .catalog-card-badge {
-  font: 700 11px 'DM Mono', monospace;
-  padding: 3px 8px;
+  font: 700 10px 'DM Mono', monospace;
+  padding: 2px 7px;
   border-radius: 4px;
   background: var(--kbd-bg);
   border: 1px solid var(--line);
   color: var(--muted);
   white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
 }
 
 .catalog-card-badge.ai {
-  background: rgba(189, 147, 249, 0.18);
-  color: var(--purple);
-  border: 1px solid rgba(189, 147, 249, 0.35);
+  background: rgba(23, 107, 103, 0.1);
+  color: var(--teal);
+  border-color: rgba(23, 107, 103, 0.25);
 }
 
 .catalog-card-meta {
@@ -2088,18 +2186,18 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 14px;
+  padding: 0 14px;
   background: var(--card-bg);
   color: var(--ink);
   border: 1px solid var(--line);
   font: 600 13px Manrope, sans-serif;
   cursor: pointer;
-  border-radius: 4px;
-  transition: all .2s ease;
+  border-radius: 6px;
+  transition: background .18s ease, border-color .18s ease, transform .15s ease;
 }
 .btn-theme-toggle:hover {
-  border-color: var(--teal);
-  color: var(--teal);
+  border-color: var(--muted);
+  background: var(--card-solid);
   transform: translateY(-1px);
 }
 .theme-icon { font-size: 15px; line-height: 1; }
@@ -2187,12 +2285,13 @@ button {
   color: var(--ink);
 }
 .stats-rhythm-badge {
-  font: 500 12px 'DM Mono', monospace;
+  font: 500 11px 'DM Mono', monospace;
   color: var(--muted);
   background: var(--kbd-bg);
-  padding: 4px 10px;
-  border-radius: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
   border: 1px solid var(--line);
+  letter-spacing: 0.3px;
 }
 .stats-encouragement {
   color: var(--muted);
@@ -2276,6 +2375,16 @@ button {
   font-family: 'DM Mono', monospace;
   font-size: 12px;
   color: var(--muted);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.section-score-pct {
+  color: var(--muted);
+  opacity: 0.65;
+  font-size: 11px;
 }
 .section-progress-track {
   width: 100%;
@@ -2302,10 +2411,17 @@ button {
   animation: confirmPop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .notice-icon {
-  font-size: 44px;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
   line-height: 1;
-  margin-bottom: 12px;
-  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.15));
+  border-radius: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  margin: 0 auto 16px;
 }
 .notice-title {
   font-size: 22px;
@@ -2810,11 +2926,12 @@ button {
 
   .modal-actions button {
     width: 100%;
-    padding: 13px;
+    height: 48px;
     font-size: 14px;
     text-align: center;
     justify-content: center;
     border-radius: 6px;
+    padding: 0 16px;
   }
 
   .drop-zone {
@@ -2930,15 +3047,23 @@ button {
     width: 100%;
   }
 
+  .results-footer-left,
+  .results-footer-right {
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+  }
+
   .results-footer button,
   .btn-redo,
   .btn-mistakes,
-  .btn-remix {
+  .btn-remix,
+  .btn-close-result {
     width: 100%;
-    justify-content: center;
-    padding: 12px;
-    font-size: 13px;
+    height: 48px;
+    font-size: 14px;
     border-radius: 6px;
+    padding: 0 16px;
   }
 
   /* ── Modal de Catálogo ── */
@@ -2992,7 +3117,7 @@ button {
   }
 
   .confirm-submit-actions {
-    flex-direction: column;
+    flex-direction: column-reverse;
     gap: 8px;
     width: 100%;
   }
@@ -3001,8 +3126,11 @@ button {
   .confirm-submit-actions .secondary,
   .btn-confirm-finish {
     width: 100%;
+    height: 48px;
     min-width: unset;
     border-radius: 6px;
+    padding: 0 16px;
+    font-size: 14px;
   }
 
   /* ── Modal de Timer Customizado ── */

@@ -144,7 +144,7 @@
           <span>📄 Enviar Arquivo</span>
         </button>
         <button type="button" class="modal-tab-btn" id="tabGenerateTopic" data-target="panelTopic">
-          <span>✨ Gerar por Tema (IA)</span>
+          <span>✦ Gerar por Tema</span>
         </button>
       </nav>
 
@@ -257,7 +257,7 @@
       <div class="modal-actions">
         <button id="cancelUpload" class="secondary" type="button">Cancelar</button>
         <button id="confirmUpload" class="primary" type="button" disabled>Enviar Arquivo</button>
-        <button id="confirmGenerateTopic" class="primary" type="button" hidden>✨ Gerar com IA</button>
+        <button id="confirmGenerateTopic" class="primary" type="button" hidden>Gerar Simulado</button>
       </div>
     </div>
   </div>
@@ -268,7 +268,7 @@
       <button class="modal-close" id="closeResultModal" aria-label="Fechar">&times;</button>
       
       <div class="results-header">
-        <div class="results-badge" id="resultScoreBadge">🎯 Desempenho</div>
+        <div class="results-badge" id="resultScoreBadge">Desempenho</div>
         <h2 id="resultModalTitle" class="results-title">Gabarito & Resultado</h2>
         <div class="results-score-wrap">
           <span class="results-score" id="resultScoreNumber">0/0</span>
@@ -283,18 +283,22 @@
       <div class="results-list" id="resultQuestionsList"></div>
 
       <div class="results-footer">
-        <button id="btnRedoQuiz" class="secondary btn-redo" type="button">
-          <span>↺</span> Refazer Tudo
-        </button>
-        <button id="btnTrainMistakes" class="primary btn-mistakes" type="button" hidden>
-          <span>🎯</span> Caderno de Erros (<span id="mistakesCount">0</span>)
-        </button>
-        <button id="btnRemixMistakes" class="primary btn-remix" type="button" hidden>
-          <span>✨</span> Gerar Variações Inéditas (IA)
-        </button>
-        <button id="btnCloseResultModal" class="secondary" type="button">
-          Fechar
-        </button>
+        <div class="results-footer-left">
+          <button id="btnRedoQuiz" class="btn-redo" type="button">
+            <span class="icon">↺</span> Refazer Tudo
+          </button>
+        </div>
+        <div class="results-footer-right">
+          <button id="btnTrainMistakes" class="btn-mistakes" type="button" hidden>
+            🎯 Caderno de Erros (<span id="mistakesCount">0</span>)
+          </button>
+          <button id="btnRemixMistakes" class="btn-remix" type="button" hidden>
+            ↻ Gerar Novas Variações
+          </button>
+          <button id="btnCloseResultModal" class="btn-close-result" type="button">
+            Fechar
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -305,7 +309,7 @@
       <button class="modal-close" id="closeAboutModal" aria-label="Fechar">&times;</button>
       
       <div class="about-header">
-        <span class="about-badge">⚡ Propósito & Diferenciais</span>
+        <span class="about-badge">Propósito & Diferenciais</span>
         <h2 id="aboutModalTitle" class="about-title">Por que o Quiz Study existe?</h2>
         <p class="about-tagline">“Da sua apostila ao simulado ativo em 5 segundos.”</p>
       </div>
@@ -392,7 +396,8 @@
         Você respondeu <strong id="confirmSubmitAnswered">0</strong> de <strong id="confirmSubmitTotal">0</strong> questões.
       </p>
       <p class="confirm-submit-warning" id="confirmSubmitWarning" hidden>
-        ⚠️ As <strong id="confirmSubmitMissing">0</strong> questões não respondidas serão consideradas <strong>erradas</strong>.
+        <span class="warn-icon">⚠️</span>
+        <span class="warn-text">As <strong id="confirmSubmitMissing">0</strong> questões não respondidas serão consideradas <strong>erradas</strong>.</span>
       </p>
       <div class="confirm-submit-actions">
         <button id="confirmSubmitCancel" class="secondary" type="button">Voltar e revisar</button>
@@ -409,7 +414,7 @@
       <button class="modal-close" id="closeCatalogModal" aria-label="Fechar">&times;</button>
       
       <div class="catalog-header">
-        <span class="catalog-badge">📚 Biblioteca de Estudos</span>
+        <span class="catalog-badge">Biblioteca de Estudos</span>
         <h2 id="catalogModalTitle" class="catalog-title">Explorar Simulados</h2>
         <p class="catalog-subtitle">Escolha um simulado para treinar com foco total ou filtre por assunto.</p>
 
@@ -421,7 +426,7 @@
         <div class="catalog-tabs">
           <button type="button" class="catalog-tab-btn active" data-filter="all">Todos</button>
           <button type="button" class="catalog-tab-btn" data-filter="platform">Plataforma</button>
-          <button type="button" class="catalog-tab-btn" data-filter="ai">Gerados por IA ✨</button>
+          <button type="button" class="catalog-tab-btn" data-filter="ai">Gerados por IA</button>
           <button type="button" class="catalog-tab-btn" data-filter="custom">Meus Uploads 📄</button>
         </div>
       </div>

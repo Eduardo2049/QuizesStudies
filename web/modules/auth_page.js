@@ -13,7 +13,7 @@ sessionStorage.clear();
 // ─── Verificação da sessão HttpOnly ──────────────────────────────────────────
 fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' })
   .then(res => { if (res.ok) window.location.replace('/'); })
-  .catch(() => {});
+  .catch(() => { });
 
 // ─── Elementos da Interface ──────────────────────────────────────────────────
 const pageTitle = document.getElementById('pageTitle');
@@ -269,7 +269,7 @@ pageRegisterForm?.addEventListener('submit', async (e) => {
         }, 500);
         return;
       }
-    } catch (_) {}
+    } catch (_) { }
 
     setMode('login');
     if (loginFeedback) {

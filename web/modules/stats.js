@@ -181,7 +181,7 @@ export function renderStatsHtml(stats) {
                 <div class="section-item-head">
                   <span class="section-name" title="${escapeHtml(sec.section)}">${escapeHtml(sec.section)}</span>
                   <span class="section-score">
-                    <strong>${sec.correct}/${sec.total}</strong> (${sec.percentage}%)
+                    <strong>${sec.correct}/${sec.total}</strong><span class="section-score-pct">${sec.percentage}%</span>
                   </span>
                 </div>
                 <div class="section-progress-track">
