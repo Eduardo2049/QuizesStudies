@@ -20,6 +20,7 @@ Este documento é a referência primária e fixa de arquitetura, permissões, li
 | **Autenticação, login, cadastro, senhas, tokens de sessão** | `api/services/auth_service.py`<br>`api/controllers/auth_controller.py`<br>`api/repositories/user_repository.py` | `api/utils/file_parser.py`<br>`api/services/ai_service.py` |
 | **Banco de dados, tabelas, consultas SQL, migrations** | `api/database/migrations.py`<br>`api/repositories/quiz_repository.py`<br>`api/repositories/user_repository.py` | Toda a pasta `web/` |
 | **Configuração de ambiente, portas, chaves de API** | `api/utils/config.py`<br>`.env.example` | Código de regras de negócio |
+| **Pipelines CI/CD, deploy e Gitflow** | `.github/workflows/`<br>`vercel.json`<br>`docs/CICD_E_DEPLOY.md` | Código de backend `api/` |
 | **Testes unitários e de integração** | `tests/` (execute o teste específico ou a suíte) | `web/` |
 
 ---
