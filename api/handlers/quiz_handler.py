@@ -386,7 +386,7 @@ class QuizHandler(BaseHTTPRequestHandler):
             # 3.3 Servir Favicon na raiz (/favicon.ico, /favicon.svg, /favicon.png, /apple-touch-icon.png)
             if request.path in ("/favicon.ico", "/favicon.svg", "/favicon.png", "/apple-touch-icon.png"):
                 fav_name = request.path.lstrip("/").split("?", 1)[0]
-                fav_file = (WEB_DIR / fav_name).resolve()
+                fav_file = (WEB_DIR / "icons" / fav_name).resolve()
                 if fav_file.is_file():
                     content = fav_file.read_bytes()
                     mime = (
