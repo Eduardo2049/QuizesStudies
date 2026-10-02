@@ -44,7 +44,7 @@ class UploadService:
     MAX_GUEST_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB (convidado)
     ALLOWED_FILE_TYPES = {"txt", "pdf", "docx"}
 
-    def __init__(self, repository: QuizRepository = None):
+    def __init__(self, repository: QuizRepository | None = None):
         self.repo = repository or QuizRepository()
 
     def process_upload(
@@ -52,10 +52,10 @@ class UploadService:
         filename: str,
         content: bytes,
         file_type: str,
-        created_by: int,
+        created_by: int | None,
         is_public: bool,
         persist: bool = True,
-        client_ip: str = None,
+        client_ip: str | None = None,
         num_questions: str | int = "auto",
         context: str = "",
     ) -> dict:
@@ -79,7 +79,7 @@ class UploadService:
         Raises:
             QuizAPIException: Se parsing falhar ou IA não disponível
         """
-        is_guest = bool(created_by is None or not persist)
+        is_guest = created_by is None or not persist
 
         # 0. Validação de tipo de arquivo e peso
         clean_ext = file_type.lower().lstrip(".")

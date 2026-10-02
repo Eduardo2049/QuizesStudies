@@ -231,7 +231,12 @@ class QuizHandler(BaseHTTPRequestHandler):
         if body is None:
             return None
         try:
-            return json.loads(body.decode("utf-8"))
+            parsed = json.loads(body.decode("utf-8"))
+            if isinstance(parsed, dict):
+                return parsed
+            status, data = ResponseFormatter.bad_request("JSON deve ser um objeto")
+            HTTPMiddleware.send_json_response(self, 400, data)
+            return None
         except (json.JSONDecodeError, UnicodeDecodeError):
             status, data = ResponseFormatter.bad_request("JSON inválido")
             HTTPMiddleware.send_json_response(self, 400, data)
@@ -733,6 +738,8 @@ class QuizHandler(BaseHTTPRequestHandler):
 
     def _require_authenticated_user(self):
         token = HTTPMiddleware.get_auth_token(self)
+        if not token:
+            raise QuizAPIException("Autenticação necessária", 401)
         user = self.auth_controller.service.validate_token(token)
         if not user:
             raise QuizAPIException("Autenticação necessária", 401)

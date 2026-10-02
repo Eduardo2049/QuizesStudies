@@ -532,20 +532,21 @@ def generate_quiz_by_topic(
             "Adicione GEMINI_API_KEY ou OPENROUTER_API_KEY no arquivo .env."
         )
 
-    clean_topic = str(topic or "").strip()
+    clean_topic = topic.strip() if topic else ""
     if not clean_topic:
         raise AIServiceError("Por favor, informe um tema ou assunto para gerar o quiz.")
 
     try:
-        qty = max(1, min(int(num_questions or 5), 30))
+        qty = max(1, min(int(num_questions), 30))
     except (ValueError, TypeError):
         qty = 5
 
     diff = difficulty if difficulty in ("Fácil", "Médio", "Difícil") else "Médio"
+    context_str = context.strip() if context else ""
 
     # ── Cache de simulação para evitar requisições idênticas duplicadas ──────
     cache_key = hashlib.sha256(
-        f"{clean_topic.lower()}:{qty}:{diff}:{str(context).strip().lower()}".encode("utf-8")
+        f"{clean_topic.lower()}:{qty}:{diff}:{context_str.lower()}".encode("utf-8")
     ).hexdigest()
 
     now = time.time()
@@ -562,8 +563,8 @@ def generate_quiz_by_topic(
         f"Crie um simulado de múltipla escolha com exatamente {qty} questões sobre o seguinte tema: '{clean_topic}'.",
         f"Nível de dificuldade exigido: {diff}.",
     ]
-    if context and str(context).strip():
-        prompt_lines.append(f"Diretrizes e foco específico adicional: {str(context).strip()}")
+    if context_str:
+        prompt_lines.append(f"Diretrizes e foco específico adicional: {context_str}")
 
     prompt_lines.extend([
         "",
@@ -826,8 +827,8 @@ def parse_and_structure_questions_with_ai(
 
     qty_instruction = ""
     target_count = None
-    if num_questions and int(num_questions) > 0:
-        target_count = max(1, min(int(num_questions), 30))
+    if num_questions and num_questions > 0:
+        target_count = max(1, min(num_questions, 30))
         qty_instruction = f"Você DEVE produzir e retornar exatamente {target_count} questões de múltipla escolha a partir do conteúdo."
     else:
         qty_instruction = "Identifique e extraia todas as questões contidas no texto. Se o texto for dissertativo/resumo, elabore entre 5 e 10 questões relevantes."
@@ -841,8 +842,9 @@ def parse_and_structure_questions_with_ai(
         "",
         f"Instrução de quantidade: {qty_instruction}",
     ]
-    if context and str(context).strip():
-        prompt_lines.append(f"Diretrizes e foco específico adicional: {str(context).strip()}")
+    context_clean = context.strip() if context else ""
+    if context_clean:
+        prompt_lines.append(f"Diretrizes e foco específico adicional: {context_clean}")
 
     prompt_lines.extend([
         "",
