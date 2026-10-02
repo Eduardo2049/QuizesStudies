@@ -11,28 +11,32 @@ from threading import Lock
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
-from api.utils.config import WEB_DIR, DEBUG, COOKIE_SECURE
+from api.utils.config import WEB_DIR, DEBUG, COOKIE_SECURE, AUTO_MIGRATE
 from api.controllers.quiz_controller import QuizController, UploadController
 from api.controllers.auth_controller import AuthController
 from api.exceptions.quiz_exceptions import QuizAPIException
 from api.middleware.http_middleware import HTTPMiddleware, ResponseFormatter
 from api.utils.validators import AnswerValidator
+from api.repositories.rate_limit_repository import rate_limit_repo, RateLimitRepository
 
 # Extensões permitidas para upload
 ALLOWED_EXTENSIONS = {"txt", "pdf", "docx"}
-MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024        # 20 MB (autenticado)
+MAX_GUEST_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB (convidado)
 MAX_JSON_BYTES = 256 * 1024
 
 
 class RateLimiter:
     """
     Rate-limiter genérico com janela deslizante por chave (rota, IP, conta).
-    Remove chaves expiradas automaticamente para prevenir vazamento de memória.
+    Suporta persistência via RateLimitRepository para cross-process/serverless
+    e mantém execução rápida e isolada em memória quando repo=None (ex: testes).
     """
 
-    def __init__(self, limit: int, window_seconds: int):
+    def __init__(self, limit: int, window_seconds: int, repo: RateLimitRepository | None = None):
         self.limit = limit
         self.window = window_seconds
+        self.repo = repo
         self._requests: dict = defaultdict(deque)
         self._lock = Lock()
         self._counter = 0
@@ -42,7 +46,7 @@ class RateLimiter:
         Retorna (permitido, retry_after_segundos).
         retry_after é 0 quando a requisição é permitida.
         """
-        now = time.monotonic()
+        now = time.time()
         cutoff = now - self.window
         with self._lock:
             self._counter += 1
@@ -52,15 +56,20 @@ class RateLimiter:
             if len(reqs) >= self.limit:
                 retry_after = max(1, int(reqs[0] - cutoff + 1))
                 return False, retry_after
-            reqs.append(now)
 
-            # Limpeza periódica a cada 100 checagens para evitar vazamento de memória
+        if self.repo is not None:
+            allowed, retry_after = self.repo.check_and_record(key, self.limit, self.window, cost=1)
+            if not allowed:
+                return False, retry_after
+
+        with self._lock:
+            reqs.append(now)
             if self._counter % 100 == 0:
                 expired = [k for k, v in self._requests.items() if not v or v[-1] <= cutoff]
                 for k in expired:
                     del self._requests[k]
 
-            return True, 0
+        return True, 0
 
     def check_handler(self, handler, route_key: str) -> tuple[bool, int]:
         """Extrai o IP real do handler e verifica o rate-limit."""
@@ -68,13 +77,13 @@ class RateLimiter:
         return self.is_allowed(f"{route_key}:{client_ip}")
 
 
-# ─── Instâncias de rate-limiters por rota ────────────────────────────────────
-_rl_auth = RateLimiter(limit=10, window_seconds=15 * 60)    # login/register: 10/15min
-_rl_submit = RateLimiter(limit=30, window_seconds=15 * 60)  # submit: 30/15min
-_rl_upload = RateLimiter(limit=5, window_seconds=60)         # upload: 5/min
-_rl_generate = RateLimiter(limit=10, window_seconds=60)      # generate IA: 10/min
-_rl_remix = RateLimiter(limit=10, window_seconds=60)         # remix IA: 10/min
-_rl_read = RateLimiter(limit=120, window_seconds=60)         # leitura geral: 120/min
+# ─── Instâncias de rate-limiters por rota com persistência compartilhada ─────
+_rl_auth = RateLimiter(limit=10, window_seconds=15 * 60, repo=rate_limit_repo)    # login/register: 10/15min
+_rl_submit = RateLimiter(limit=30, window_seconds=15 * 60, repo=rate_limit_repo)  # submit: 30/15min
+_rl_upload = RateLimiter(limit=5, window_seconds=60, repo=rate_limit_repo)         # upload: 5/min
+_rl_generate = RateLimiter(limit=10, window_seconds=60, repo=rate_limit_repo)      # generate IA: 10/min
+_rl_remix = RateLimiter(limit=10, window_seconds=60, repo=rate_limit_repo)         # remix IA: 10/min
+_rl_read = RateLimiter(limit=120, window_seconds=60, repo=rate_limit_repo)         # leitura geral: 120/min
 
 
 def _rate_limited_response(handler, retry_after: int) -> None:
@@ -150,6 +159,8 @@ _migrations_initialized = False
 
 def _ensure_migrations():
     """Garante que as tabelas do banco foram criadas, útil no ambiente Serverless da Vercel."""
+    if not AUTO_MIGRATE:
+        return
     global _migrations_initialized
     if not _migrations_initialized:
         try:
@@ -283,7 +294,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                 user_id = user["id"] if user else None
                 response = self.quiz_controller.get_quizzes(user_id)
                 status, data = ResponseFormatter.success(response["data"])
-                HTTPMiddleware.send_json_response(self, status, data)
+                HTTPMiddleware.send_cached_json_response(self, status, data, max_age=60)
                 return
 
             # 2. API: Carregar um quiz
@@ -297,7 +308,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                 source_name = query.get("source", [None])[0]
                 response = self.quiz_controller.get_quiz(source_name, user_id)
                 status, data = ResponseFormatter.success(response["data"])
-                HTTPMiddleware.send_json_response(self, status, data)
+                HTTPMiddleware.send_cached_json_response(self, status, data, max_age=120)
                 return
 
             # 2.1 API: Histórico de tentativas do usuário (Caderno de Erros)
@@ -643,7 +654,22 @@ class QuizHandler(BaseHTTPRequestHandler):
             HTTPMiddleware.send_json_response(self, status, data)
             return
 
-        body = self._read_body_bytes(MAX_UPLOAD_BYTES)
+        limit_bytes = MAX_GUEST_UPLOAD_BYTES if guest else MAX_UPLOAD_BYTES
+        raw_len = self.headers.get("Content-Length")
+        if raw_len:
+            try:
+                if int(raw_len.strip()) > limit_bytes:
+                    mb = limit_bytes // (1024 * 1024)
+                    status, data = ResponseFormatter.bad_request(
+                        f"Arquivo excede o limite máximo permitido de {mb} MB"
+                        + (" para convidados. Faça login para enviar até 20 MB." if guest else "")
+                    )
+                    HTTPMiddleware.send_json_response(self, 413, data)
+                    return
+            except (ValueError, TypeError):
+                pass
+
+        body = self._read_body_bytes(limit_bytes)
         if body is None:
             return
 

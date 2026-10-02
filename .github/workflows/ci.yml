@@ -1,4 +1,4 @@
-name: CI — Testes Automatizados
+name: CI — Testes e Qualidade
 
 on:
   push:
@@ -6,15 +6,26 @@ on:
   pull_request:
     branches: [develop, homolog, main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
+  # ── Testes Python com PostgreSQL real ──────────────────────────────────────
   test:
     name: Testes Python
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    uses: ./.github/workflows/tests.yml
+    with:
+      python-version: "3.11"
 
+  # ── Lint e Formatação (ruff) ───────────────────────────────────────────────
+  lint:
+    name: Lint & Format (ruff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
@@ -23,20 +34,66 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
-      - name: Instalar dependências
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+      - name: Instalar ruff
+        run: pip install ruff
 
-      - name: Executar testes unitários
+      - name: Lint
+        run: ruff check . --output-format=github
+
+      - name: Verificar formatação
+        run: ruff format --check .
+
+  # ── Segurança: Semgrep SAST ────────────────────────────────────────────────
+  semgrep:
+    name: Semgrep SAST
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Executar Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: auto
         env:
-          # Força fallback para SQLite em memória (sem PostgreSQL no CI)
-          DATABASE_URL: ""
-          ADMIN_USERNAME: "admin"
-          ADMIN_PASSWORD: "ci-test-password-123"
-          AI_PROVIDER: "google"
-          GEMINI_API_KEY: "fake-key-for-tests"
+          SEMGREP_RULES: "p/python p/owasp-top-ten p/dockerfile p/secrets"
+
+  # ── Segurança: pip-audit (vulnerabilidades em dependências) ────────────────
+  pip-audit:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências e pip-audit
         run: |
-          python -m unittest discover tests -v
+          pip install -r requirements.txt
+          pip install pip-audit
+
+      - name: Auditar dependências
+        run: pip-audit --strict
+
+  # ── Segurança: gitleaks (segredos vazados no histórico) ────────────────────
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Executar gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

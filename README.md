@@ -58,9 +58,11 @@ Edite o `.env`:
 | `COOKIE_SECURE` | Não | Padrão `true`; use `false` apenas no desenvolvimento HTTP |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Para Tunnel | Token do Cloudflare Zero Trust para expor via túnel HTTPS |
 | `GEMINI_API_KEY` | Opção 1 IA (Recomendado) | Chave gratuita direta do [Google AI Studio](https://aistudio.google.com) (1.500 req/dia) |
-| `GEMINI_MODEL` | Não | Modelo Google Gemini (padrão: `gemini-2.5-flash`) |
+| `GEMINI_MODEL` | Não | Modelo Google Gemini (padrão: `gemini-flash-lite-latest`) |
 | `OPENROUTER_API_KEY` | Opção 2 IA | Chave do [OpenRouter](https://openrouter.ai) para geração multi-provedor |
 | `OPENROUTER_MODEL` | Não | Modelo OpenRouter (padrão: `google/gemini-2.5-flash`) |
+| `AI_TOKEN_QUOTA_PER_HOUR` | Não | Cota de tokens estimados por hora por IP (padrão: `50000`) |
+| `TRUST_PROXY` | Não | Confiar em headers de proxy (padrão: `false`, auto `true` na Vercel) |
 | `PORT` | Não | Porta do servidor (padrão: `8000`) |
 | `DEBUG` | Não | Logs detalhados (padrão: `false`) |
 
@@ -134,6 +136,7 @@ semgrep scan --config auto .
    - Limite estrito de tamanho para JSONs (`MAX_JSON_BYTES = 1 MB`), upload com teto de 20 MB e whitelist de formatos (`.txt`, `.pdf`, `.docx`).
 7. **Status do Scan SAST**:
    - ✅ **0 vulnerabilidades / 0 achados bloqueantes** em mais de 490 regras aplicadas.
+    - *Último scan: execute `semgrep scan --config auto .` para verificar o status atual.*
 
 ---
 
@@ -190,23 +193,25 @@ c) Opção C
 | `GET` | `/` ou `/index.html` | Pública | Interface principal de simulados |
 | `GET` | `/login` ou `/login.html` | Pública | Página de autenticação |
 | `GET` | `/register` ou `/register.html` | Pública | Página de cadastro de estudante |
-| `GET` | `/api/quizzes` | Pública | Lista quizzes disponíveis |
-| `GET` | `/api/quiz?source=<name>` | Pública | Questões de um quiz (sem gabarito) |
+| `GET` | `/api/quizzes` | Pública | Lista quizzes disponíveis (com cache HTTP e ETag / 304) |
+| `GET` | `/api/quiz?source=<name>` | Pública | Questões de um quiz (sem gabarito; com ETag / 304) |
 | `POST` | `/api/quiz/submit` | Pública | Submete respostas, salva tentativa e retorna score/gabarito |
 | `GET` | `/api/user/attempts` | Autenticado / Convidado | Histórico de tentativas e caderno de erros |
 | `POST` | `/api/quiz/remix-mistakes` | Pública | Cria variações inéditas com IA para questões erradas |
-| `POST` | `/api/quiz/generate` | Pública / Convidado / Autenticado | Gera questões por tema via IA |
-| `POST` | `/api/auth/login` | Pública | Login (retorna Bearer Token) |
+| `POST` | `/api/quiz/generate` | Pública / Convidado / Autenticado | Gera questões por tema via IA (com cache por hash) |
+| `POST` | `/api/auth/login` | Pública | Login (retorna Bearer Token e cookie HttpOnly) |
 | `POST` | `/api/auth/register` | Pública | Cadastro de estudante |
 | `GET` | `/api/auth/me` | Bearer Token | Dados do usuário autenticado |
 | `POST` | `/api/auth/logout` | Bearer Token | Encerramento de sessão |
-| `POST` | `/api/upload` | Autenticado / Convidado (`?guest=1`) | Upload de arquivo (multipart/form-data) |
+| `POST` | `/api/upload` | Autenticado (20 MB) / Convidado (`?guest=1`, 5 MB) | Upload multipart/form-data (TXT, PDF, DOCX) |
 
 ---
 
 ## Testes de Carga, Segurança e Consumo de Tokens
 
 O projeto conta com suítes completas tanto para **auditoria em ambiente isolado (sem custo de tokens)** quanto para **testes reais de carga contra o servidor ativo**.
+
+> **Nota sobre o CI**: Os testes unitários (`python -m unittest discover tests`) executam com **PostgreSQL 16 real** no pipeline de CI. Em ambiente local sem PostgreSQL disponível, o sistema faz fallback automático para **SQLite em memória** — funcional para desenvolvimento, mas não garante compatibilidade total com tipos PostgreSQL (ex: `JSONB`, `SERIAL`).
 
 ### 1. Testes Automatizados de Segurança e Carga (Mock — Sem Custo)
 Valida a integridade do `RateLimiter`, cotas de tokens por IP e concorrência massiva:
@@ -223,16 +228,16 @@ python -m unittest tests/test_load_and_token_usage.py
 Para testar a infraestrutura com geração real de questões via IA (`POST /api/quiz/generate`):
 ```bash
 # Nível 1: Teste rápido de validação (5 chamadas, 1 worker, ~7k tokens)
-python tests/test_real_api_load.py --calls 5 --workers 1 --guest --questions 3
+python scripts/test_real_api_load.py --calls 5 --workers 1 --guest --questions 3
 
 # Nível 2: Carga moderada (10 chamadas, 3 workers, ~15k tokens)
-python tests/test_real_api_load.py --calls 10 --workers 3 --guest --questions 5
+python scripts/test_real_api_load.py --calls 10 --workers 3 --guest --questions 5
 
 # Nível 3: Teste de estresse com teto de 200k tokens
-python tests/test_real_api_load.py --calls 50 --workers 5 --guest --questions 10 --token-limit 200000
+python scripts/test_real_api_load.py --calls 50 --workers 5 --guest --questions 10 --token-limit 200000
 
 # Nível 4: Rajada imediata para testar bloqueio 429 pelo Rate Limiter
-python tests/test_real_api_load.py --calls 30 --workers 10 --burst --guest
+python scripts/test_real_api_load.py --calls 30 --workers 10 --burst --guest
 ```
 - **Recursos do script**:
   - **Auto-detecção inteligente de porta**: Identifica se o servidor está na porta `8001`, `8002`, etc., evitando conflitos com serviços nativos do Windows (como IIS/HTTP.sys na porta 8000).
@@ -283,7 +288,7 @@ Quizes_Study/
 │   └── styles.css             # Design system completo
 ├── .env.example               # Template de variáveis de ambiente
 ├── docker-compose.yml         # PostgreSQL + app + tunnel
-├── Dockerfile                 # Multi-stage com usuário non-root
+├── Dockerfile                 # Multi-stage (builder + runtime) com usuário non-root
 ├── Procfile
 ├── quiz_api.py                # Entry point local
 └── requirements.txt           # Dependências (psycopg2, pdfplumber, requests, etc.)
@@ -300,36 +305,62 @@ CREATE TABLE quizzes (
     name             VARCHAR(255) UNIQUE NOT NULL,  -- slug identificador
     label            VARCHAR(255) NOT NULL,          -- nome de exibição
     original_filename VARCHAR(255),
-    file_type        VARCHAR(10),                    -- 'txt' | 'pdf' | 'docx'
+    file_type        VARCHAR(10) DEFAULT 'txt',      -- 'txt' | 'pdf' | 'docx' | 'md'
     has_answer_key   BOOLEAN DEFAULT TRUE,
     ai_generated     BOOLEAN DEFAULT FALSE,
+    created_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    is_public        BOOLEAN NOT NULL DEFAULT FALSE,
     created_at       TIMESTAMP DEFAULT NOW()
 );
 
 -- Questões (options em JSONB suporta 2 a N alternativas)
 CREATE TABLE questions (
     id              SERIAL PRIMARY KEY,
-    quiz_id         INTEGER REFERENCES quizzes(id) ON DELETE CASCADE,
+    quiz_id         INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
     question_number INTEGER NOT NULL,
     section         VARCHAR(255) DEFAULT 'Geral',
     context         TEXT DEFAULT '',
     question        TEXT NOT NULL,
     options         JSONB NOT NULL,   -- ["Opção A", "Opção B", ...]
     answer          INTEGER,          -- índice base-0 (0=A, 1=B, ...)
-    explanation     TEXT DEFAULT ''
+    explanation     TEXT DEFAULT '',
+    UNIQUE (quiz_id, question_number)
 );
+CREATE INDEX idx_questions_quiz_id ON questions(quiz_id);
+
+-- Usuários e Autenticação
+CREATE TABLE users (
+    id            SERIAL PRIMARY KEY,
+    username      VARCHAR(50) UNIQUE NOT NULL,
+    email         VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    salt          VARCHAR(64) NOT NULL,
+    role          VARCHAR(20) DEFAULT 'student',
+    created_at    TIMESTAMP DEFAULT NOW()
+);
+
+-- Sessões (token armazenado como hash SHA-256)
+CREATE TABLE sessions (
+    token         VARCHAR(128) PRIMARY KEY,
+    user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at    TIMESTAMP NOT NULL,
+    created_at    TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX idx_sessions_token ON sessions(token);
+CREATE INDEX idx_sessions_user_id ON sessions(user_id);
 
 -- Tentativas e Histórico de Desempenho (Caderno de Erros)
 CREATE TABLE quiz_attempts (
     id                 SERIAL PRIMARY KEY,
     user_id            INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    quiz_id            INTEGER REFERENCES quizzes(id) ON DELETE CASCADE,
+    quiz_id            INTEGER REFERENCES quizzes(id) ON DELETE SET NULL,
+    quiz_name          VARCHAR(255) NOT NULL,
     score              INTEGER NOT NULL,
     total              INTEGER NOT NULL,
     percentage         INTEGER NOT NULL,
     wrong_question_ids JSONB DEFAULT '[]'::jsonb,
     created_at         TIMESTAMP DEFAULT NOW()
 );
-CREATE INDEX idx_quiz_attempts_user ON quiz_attempts(user_id);
-CREATE INDEX idx_quiz_attempts_quiz ON quiz_attempts(quiz_id);
+CREATE INDEX idx_quiz_attempts_user_id ON quiz_attempts(user_id);
+CREATE INDEX idx_quiz_attempts_quiz_id ON quiz_attempts(quiz_id);
 ```

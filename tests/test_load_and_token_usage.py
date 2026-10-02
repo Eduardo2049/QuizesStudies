@@ -136,6 +136,7 @@ class TestAITokenQuota(unittest.TestCase):
         from api.services.ai_service import check_ai_token_quota, AIQuotaExceededError, _token_quota
         test_ip = "10.0.99.99"
         original_quota = _token_quota.quota
+        _token_quota._usage.pop(test_ip, None)
         _token_quota.quota = 50
         try:
             big_prompt = "a" * 200  # ~50 tokens

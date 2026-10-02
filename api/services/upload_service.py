@@ -40,7 +40,8 @@ class UploadService:
     """Service para processamento e ingesta de novos quizzes"""
 
     MAX_QUESTIONS = 500
-    MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
+    MAX_UPLOAD_BYTES = 20 * 1024 * 1024        # 20 MB (autenticado)
+    MAX_GUEST_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB (convidado)
     ALLOWED_FILE_TYPES = {"txt", "pdf", "docx"}
 
     def __init__(self, repository: QuizRepository = None):
@@ -78,6 +79,8 @@ class UploadService:
         Raises:
             QuizAPIException: Se parsing falhar ou IA não disponível
         """
+        is_guest = bool(created_by is None or not persist)
+
         # 0. Validação de tipo de arquivo e peso
         clean_ext = file_type.lower().lstrip(".")
         if clean_ext not in self.ALLOWED_FILE_TYPES:
@@ -86,11 +89,15 @@ class UploadService:
                 400
             )
 
-        if content and len(content) > self.MAX_UPLOAD_BYTES:
-            raise QuizAPIException(
-                f"Arquivo excede o limite máximo permitido de {self.MAX_UPLOAD_BYTES // (1024 * 1024)} MB",
-                413
+        limit_bytes = self.MAX_GUEST_UPLOAD_BYTES if is_guest else self.MAX_UPLOAD_BYTES
+        if content and len(content) > limit_bytes:
+            mb = limit_bytes // (1024 * 1024)
+            msg = (
+                f"Arquivo excede o limite máximo permitido de {mb} MB para convidados. Faça login para enviar até 20 MB."
+                if is_guest else
+                f"Arquivo excede o limite máximo permitido de {mb} MB"
             )
+            raise QuizAPIException(msg, 413)
 
         target_qty = None
         if num_questions and str(num_questions).lower() != "auto":
@@ -99,9 +106,9 @@ class UploadService:
             except (ValueError, TypeError):
                 target_qty = None
 
-        # 1. Extrair texto
+        # 1. Extrair texto com limites específicos para visitante
         try:
-            text = extract_text(content, file_type)
+            text = extract_text(content, file_type, is_guest=is_guest)
         except ImportError as e:
             raise QuizAPIException(str(e), 500)
         except Exception as e:

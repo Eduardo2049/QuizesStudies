@@ -1,4 +1,6 @@
 {
+  "private": true,
+  "description": "Dependências JavaScript exclusivas da Vercel (Analytics + Speed Insights). O projeto não usa frameworks frontend.",
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0"
