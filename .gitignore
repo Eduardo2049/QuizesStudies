@@ -17,3 +17,9 @@ node_modules/
 .env
 .env.local
 .env.*.local
+
+# Arquivo de redação de credenciais (contém padrões de senhas)
+replacements.txt
+
+# Overrides de desenvolvimento Docker (não deve ir para produção)
+docker-compose.override.yml
