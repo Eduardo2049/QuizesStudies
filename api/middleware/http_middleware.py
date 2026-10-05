@@ -140,6 +140,46 @@ class HTTPMiddleware:
             return
 
     @staticmethod
+    def send_cached_json_response(
+        handler,
+        status: int,
+        data: dict,
+        max_age: int = 60,
+    ) -> None:
+        """
+        Envia resposta JSON com suporte a ETag e validação condicional If-None-Match.
+        Se o cliente já possuir a versão mais recente em cache, responde com HTTP 304 Not Modified.
+        """
+        import hashlib
+        body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        etag = f'"{hashlib.sha256(body).hexdigest()[:16]}"'
+
+        client_etag = handler.headers.get("If-None-Match")
+        if client_etag and client_etag.strip() == etag:
+            handler.send_response(304)
+            handler.send_header("ETag", etag)
+            handler.send_header("Cache-Control", f"private, max-age={max_age}, must-revalidate")
+            HTTPMiddleware.add_cors_headers(handler)
+            HTTPMiddleware.add_security_headers(handler)
+            handler.end_headers()
+            return
+
+        handler.send_response(status)
+        handler.send_header("Content-Type", "application/json; charset=utf-8")
+        handler.send_header("Content-Length", str(len(body)))
+        handler.send_header("ETag", etag)
+        handler.send_header("Cache-Control", f"private, max-age={max_age}, must-revalidate")
+
+        HTTPMiddleware.add_cors_headers(handler)
+        HTTPMiddleware.add_security_headers(handler)
+        handler.end_headers()
+
+        try:
+            handler.wfile.write(body)
+        except (BrokenPipeError, ConnectionAbortedError):
+            return
+
+    @staticmethod
     def handle_preflight(handler) -> None:
         handler.send_response(204)
         HTTPMiddleware.add_cors_headers(handler)

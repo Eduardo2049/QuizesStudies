@@ -73,13 +73,21 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
 
 CREATE INDEX IF NOT EXISTS idx_quiz_attempts_user_id ON quiz_attempts(user_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_attempts_quiz_id ON quiz_attempts(quiz_id);
+
+CREATE TABLE IF NOT EXISTS rate_limits (
+    key          VARCHAR(255) NOT NULL,
+    timestamp    DOUBLE PRECISION NOT NULL,
+    tokens       INTEGER DEFAULT 1
+);
+
+CREATE INDEX IF NOT EXISTS idx_rate_limits_key_timestamp ON rate_limits(key, timestamp);
 """
 
 
 def run_migrations():
     """
     Executa as migrações de schema.
-    Chamado na inicialização do servidor.
+    Chamado na inicialização do servidor ou como etapa de release via CLI.
     """
     try:
         with get_cursor() as cur:
@@ -94,4 +102,16 @@ def run_migrations():
     except Exception as e:
         print(f"[db] Erro ao executar migrations: {e}")
         raise
+
+
+if __name__ == "__main__":
+    import sys
+    print("[db] Executando migracoes de banco de dados...")
+    try:
+        run_migrations()
+        print("[db] Migracoes finalizadas com sucesso.")
+        sys.exit(0)
+    except Exception as err:
+        print(f"[db] Falha na execucao das migracoes: {err}", file=sys.stderr)
+        sys.exit(1)
 

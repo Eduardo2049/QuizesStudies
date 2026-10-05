@@ -69,3 +69,6 @@ TRUST_PROXY = os.getenv("TRUST_PROXY", "false").lower() == "true" or os.getenv("
 # Cloudflare Tunnel
 CLOUDFLARE_TUNNEL_TOKEN = os.getenv("CLOUDFLARE_TUNNEL_TOKEN", "")
 
+# Controle de migrações automáticas (true por padrão; defina false se as migrations rodarem no pipeline de CI/CD)
+AUTO_MIGRATE = os.getenv("AUTO_MIGRATE", "true").lower() in ("true", "1", "yes")
+
