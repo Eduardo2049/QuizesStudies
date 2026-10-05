@@ -11,10 +11,10 @@ from api.utils.quiz_logic import grade_answers
 class QuizService:
     """Service para lógica de quizzes (leitura do banco)"""
 
-    def __init__(self, repository: QuizRepository = None):
+    def __init__(self, repository: QuizRepository | None = None):
         self.repository = repository or QuizRepository()
 
-    def get_all_quizzes(self, user_id: int = None) -> list[dict]:
+    def get_all_quizzes(self, user_id: int | None = None) -> list[dict]:
         """
         Retorna lista de todos os quizzes disponíveis.
 
@@ -33,7 +33,7 @@ class QuizService:
             for row in sources
         ]
 
-    def get_quiz(self, source_name: str = None, user_id: int = None) -> QuizDTO:
+    def get_quiz(self, source_name: str | None = None, user_id: int | None = None) -> QuizDTO:
         """
         Carrega um quiz com suas questões (sem respostas expostas ao cliente).
 
@@ -73,8 +73,8 @@ class QuizService:
     def submit_answers(
         self,
         answers: dict,
-        source_name: str = None,
-        user_id: int = None,
+        source_name: str | None = None,
+        user_id: int | None = None,
     ) -> GradeResultDTO:
         """
         Corrige respostas e retorna score detalhado.
@@ -134,7 +134,7 @@ class QuizService:
             attempt_id=attempt_id,
         )
 
-    def get_user_attempts(self, user_id: int) -> list[dict]:
+    def get_user_attempts(self, user_id: int | None) -> list[dict]:
         """Retorna histórico de tentativas do aluno."""
         if not user_id:
             return []

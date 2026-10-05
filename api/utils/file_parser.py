@@ -11,17 +11,22 @@ import zipfile
 from typing import Optional
 
 MAX_PDF_PAGES = 100
+MAX_GUEST_PDF_PAGES = 20
 MAX_DOCX_PARAGRAPHS = 10_000
+MAX_GUEST_DOCX_PARAGRAPHS = 500
 MAX_EXTRACTED_CHARS = 1_000_000
+MAX_GUEST_EXTRACTED_CHARS = 250_000
 MAX_DOCX_UNCOMPRESSED_BYTES = 30 * 1024 * 1024  # 30 MB
+MAX_GUEST_DOCX_UNCOMPRESSED_BYTES = 5 * 1024 * 1024  # 5 MB
 MAX_DOCX_COMPRESSION_RATIO = 100
 MAX_DOCX_ENTRIES = 1_000
+MAX_GUEST_DOCX_ENTRIES = 200
 MAX_LINE_PARSE_CHARS = 2_000
 
 
 # ─── Extração de texto bruto por formato ─────────────────────────────────────
 
-def parse_txt(content: bytes, encoding: str = "utf-8") -> str:
+def parse_txt(content: bytes, encoding: str = "utf-8", is_guest: bool = False) -> str:
     """Extrai texto de arquivo TXT com suporte resiliente a UTF-8 (com/sem BOM), CP1252 e Latin-1."""
     encodings_to_try = [encoding, "utf-8-sig", "utf-8", "cp1252", "latin-1"]
     tried = set()
@@ -36,32 +41,41 @@ def parse_txt(content: bytes, encoding: str = "utf-8") -> str:
     return content.decode("latin-1", errors="replace")
 
 
-def parse_pdf(content: bytes) -> str:
-    """Extrai texto de arquivo PDF usando pdfplumber."""
+def parse_pdf(content: bytes, is_guest: bool = False) -> str:
+    """Extrai texto de arquivo PDF usando pdfplumber com limites diferenciados para convidados."""
     try:
         import pdfplumber
     except ImportError:
         raise ImportError("pdfplumber não instalado. Execute: pip install pdfplumber")
 
+    max_pages = MAX_GUEST_PDF_PAGES if is_guest else MAX_PDF_PAGES
+    max_chars = MAX_GUEST_EXTRACTED_CHARS if is_guest else MAX_EXTRACTED_CHARS
+
     text_parts = []
     with pdfplumber.open(io.BytesIO(content)) as pdf:
         for page_number, page in enumerate(pdf.pages, start=1):
-            if page_number > MAX_PDF_PAGES:
-                raise ValueError(f"PDF excede o limite de {MAX_PDF_PAGES} páginas")
+            if page_number > max_pages:
+                raise ValueError(
+                    f"PDF excede o limite de {max_pages} páginas"
+                    + (" para convidados. Faça login para enviar até 100 páginas." if is_guest else "")
+                )
             page_text = page.extract_text()
             if page_text:
                 text_parts.append(page_text)
-                if sum(len(part) for part in text_parts) > MAX_EXTRACTED_CHARS:
+                if sum(len(part) for part in text_parts) > max_chars:
                     raise ValueError("Texto extraído excede o limite permitido")
     return "\n".join(text_parts)
 
 
-def _validate_docx_zip(content: bytes) -> None:
+def _validate_docx_zip(content: bytes, is_guest: bool = False) -> None:
     """Verifica proteção contra ZIP Bomb e integridade em arquivos DOCX."""
+    max_entries = MAX_GUEST_DOCX_ENTRIES if is_guest else MAX_DOCX_ENTRIES
+    max_bytes = MAX_GUEST_DOCX_UNCOMPRESSED_BYTES if is_guest else MAX_DOCX_UNCOMPRESSED_BYTES
+
     try:
         with zipfile.ZipFile(io.BytesIO(content)) as zf:
             infolist = zf.infolist()
-            if len(infolist) > MAX_DOCX_ENTRIES:
+            if len(infolist) > max_entries:
                 raise ValueError(f"DOCX contém muitas entradas internas ({len(infolist)}).")
             total_uncompressed = 0
             total_compressed = 0
@@ -70,48 +84,58 @@ def _validate_docx_zip(content: bytes) -> None:
                 total_compressed += info.compress_size
                 if info.compress_size > 0 and (info.file_size / info.compress_size) > MAX_DOCX_COMPRESSION_RATIO:
                     raise ValueError("Arquivo DOCX suspeito de Zip Bomb (razão de compressão individual excessiva).")
-            if total_uncompressed > MAX_DOCX_UNCOMPRESSED_BYTES:
-                raise ValueError("DOCX descompactado excede o limite de tamanho permitido (30 MB).")
+            if total_uncompressed > max_bytes:
+                mb_limit = max_bytes // (1024 * 1024)
+                raise ValueError(
+                    f"DOCX descompactado excede o limite de tamanho permitido ({mb_limit} MB)"
+                    + (" para convidados. Faça login para enviar até 30 MB." if is_guest else "")
+                )
             if total_compressed > 0 and (total_uncompressed / total_compressed) > MAX_DOCX_COMPRESSION_RATIO:
                 raise ValueError("Arquivo DOCX suspeito de Zip Bomb (razão de compressão total excessiva).")
     except zipfile.BadZipFile:
         raise ValueError("Arquivo DOCX inválido ou corrompido.")
 
 
-def parse_docx(content: bytes) -> str:
-    """Extrai texto de arquivo DOCX usando python-docx com proteção contra Zip Bomb."""
-    _validate_docx_zip(content)
+def parse_docx(content: bytes, is_guest: bool = False) -> str:
+    """Extrai texto de arquivo DOCX usando python-docx com proteção contra Zip Bomb e limites para convidados."""
+    _validate_docx_zip(content, is_guest=is_guest)
     try:
         from docx import Document
     except ImportError:
         raise ImportError("python-docx não instalado. Execute: pip install python-docx")
 
+    max_paragraphs = MAX_GUEST_DOCX_PARAGRAPHS if is_guest else MAX_DOCX_PARAGRAPHS
+
     doc = Document(io.BytesIO(content))
-    if len(doc.paragraphs) > MAX_DOCX_PARAGRAPHS:
-        raise ValueError(f"DOCX excede o limite de {MAX_DOCX_PARAGRAPHS} parágrafos")
+    if len(doc.paragraphs) > max_paragraphs:
+        raise ValueError(
+            f"DOCX excede o limite de {max_paragraphs} parágrafos"
+            + (" para convidados. Faça login para documentos maiores." if is_guest else "")
+        )
     paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
     return "\n".join(paragraphs)
 
 
-def extract_text(content: bytes, file_type: str) -> str:
+def extract_text(content: bytes, file_type: str, is_guest: bool = False) -> str:
     """
     Dispatcher principal: extrai texto baseado no tipo do arquivo.
 
     Args:
         content: Bytes do arquivo
         file_type: 'txt', 'pdf' ou 'docx'
+        is_guest: Se o upload foi realizado por visitante não autenticado
 
     Returns:
         Texto extraído
 
     Raises:
-        ValueError: Se file_type não suportado
+        ValueError: Se file_type não suportado ou limites excedidos
     """
     file_type = file_type.lower().lstrip(".")
     parsers = {
-        "txt": parse_txt,
-        "pdf": parse_pdf,
-        "docx": parse_docx,
+        "txt": lambda c: parse_txt(c, is_guest=is_guest),
+        "pdf": lambda c: parse_pdf(c, is_guest=is_guest),
+        "docx": lambda c: parse_docx(c, is_guest=is_guest),
     }
     if file_type not in parsers:
         raise ValueError(f"Tipo de arquivo não suportado: {file_type}. Use: txt, pdf, docx")
