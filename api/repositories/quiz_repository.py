@@ -13,7 +13,7 @@ class QuizRepository:
 
     # ─── Leitura ──────────────────────────────────────────────────────────────
 
-    def find_all_sources(self, user_id: int = None) -> list[dict]:
+    def find_all_sources(self, user_id: int | None = None) -> list[dict]:
         """
         Lista todos os quizzes cadastrados acessíveis ao usuário (públicos ou criados por ele).
 
@@ -43,7 +43,7 @@ class QuizRepository:
                 """)
             return [dict(row) for row in cur.fetchall()]
 
-    def find_by_name(self, name: str, user_id: int = None) -> dict:
+    def find_by_name(self, name: str, user_id: int | None = None) -> dict:
         """
         Encontra um quiz pelo campo `name` (se público ou se pertencente ao usuário).
 
@@ -66,7 +66,7 @@ class QuizRepository:
             raise QuizNotFound(name)
         return dict(row)
 
-    def find_default(self, user_id: int = None) -> dict:
+    def find_default(self, user_id: int | None = None) -> dict:
         """
         Retorna o primeiro quiz cadastrado acessível (mais antigo).
 
@@ -131,10 +131,10 @@ class QuizRepository:
         name: str,
         label: str,
         questions: list[dict],
-        original_filename: str = None,
+        original_filename: str | None = None,
         file_type: str = "txt",
         ai_generated: bool = False,
-        created_by: int = None,
+        created_by: int | None = None,
         is_public: bool = False,
     ) -> dict:
         """
