@@ -1,11 +1,26 @@
-FROM python:3.11-slim
+# ─── Stage 1: Builder ────────────────────────────────────────────────────────
+# Compila dependências que requerem gcc (ex: psycopg2-binary)
+FROM python:3.11.11-slim@sha256:614c8e5efd88a1e02137d281a69baa675c5797a2e5da0fc4a5d56b05a1964e6c AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ─── Stage 2: Runtime (sem gcc, menor e mais seguro) ─────────────────────────
+FROM python:3.11.11-slim@sha256:614c8e5efd88a1e02137d281a69baa675c5797a2e5da0fc4a5d56b05a1964e6c
 
 WORKDIR /app
 
-# Dependências do sistema para pdfplumber (poppler)
+# Apenas dependências de runtime (libpq para psycopg2)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpoppler-cpp-dev \
-    gcc \
+    libpq5 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurações de ambiente
@@ -14,17 +29,20 @@ ENV PYTHONUNBUFFERED=1 \
     HOST=0.0.0.0 \
     PORT=8000
 
-# Dependências Python
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Copiar pacotes Python compilados do builder
+COPY --from=builder /install /usr/local
 
-# Código da aplicação
-COPY . .
+# Criar usuário não-root ANTES de copiar código
+RUN useradd -m -u 1000 appuser
 
-# Usuário não-root para execução segura do container
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+# Copiar código da aplicação com ownership correto (sem chown -R posterior)
+COPY --chown=appuser:appuser . .
+
 USER appuser
 
 EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/api/quizzes || exit 1
 
 CMD ["python", "quiz_api.py"]
