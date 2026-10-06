@@ -16,10 +16,27 @@ permissions:
 jobs:
   # ── Testes Python com PostgreSQL real ──────────────────────────────────────
   test:
-    name: Testes Python
+    name: Testes (PostgreSQL)
     uses: ./.github/workflows/tests.yml
     with:
       python-version: "3.11"
+
+  # Gate com o nome EXATO do check obrigatório da branch protection.
+  # Jobs que chamam workflow reutilizável são reportados como "<job> / <job chamado>",
+  # então o nome "Testes Python" sozinho nunca seria publicado.
+  testes-python:
+    name: Testes Python
+    needs: test
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Exigir que os testes tenham passado
+        env:
+          RESULT: ${{ needs.test.result }}
+        run: |
+          echo "Resultado dos testes: $RESULT"
+          test "$RESULT" = "success"
 
   # ── Lint e Formatação (ruff) ───────────────────────────────────────────────
   lint:

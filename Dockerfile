@@ -7,6 +7,7 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
@@ -21,6 +22,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurações de ambiente
@@ -43,6 +45,6 @@ USER appuser
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/api/quizzes || exit 1
+    CMD ["sh", "-c", "curl -f http://localhost:8000/api/quizzes || exit 1"]
 
 CMD ["python", "quiz_api.py"]

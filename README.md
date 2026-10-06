@@ -228,16 +228,16 @@ python -m unittest tests/test_load_and_token_usage.py
 Para testar a infraestrutura com geração real de questões via IA (`POST /api/quiz/generate`):
 ```bash
 # Nível 1: Teste rápido de validação (5 chamadas, 1 worker, ~7k tokens)
-python scripts/test_real_api_load.py --calls 5 --workers 1 --guest --questions 3
+python tests/load_test_real_api.py --calls 5 --workers 1 --guest --questions 3
 
 # Nível 2: Carga moderada (10 chamadas, 3 workers, ~15k tokens)
-python scripts/test_real_api_load.py --calls 10 --workers 3 --guest --questions 5
+python tests/load_test_real_api.py --calls 10 --workers 3 --guest --questions 5
 
 # Nível 3: Teste de estresse com teto de 200k tokens
-python scripts/test_real_api_load.py --calls 50 --workers 5 --guest --questions 10 --token-limit 200000
+python tests/load_test_real_api.py --calls 50 --workers 5 --guest --questions 10 --token-limit 200000
 
 # Nível 4: Rajada imediata para testar bloqueio 429 pelo Rate Limiter
-python scripts/test_real_api_load.py --calls 30 --workers 10 --burst --guest
+python tests/load_test_real_api.py --calls 30 --workers 10 --burst --guest
 ```
 - **Recursos do script**:
   - **Auto-detecção inteligente de porta**: Identifica se o servidor está na porta `8001`, `8002`, etc., evitando conflitos com serviços nativos do Windows (como IIS/HTTP.sys na porta 8000).
