@@ -1,4 +1,4 @@
-﻿"""
+"""
 Testes End-to-End de autenticação e controle de acesso.
 
 Sobe o servidor em setUpClass, aguarda a porta responder e derruba em tearDownClass.
@@ -97,15 +97,18 @@ class AuthE2ETestCase(unittest.TestCase):
             raise unittest.SkipTest(
                 "ADMIN_PASSWORD nao configurada -- pulando testes e2e."
             )
+        if not os.environ.get("DATABASE_URL"):
+            raise unittest.SkipTest(
+                "DATABASE_URL nao configurada (o servidor exige PostgreSQL) -- pulando testes e2e."
+            )
 
         env = os.environ.copy()
         env["PORT"] = str(E2E_PORT)
 
         _PROC = subprocess.Popen(
             [sys.executable, "-u", "quiz_api.py"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             env=env,
         )
 
@@ -181,15 +184,15 @@ class AuthE2ETestCase(unittest.TestCase):
         self.assertEqual(st, 200, f"Login do estudante falhou: {st}")
         AuthE2ETestCase.student_token = data["data"]["token"]
 
-    def test_06_student_upload_is_403(self):
-        """Upload com token de estudante deve retornar 403 Forbidden."""
+    def test_06_student_upload_is_allowed(self):
+        """Estudante autenticado pode fazer upload (201); só o admin publica quizzes."""
         self.assertTrue(self.student_token, "Prereq: student_token ausente (test_05 falhou?)")
         headers = {
             **self._UPLOAD_HEADERS,
             "Authorization": f"Bearer {self.student_token}",
         }
-        st, _ = _request("/api/upload", data=self._UPLOAD_BODY, headers=headers)
-        self.assertEqual(st, 403, f"Esperado 403 para estudante, obtido {st}")
+        st, data = _request("/api/upload", data=self._UPLOAD_BODY, headers=headers)
+        self.assertEqual(st, 201, f"Esperado 201 para estudante autenticado, obtido {st}: {data}")
 
     def test_07_admin_upload_is_201(self):
         """Upload com token de admin deve retornar 201 Created."""

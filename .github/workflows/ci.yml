@@ -51,14 +51,20 @@ jobs:
     name: Semgrep SAST
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    container:
+      image: semgrep/semgrep:latest
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
 
       - name: Executar Semgrep
-        uses: semgrep/semgrep-action@v2
-        with:
-          config: auto
+        run: >
+          semgrep scan
+          --config p/python
+          --config p/owasp-top-ten
+          --config p/dockerfile
+          --config p/secrets
+          --error
 
   # ── Segurança: pip-audit (vulnerabilidades em dependências) ────────────────
   pip-audit:
@@ -74,13 +80,13 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Instalar dependências e pip-audit
-        run: |
-          pip install -r requirements.txt
-          pip install pip-audit
+      - name: Instalar pip-audit
+        run: pip install pip-audit
 
+      # Audita apenas as dependências do projeto (requirements.txt), e não o
+      # pip/setuptools que já vêm no runner e podem ter CVEs fora do nosso controle.
       - name: Auditar dependências
-        run: pip-audit --strict
+        run: pip-audit -r requirements.txt --strict
 
   # ── Segurança: gitleaks (segredos vazados no histórico) ────────────────────
   gitleaks:
