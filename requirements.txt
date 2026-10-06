@@ -1,7 +1,7 @@
 # IFuture Study - Dependências Python (Versões fixadas para estabilidade e reprodutibilidade)
 
 # Banco de dados PostgreSQL
-psycopg2-binary==2.9.10
+psycopg2-binary==2.9.13
 
 # Variáveis de ambiente
 python-dotenv==1.2.4
