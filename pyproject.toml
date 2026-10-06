@@ -1,0 +1,66 @@
+[project]
+name = "quiz-study"
+version = "1.0.0"
+description = "Plataforma de simulados de alto rendimento com IA"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["api", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "S",    # flake8-bandit (segurança)
+    "SIM",  # flake8-simplify
+    "TCH",  # type-checking imports
+    "RUF",  # ruff-specific rules
+]
+ignore = [
+    "E501",   # line too long (controlado por formatter)
+    "S101",   # assert (usado em testes)
+    "S311",   # random (não usado para criptografia)
+    "B008",   # function call in default arg (padrão Python)
+    "UP007",  # X | Y union syntax (manter compatibilidade 3.10)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S106"]  # asserts e senhas hardcoded em testes são OK
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["api"]
+omit = [
+    "tests/*",
+    "scripts/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if DEBUG:",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+fail_under = 50
+show_missing = true
+

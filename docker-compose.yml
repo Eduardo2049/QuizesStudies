@@ -1,7 +1,7 @@
 services:
   postgres:
-    image: postgres:16-alpine
-    container_name: ifuture_postgres
+    image: postgres:16.6-alpine
+    container_name: quizstudy_postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -19,29 +19,49 @@ services:
 
   app:
     build: .
-    container_name: ifuture_app
+    container_name: quizstudy_app
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/quiz_study
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      # IA — Google Gemini (provedor recomendado)
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-flash-lite-latest}
+      AI_PROVIDER: ${AI_PROVIDER:-google}
+      AI_TOKEN_QUOTA_PER_HOUR: ${AI_TOKEN_QUOTA_PER_HOUR:-50000}
+      # IA — OpenRouter (fallback multi-provedor)
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-google/gemini-2.5-flash}
+      # Servidor e Segurança
       PORT: 8000
+      DEBUG: ${DEBUG:-false}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
     ports:
       - "127.0.0.1:8080:8000"
-    volumes:
-      - ./web:/app/web
-      - ./api:/app/api
+    # Hardening de segurança do container
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/quizzes"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
 
   tunnel:
-    image: cloudflare/cloudflared:latest
-    container_name: ifuture_tunnel
+    image: cloudflare/cloudflared:2024.12.2
+    container_name: quizstudy_tunnel
     restart: unless-stopped
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
@@ -51,4 +71,3 @@ services:
 
 volumes:
   postgres_data:
-
