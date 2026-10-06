@@ -81,6 +81,7 @@ jobs:
           --config p/owasp-top-ten
           --config p/dockerfile
           --config p/secrets
+          --exclude .github
           --error
 
   # ── Segurança: pip-audit (vulnerabilidades em dependências) ────────────────

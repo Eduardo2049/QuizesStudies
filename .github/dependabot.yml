@@ -12,6 +12,8 @@ updates:
     labels:
       - "dependencies"
       - "ci"
+    cooldown:
+      default-days: 7
 
   # Python (pip) — dependências do requirements.txt
   - package-ecosystem: "pip"
@@ -24,6 +26,8 @@ updates:
     labels:
       - "dependencies"
       - "python"
+    cooldown:
+      default-days: 7
 
   # Docker — imagens base no Dockerfile e docker-compose.yml
   - package-ecosystem: "docker"
@@ -36,3 +40,5 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+    cooldown:
+      default-days: 7
