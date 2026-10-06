@@ -58,9 +58,4 @@ jobs:
         run: |
           python -m unittest discover tests -v
 
-      # Notifica a Vercel que os testes passaram (Deployment Checks)
-      - name: Notificar Vercel (Deployment Check)
-        if: always()
-        uses: vercel/repository-dispatch/actions/status@v1
-        with:
-          name: "Vercel - quizestudies: Testes Python"
+

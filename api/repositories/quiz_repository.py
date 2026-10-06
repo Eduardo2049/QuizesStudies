@@ -122,7 +122,7 @@ class QuizRepository:
         """Verifica se já existe um quiz com esse nome."""
         with get_cursor() as cur:
             cur.execute("SELECT 1 FROM quizzes WHERE name = %s", (name,))
-            return cur.fetchone() is not None
+            return bool(cur.fetchone() is not None)
 
     # ─── Escrita ──────────────────────────────────────────────────────────────
 
@@ -204,7 +204,7 @@ class QuizRepository:
         """Remove um quiz e suas questões (CASCADE)."""
         with get_cursor() as cur:
             cur.execute("DELETE FROM quizzes WHERE id = %s RETURNING id", (quiz_id,))
-            return cur.fetchone() is not None
+            return bool(cur.fetchone() is not None)
 
     def save_attempt(
         self,

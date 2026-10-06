@@ -63,7 +63,7 @@ class HTTPMiddleware:
         """Extrai o Bearer token do header Authorization."""
         auth_header = handler.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
-            return auth_header[7:].strip()
+            return str(auth_header[7:].strip())
         return None
 
     @staticmethod
@@ -99,11 +99,11 @@ class HTTPMiddleware:
 
         cf_ip = handler.headers.get("CF-Connecting-IP")
         if cf_ip:
-            return cf_ip.strip()
+            return str(cf_ip.strip())
 
         x_forwarded = handler.headers.get("X-Forwarded-For")
         if x_forwarded:
-            return x_forwarded.split(",")[0].strip()
+            return str(x_forwarded.split(",")[0].strip())
 
         return socket_ip
 

@@ -113,7 +113,7 @@ class QuizService:
             try:
                 saved = self.repository.save_attempt(
                     user_id=user_id,
-                    quiz_id=quiz_row.get("id"),
+                    quiz_id=int(quiz_row["id"]),
                     quiz_name=quiz_row.get("name", source_name or "quiz"),
                     score=result["score"],
                     total=result["total"],
