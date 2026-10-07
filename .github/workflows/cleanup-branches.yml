@@ -1,0 +1,48 @@
+name: Cleanup — Auto-deletar branch após merge
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  delete-branch:
+    name: Deletar branch após PR fechado
+    runs-on: ubuntu-latest
+    # Só executa se o PR foi mergeado OU se a branch for do Dependabot (fecha sem merge = outdated)
+    if: |
+      github.event.pull_request.merged == true ||
+      startsWith(github.event.pull_request.head.ref, 'dependabot/')
+    steps:
+      - name: Deletar branch head
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branch = context.payload.pull_request.head.ref;
+            const owner  = context.repo.owner;
+            const repo   = context.repo.repo;
+
+            // Protege as branches permanentes do CI/CD
+            const protected = ['main', 'homolog', 'develop'];
+            if (protected.includes(branch)) {
+              core.info(`Branch "${branch}" é permanente — nenhuma ação necessária.`);
+              return;
+            }
+
+            try {
+              await github.rest.git.deleteRef({
+                owner,
+                repo,
+                ref: `heads/${branch}`,
+              });
+              core.info(`✅ Branch "${branch}" deletada com sucesso.`);
+            } catch (err) {
+              if (err.status === 422) {
+                core.info(`Branch "${branch}" já não existe — ignorando.`);
+              } else {
+                core.setFailed(`Erro ao deletar branch "${branch}": ${err.message}`);
+              }
+            }

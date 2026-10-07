@@ -6,20 +6,20 @@ AVISO: Este script faz chamadas REAIS ao servidor local (ou remoto) e
 CONSUMIRA TOKENS REAIS da sua conta Gemini / OpenRouter.
 
 Uso:
-    python tests/test_real_api_load.py [opcoes]
+    python tests/load_test_real_api.py [opcoes]
 
 Exemplos:
     # 5 chamadas, 1 worker (mais seguro para testar)
-    python tests/test_real_api_load.py --calls 5 --workers 1
+    python tests/load_test_real_api.py --calls 5 --workers 1
 
     # 20 chamadas, 4 workers simultaneos (consumo moderado)
-    python tests/test_real_api_load.py --calls 20 --workers 4
+    python tests/load_test_real_api.py --calls 20 --workers 4
 
     # Teste de rajada: 50 chamadas, 10 workers (verifica rate-limit)
-    python tests/test_real_api_load.py --calls 50 --workers 10 --burst
+    python tests/load_test_real_api.py --calls 50 --workers 10 --burst
 
     # Usar servidor remoto
-    python tests/test_real_api_load.py --base-url https://meu-site.vercel.app --calls 10
+    python tests/load_test_real_api.py --base-url https://meu-site.vercel.app --calls 10
 
 Tokens estimados por chamada (3 questoes):
     ~800 tokens input  +  ~660 tokens output  =  ~1.460 tokens total
@@ -37,6 +37,7 @@ import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from typing import Any
 
 COST_INPUT_PER_1M = 0.075    # USD (OpenRouter Gemini Flash)
 COST_OUTPUT_PER_1M = 0.300   # USD
@@ -160,7 +161,7 @@ def run_single_call(call_id, base_url, num_questions, token, is_guest, endpoint=
     if endpoint == "quizzes":
         url = f"{base_url}/api/quizzes"
         status, data, latency = _http_get(url, token=token)
-        result = {
+        result: dict[str, Any] = {
             "call_id": call_id + 1,
             "topic": "GET /api/quizzes",
             "status": status,
@@ -200,7 +201,7 @@ def run_single_call(call_id, base_url, num_questions, token, is_guest, endpoint=
     real_tot = int(usage.get("total_tokens") or (real_prompt + real_comp))
     model_name = api_data.get("model") or api_data.get("provider") or "IA"
 
-    result = {
+    result: dict[str, Any] = {
         "call_id": call_id + 1,
         "topic": topic,
         "status": status,

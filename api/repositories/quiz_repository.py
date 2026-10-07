@@ -13,7 +13,7 @@ class QuizRepository:
 
     # ─── Leitura ──────────────────────────────────────────────────────────────
 
-    def find_all_sources(self, user_id: int = None) -> list[dict]:
+    def find_all_sources(self, user_id: int | None = None) -> list[dict]:
         """
         Lista todos os quizzes cadastrados acessíveis ao usuário (públicos ou criados por ele).
 
@@ -43,7 +43,7 @@ class QuizRepository:
                 """)
             return [dict(row) for row in cur.fetchall()]
 
-    def find_by_name(self, name: str, user_id: int = None) -> dict:
+    def find_by_name(self, name: str, user_id: int | None = None) -> dict:
         """
         Encontra um quiz pelo campo `name` (se público ou se pertencente ao usuário).
 
@@ -66,7 +66,7 @@ class QuizRepository:
             raise QuizNotFound(name)
         return dict(row)
 
-    def find_default(self, user_id: int = None) -> dict:
+    def find_default(self, user_id: int | None = None) -> dict:
         """
         Retorna o primeiro quiz cadastrado acessível (mais antigo).
 
@@ -122,7 +122,7 @@ class QuizRepository:
         """Verifica se já existe um quiz com esse nome."""
         with get_cursor() as cur:
             cur.execute("SELECT 1 FROM quizzes WHERE name = %s", (name,))
-            return cur.fetchone() is not None
+            return bool(cur.fetchone() is not None)
 
     # ─── Escrita ──────────────────────────────────────────────────────────────
 
@@ -131,10 +131,10 @@ class QuizRepository:
         name: str,
         label: str,
         questions: list[dict],
-        original_filename: str = None,
+        original_filename: str | None = None,
         file_type: str = "txt",
         ai_generated: bool = False,
-        created_by: int = None,
+        created_by: int | None = None,
         is_public: bool = False,
     ) -> dict:
         """
@@ -204,7 +204,7 @@ class QuizRepository:
         """Remove um quiz e suas questões (CASCADE)."""
         with get_cursor() as cur:
             cur.execute("DELETE FROM quizzes WHERE id = %s RETURNING id", (quiz_id,))
-            return cur.fetchone() is not None
+            return bool(cur.fetchone() is not None)
 
     def save_attempt(
         self,

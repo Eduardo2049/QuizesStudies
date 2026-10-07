@@ -2,6 +2,8 @@
 Serviço de IA via OpenRouter.
 Gera gabarito automaticamente para quizzes sem resposta definida.
 """
+import copy
+import hashlib
 import json
 import os
 import re
@@ -11,6 +13,7 @@ from collections import defaultdict, deque
 from threading import Lock
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from api.repositories.rate_limit_repository import rate_limit_repo, RateLimitRepository
 from api.utils.config import (
     OPENROUTER_API_KEY,
     OPENROUTER_MODEL,
@@ -64,19 +67,37 @@ _AI_TOKEN_QUOTA_PER_HOUR = int(os.getenv("AI_TOKEN_QUOTA_PER_HOUR", "50000"))
 _AI_TOKEN_WINDOW_SECONDS = 3600  # 1 hora
 
 
+# ─── Cache de geração de simulados por IA ────────────────────────────────────
+_quiz_generation_cache: dict[str, tuple[float, dict]] = {}
+_QUIZ_CACHE_TTL = 3600  # 1 hora de cache para temas idênticos
+_quiz_cache_lock = Lock()
+
+
+class _QuotaUsageDict(defaultdict):
+    """defaultdict especializado que sincroniza remoção com a tabela rate_limits."""
+    def __init__(self, default_factory=deque, repo=None):
+        super().__init__(default_factory)
+        self.repo = repo
+
+    def pop(self, key, *args):
+        if self.repo is not None:
+            self.repo.reset(key)
+            self.repo.reset(f"token_quota:{key}")
+        return super().pop(key, *args)
+
+
 class _TokenQuota:
     """
-    Rastreia o consumo estimado de tokens de IA por chave (geralmente o IP do cliente).
-    Usa uma janela deslizante de 1 hora.
-
-    Estimativa de tokens: len(texto) / 4 (regra geral para português/inglês).
+    Rastreia o consumo estimado de tokens de IA por chave (IP do cliente ou usuário).
+    Usa persistência compartilhada (PostgreSQL) quando repo é informado
+    e mantém compatibilidade total com testes locais mantendo self._lock e self._usage.
     """
 
-    def __init__(self, quota: int, window_seconds: int):
+    def __init__(self, quota: int, window_seconds: int, repo: RateLimitRepository | None = None):
         self.quota = quota
         self.window = window_seconds
-        # {key: deque of (timestamp, tokens_used)}
-        self._usage: dict = defaultdict(deque)
+        self.repo = repo
+        self._usage = _QuotaUsageDict(deque, repo=self.repo)
         self._lock = Lock()
 
     def estimate_tokens(self, text: str) -> int:
@@ -86,56 +107,49 @@ class _TokenQuota:
     def check_and_record(self, key: str, estimated_tokens: int) -> tuple[bool, int, int]:
         """
         Verifica se a chave tem quota disponível e registra o consumo.
-
         Retorna (permitido, tokens_usados_na_janela, retry_after_segundos).
-        retry_after é 0 quando permitido.
         """
-        now = time.monotonic()
+        now = time.time()
         cutoff = now - self.window
         with self._lock:
             entries = self._usage[key]
-            # Remove entradas fora da janela
             while entries and entries[0][0] <= cutoff:
                 entries.popleft()
 
-            used = sum(t for _, t in entries)
-            if used + estimated_tokens > self.quota:
-                # Calcula quanto tempo falta para a janela dar espaço
-                if entries:
-                    retry_after = max(1, int(entries[0][0] - cutoff + 1))
-                else:
-                    retry_after = self.window
+            local_used = sum(t for _, t in entries)
+            if local_used + estimated_tokens > self.quota:
+                oldest = entries[0][0] if entries else now
+                retry_after = max(1, int(oldest - cutoff + 1))
+                return False, local_used, retry_after
+
+        if self.repo is not None:
+            quota_key = f"token_quota:{key}"
+            allowed, retry_after = self.repo.check_and_record(
+                quota_key,
+                limit=self.quota,
+                window_seconds=self.window,
+                cost=estimated_tokens,
+            )
+            used = self.repo.get_usage(quota_key, self.window)
+            if not allowed:
                 return False, used, retry_after
 
-            entries.append((now, estimated_tokens))
+        with self._lock:
+            self._usage[key].append((now, estimated_tokens))
+            used = sum(t for _, t in self._usage[key])
 
-            # Limpeza periódica para evitar vazamento de memória com muitos IPs
-            if len(self._usage) > 100:
-                expired_keys = [
-                    k for k, v in self._usage.items()
-                    if not v or v[-1][0] <= cutoff
-                ]
-                for k in expired_keys:
-                    del self._usage[k]
-
-            return True, used + estimated_tokens, 0
+        return True, used, 0
 
     def get_usage(self, key: str) -> int:
         """Retorna o total de tokens estimados usados na janela atual."""
-        now = time.monotonic()
-        cutoff = now - self.window
+        cutoff = time.time() - self.window
         with self._lock:
-            entries = self._usage[key]
-            while entries and entries[0][0] <= cutoff:
-                entries.popleft()
-            if not entries:
-                del self._usage[key]
-                return 0
-            return sum(t for _, t in entries)
+            entries = self._usage.get(key, deque())
+            return sum(t for ts, t in entries if ts > cutoff)
 
 
-# Instância global do controle de quota
-_token_quota = _TokenQuota(_AI_TOKEN_QUOTA_PER_HOUR, _AI_TOKEN_WINDOW_SECONDS)
+# Instância global do controle de quota com persistência
+_token_quota = _TokenQuota(_AI_TOKEN_QUOTA_PER_HOUR, _AI_TOKEN_WINDOW_SECONDS, repo=rate_limit_repo)
 
 # Chave padrão usada quando não há IP disponível (ex: chamadas internas)
 _DEFAULT_QUOTA_KEY = "internal"
@@ -518,24 +532,39 @@ def generate_quiz_by_topic(
             "Adicione GEMINI_API_KEY ou OPENROUTER_API_KEY no arquivo .env."
         )
 
-    clean_topic = str(topic or "").strip()
+    clean_topic = topic.strip() if topic else ""
     if not clean_topic:
         raise AIServiceError("Por favor, informe um tema ou assunto para gerar o quiz.")
 
     try:
-        qty = max(1, min(int(num_questions or 5), 30))
+        qty = max(1, min(num_questions, 30))
     except (ValueError, TypeError):
         qty = 5
 
     diff = difficulty if difficulty in ("Fácil", "Médio", "Difícil") else "Médio"
+    context_str = context.strip() if context else ""
+
+    # ── Cache de simulação para evitar requisições idênticas duplicadas ──────
+    cache_key = hashlib.sha256(
+        f"{clean_topic.lower()}:{qty}:{diff}:{context_str.lower()}".encode("utf-8")
+    ).hexdigest()
+
+    now = time.time()
+    with _quiz_cache_lock:
+        if cache_key in _quiz_generation_cache:
+            ts, cached_result = _quiz_generation_cache[cache_key]
+            if now - ts < _QUIZ_CACHE_TTL:
+                if DEBUG:
+                    print(f"⚡ [ai_cache] Retornando simulado em cache para '{clean_topic}'")
+                return copy.deepcopy(cached_result)
 
     prompt_lines = [
         "Você é um professor e elaborador sênior de provas e simulados acadêmicos e de concursos.",
         f"Crie um simulado de múltipla escolha com exatamente {qty} questões sobre o seguinte tema: '{clean_topic}'.",
         f"Nível de dificuldade exigido: {diff}.",
     ]
-    if context and str(context).strip():
-        prompt_lines.append(f"Diretrizes e foco específico adicional: {str(context).strip()}")
+    if context_str:
+        prompt_lines.append(f"Diretrizes e foco específico adicional: {context_str}")
 
     prompt_lines.extend([
         "",
@@ -660,7 +689,7 @@ def generate_quiz_by_topic(
         raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
 
     provider_name = "Google AI Studio" if AI_PROVIDER in ("google", "gemini") or GEMINI_API_KEY else "OpenRouter"
-    return {
+    result = {
         "title": str(title).strip(),
         "topic": clean_topic,
         "questions": valid_questions,
@@ -668,6 +697,12 @@ def generate_quiz_by_topic(
         "model": used_model,
         "provider": provider_name,
     }
+
+    # Armazena no cache local
+    with _quiz_cache_lock:
+        _quiz_generation_cache[cache_key] = (time.time(), copy.deepcopy(result))
+
+    return result
 
 
 def remix_questions_by_ai(questions: list[dict], client_ip: str | None = None) -> list[dict]:
@@ -792,8 +827,8 @@ def parse_and_structure_questions_with_ai(
 
     qty_instruction = ""
     target_count = None
-    if num_questions and int(num_questions) > 0:
-        target_count = max(1, min(int(num_questions), 30))
+    if num_questions and num_questions > 0:
+        target_count = max(1, min(num_questions, 30))
         qty_instruction = f"Você DEVE produzir e retornar exatamente {target_count} questões de múltipla escolha a partir do conteúdo."
     else:
         qty_instruction = "Identifique e extraia todas as questões contidas no texto. Se o texto for dissertativo/resumo, elabore entre 5 e 10 questões relevantes."
@@ -807,8 +842,9 @@ def parse_and_structure_questions_with_ai(
         "",
         f"Instrução de quantidade: {qty_instruction}",
     ]
-    if context and str(context).strip():
-        prompt_lines.append(f"Diretrizes e foco específico adicional: {str(context).strip()}")
+    context_clean = context.strip() if context else ""
+    if context_clean:
+        prompt_lines.append(f"Diretrizes e foco específico adicional: {context_clean}")
 
     prompt_lines.extend([
         "",

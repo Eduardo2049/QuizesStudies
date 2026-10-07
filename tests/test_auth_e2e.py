@@ -1,129 +1,221 @@
 """
-Teste automatizado End-to-End para autenticação e controle de acesso
+Testes End-to-End de autenticação e controle de acesso.
+
+Sobe o servidor em setUpClass, aguarda a porta responder e derruba em tearDownClass.
+Compatível com 'python -m unittest discover tests'.
+
+Requisitos de ambiente:
+    ADMIN_PASSWORD  -- senha do admin (obrigatória)
+    E2E_PORT        -- porta do servidor (padrão: 8005)
 """
+
+import json
+import os
+import socket
 import subprocess
 import sys
 import time
-import json
-import os
-import urllib.request
+import unittest
 import urllib.error
+import urllib.request
 
-def run_test():
-    env = os.environ.copy()
-    env["PORT"] = "8005"
-    proc = subprocess.Popen(
-        [sys.executable, "-u", "quiz_api.py"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        env=env,
-    )
-    time.sleep(2)
+_BASE_URL = ""
+_PROC = None
 
-    base = "http://localhost:8005"
+E2E_PORT = int(os.environ.get("E2E_PORT", "8005"))
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+STARTUP_TIMEOUT = 10  # segundos máximos para o servidor subir
 
-    def do_req(path, data=None, headers=None, method=None):
-        h = headers or {}
-        body = None
-        if data is not None:
-            if isinstance(data, dict):
-                body = json.dumps(data).encode("utf-8")
-                h["Content-Type"] = "application/json"
-            else:
-                body = data
-        req = urllib.request.Request(f"{base}{path}", data=body, headers=h, method=method)
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _wait_for_port(host, port, timeout):
+    """Aguarda a porta TCP aceitar conexões (polling sem sleep fixo)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(req) as res:
-                return res.status, json.loads(res.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            return e.code, json.loads(e.read().decode("utf-8"))
+            with socket.create_connection((host, port), timeout=0.5):
+                return True
+        except OSError:
+            time.sleep(0.2)
+    return False
 
-    try:
-        # 1. Login com senha errada
-        st, data = do_req("/api/auth/login", {"username": "admin", "password": "wrongpassword"})
-        assert st == 401, f"Esperado 401, obtido {st}"
-        print("[PASS] 1. Login com senha errada rejeitado (401)")
 
-        # 2. Login com admin correto
-        admin_password = os.environ.get("ADMIN_PASSWORD")
-        assert admin_password, "ADMIN_PASSWORD deve estar configurada para o teste"
-        st, data = do_req("/api/auth/login", {"username": "admin", "password": admin_password})
-        assert st == 200, f"Esperado 200, obtido {st}"
-        admin_token = data["data"]["token"]
-        assert admin_token, "Token não retornado"
-        print("[PASS] 2. Login de admin realizado com sucesso (200)")
-
-        # 3. GET /api/auth/me com token
-        st, data = do_req("/api/auth/me", headers={"Authorization": f"Bearer {admin_token}"})
-        assert st == 200 and data["data"]["user"]["username"] == "admin", "Erro ao validar /me"
-        print("[PASS] 3. /api/auth/me validou sessão com sucesso")
-
-        # 4. Upload sem token (deve ser 401)
-        boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW"
-        upload_body = (
-            f"--{boundary}\r\n"
-            'Content-Disposition: form-data; name="file"; filename="teste_prova.txt"\r\n'
-            "Content-Type: text/plain\r\n\r\n"
-            "**1.** Questão teste de raciocínio?\n"
-            "a) Opção A\n"
-            "b) Opção B\n\n"
-            "# Gabarito\n"
-            "1. a) Opção A\r\n"
-            f"--{boundary}--\r\n"
-        ).encode("utf-8")
-        h_upload = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
-
-        st, data = do_req("/api/upload", data=upload_body, headers=h_upload)
-        assert st == 401, f"Esperado 401 sem token, obtido {st}"
-        print("[PASS] 4. Upload bloqueado sem token (401 Unauthorized)")
-
-        # 5. Registro de estudante
-        st, data = do_req("/api/auth/register", {
-            "username": "aluno_teste",
-            "email": "aluno_teste@escola.com",
-            "password": "senha_estudante_123"
-        })
-        # Se já existe de rodada anterior ou criou novo:
-        if st == 409:
-            st, data = do_req("/api/auth/login", {
-                "username": "aluno_teste",
-                "password": "senha_estudante_123"
-            })
-            student_token = data["data"]["token"]
+def _request(path, data=None, headers=None, method=None):
+    """Executa uma requisição HTTP e devolve (status_code, body_dict)."""
+    h = dict(headers or {})
+    body = None
+    if data is not None:
+        if isinstance(data, dict):
+            body = json.dumps(data).encode("utf-8")
+            h.setdefault("Content-Type", "application/json")
         else:
-            assert st == 201, f"Esperado 201, obtido {st}: {data}"
-            st, data = do_req("/api/auth/login", {
-                "username": "aluno_teste",
-                "password": "senha_estudante_123"
-            })
-            student_token = data["data"]["token"]
-        print("[PASS] 5. Autenticação de estudante verificada")
+            body = data
+    req = urllib.request.Request(
+        f"{_BASE_URL}{path}", data=body, headers=h, method=method
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return resp.status, json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read().decode("utf-8"))
 
-        # 6. Upload com token de estudante (deve ser 403 Forbidden)
-        h_student = dict(h_upload)
-        h_student["Authorization"] = f"Bearer {student_token}"
-        st, data = do_req("/api/upload", data=upload_body, headers=h_student)
-        assert st == 403, f"Esperado 403 para estudante, obtido {st}"
-        print("[PASS] 6. Upload bloqueado para estudante (403 Forbidden)")
 
-        # 7. Upload com token de admin (deve ser 201 Created)
-        h_admin = dict(h_upload)
-        h_admin["Authorization"] = f"Bearer {admin_token}"
-        st, data = do_req("/api/upload", data=upload_body, headers=h_admin)
-        assert st == 201, f"Esperado 201 para admin, obtido {st}: {data}"
-        print("[PASS] 7. Upload autorizado com sucesso para admin (201 Created)")
+# ---------------------------------------------------------------------------
+# Fixture de classe
+# ---------------------------------------------------------------------------
 
-        # 8. Logout
-        st, data = do_req("/api/auth/logout", headers={"Authorization": f"Bearer {admin_token}"}, method="POST")
-        assert st == 200, f"Esperado 200 no logout, obtido {st}"
-        st, data = do_req("/api/auth/me", headers={"Authorization": f"Bearer {admin_token}"})
-        assert st == 401, f"Esperado 401 após logout, obtido {st}"
-        print("[PASS] 8. Logout e invalidação de sessão verificados com sucesso")
+class AuthE2ETestCase(unittest.TestCase):
+    """Testes de autenticação e controle de acesso contra o servidor real."""
 
-        print("\n>>> TODOS OS 8 TESTES DE SEGURANCA E AUTENTICACAO PASSARAM COM SUCESSO! <<<")
-    finally:
-        proc.terminate()
+    admin_token = ""
+    student_token = ""
+
+    _BOUNDARY = "----WebKitFormBoundary7MA4YWxkTrZu0gW"
+    _UPLOAD_BODY = (
+        "----WebKitFormBoundary7MA4YWxkTrZu0gW\r\n"
+        'Content-Disposition: form-data; name="file"; filename="teste_prova.txt"\r\n'
+        "Content-Type: text/plain\r\n\r\n"
+        "**1.** Questao teste de raciocínio?\n"
+        "a) Opcao A\n"
+        "b) Opcao B\n\n"
+        "# Gabarito\n"
+        "1. a) Opcao A\r\n"
+        "----WebKitFormBoundary7MA4YWxkTrZu0gW--\r\n"
+    ).encode("utf-8")
+    _UPLOAD_HEADERS = {
+        "Content-Type": "multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW"
+    }
+
+    @classmethod
+    def setUpClass(cls):
+        global _BASE_URL, _PROC
+
+        if not ADMIN_PASSWORD:
+            raise unittest.SkipTest(
+                "ADMIN_PASSWORD nao configurada -- pulando testes e2e."
+            )
+        if not os.environ.get("DATABASE_URL"):
+            raise unittest.SkipTest(
+                "DATABASE_URL nao configurada (o servidor exige PostgreSQL) -- pulando testes e2e."
+            )
+
+        env = os.environ.copy()
+        env["PORT"] = str(E2E_PORT)
+
+        _PROC = subprocess.Popen(
+            [sys.executable, "-u", "quiz_api.py"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=env,
+        )
+
+        _BASE_URL = f"http://localhost:{E2E_PORT}"
+
+        if not _wait_for_port("localhost", E2E_PORT, STARTUP_TIMEOUT):
+            _PROC.terminate()
+            raise RuntimeError(
+                f"Servidor nao respondeu em {STARTUP_TIMEOUT}s na porta {E2E_PORT}."
+            )
+
+    @classmethod
+    def tearDownClass(cls):
+        global _PROC
+        if _PROC is not None:
+            _PROC.terminate()
+            try:
+                _PROC.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                _PROC.kill()
+            _PROC = None
+
+    def test_01_login_wrong_password(self):
+        """Login com senha errada deve retornar 401."""
+        st, _ = _request(
+            "/api/auth/login", {"username": "admin", "password": "wrongpassword"}
+        )
+        self.assertEqual(st, 401, "Esperado 401 para senha incorreta")
+
+    def test_02_admin_login_success(self):
+        """Login com credenciais corretas deve retornar 200 e um token."""
+        st, data = _request(
+            "/api/auth/login", {"username": "admin", "password": ADMIN_PASSWORD}
+        )
+        self.assertEqual(st, 200, f"Esperado 200, obtido {st}")
+        token = data.get("data", {}).get("token", "")
+        self.assertTrue(token, "Token nao retornado no payload")
+        AuthE2ETestCase.admin_token = token
+
+    def test_03_me_endpoint(self):
+        """GET /api/auth/me com token valido deve confirmar a sessao."""
+        self.assertTrue(self.admin_token, "Prereq: admin_token ausente (test_02 falhou?)")
+        st, data = _request(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {self.admin_token}"},
+        )
+        self.assertEqual(st, 200)
+        self.assertEqual(data["data"]["user"]["username"], "admin")
+
+    def test_04_upload_without_token_is_401(self):
+        """Upload sem token deve retornar 401 Unauthorized."""
+        st, _ = _request(
+            "/api/upload", data=self._UPLOAD_BODY, headers=self._UPLOAD_HEADERS
+        )
+        self.assertEqual(st, 401, f"Esperado 401 sem token, obtido {st}")
+
+    def test_05_student_auth(self):
+        """Registro ou login de estudante deve funcionar."""
+        st, data = _request(
+            "/api/auth/register",
+            {
+                "username": "aluno_e2e",
+                "email": "aluno_e2e@escola.com",
+                "password": "senha_estudante_123",
+            },
+        )
+        self.assertIn(st, (201, 409), f"Esperado 201 ou 409, obtido {st}: {data}")
+
+        st, data = _request(
+            "/api/auth/login",
+            {"username": "aluno_e2e", "password": "senha_estudante_123"},
+        )
+        self.assertEqual(st, 200, f"Login do estudante falhou: {st}")
+        AuthE2ETestCase.student_token = data["data"]["token"]
+
+    def test_06_student_upload_is_allowed(self):
+        """Estudante autenticado pode fazer upload (201); só o admin publica quizzes."""
+        self.assertTrue(self.student_token, "Prereq: student_token ausente (test_05 falhou?)")
+        headers = {
+            **self._UPLOAD_HEADERS,
+            "Authorization": f"Bearer {self.student_token}",
+        }
+        st, data = _request("/api/upload", data=self._UPLOAD_BODY, headers=headers)
+        self.assertEqual(st, 201, f"Esperado 201 para estudante autenticado, obtido {st}: {data}")
+
+    def test_07_admin_upload_is_201(self):
+        """Upload com token de admin deve retornar 201 Created."""
+        self.assertTrue(self.admin_token, "Prereq: admin_token ausente (test_02 falhou?)")
+        headers = {
+            **self._UPLOAD_HEADERS,
+            "Authorization": f"Bearer {self.admin_token}",
+        }
+        st, data = _request("/api/upload", data=self._UPLOAD_BODY, headers=headers)
+        self.assertEqual(st, 201, f"Esperado 201 para admin, obtido {st}: {data}")
+
+    def test_08_logout_invalidates_token(self):
+        """Apos logout, o token nao deve mais ser aceito pelo /api/auth/me."""
+        self.assertTrue(self.admin_token, "Prereq: admin_token ausente (test_02 falhou?)")
+        auth_header = {"Authorization": f"Bearer {self.admin_token}"}
+
+        st, _ = _request("/api/auth/logout", headers=auth_header, method="POST")
+        self.assertEqual(st, 200, f"Logout esperava 200, obtido {st}")
+
+        st, _ = _request("/api/auth/me", headers=auth_header)
+        self.assertEqual(st, 401, f"Token deveria ser invalido apos logout, obtido {st}")
+        AuthE2ETestCase.admin_token = ""
+
 
 if __name__ == "__main__":
-    run_test()
+    unittest.main()

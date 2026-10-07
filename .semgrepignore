@@ -1,0 +1,9 @@
+# Dependency and virtual environment directories
+node_modules/
+venv/
+.venv/
+env/
+__pycache__/
+
+# GitHub metadata and workflow definitions (SAST scans application source code)
+.github/

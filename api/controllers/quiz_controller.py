@@ -15,13 +15,13 @@ from api.exceptions.quiz_exceptions import (
 class QuizController:
     """Controller para rotas de quiz"""
 
-    def __init__(self, repository: QuizRepository = None):
+    def __init__(self, repository: QuizRepository | None = None):
         self.repository = repository or QuizRepository()
         self.service = QuizService(self.repository)
 
     @timing_decorator
     @error_handler_decorator
-    def get_quizzes(self, user_id: int = None) -> dict:
+    def get_quizzes(self, user_id: int | None = None) -> dict:
         """GET /api/quizzes - Lista todos os quizzes disponíveis"""
         quizzes = self.service.get_all_quizzes(user_id)
         return {
@@ -31,7 +31,7 @@ class QuizController:
 
     @timing_decorator
     @error_handler_decorator
-    def get_quiz(self, source_name: str = None, user_id: int = None) -> dict:
+    def get_quiz(self, source_name: str | None = None, user_id: int | None = None) -> dict:
         """GET /api/quiz - Carrega um quiz com questões públicas"""
         quiz_dto = self.service.get_quiz(source_name, user_id)
         return {
@@ -54,7 +54,7 @@ class QuizController:
 
     @timing_decorator
     @error_handler_decorator
-    def submit_answers(self, payload: dict, user_id: int = None) -> dict:
+    def submit_answers(self, payload: dict, user_id: int | None = None) -> dict:
         """POST /api/quiz/submit - Corrige respostas e calcula score"""
         if not isinstance(payload, dict) or "answers" not in payload:
             raise InvalidAnswersFormat()
@@ -80,7 +80,7 @@ class QuizController:
 
     @timing_decorator
     @error_handler_decorator
-    def get_user_attempts(self, user_id: int) -> dict:
+    def get_user_attempts(self, user_id: int | None) -> dict:
         """GET /api/user/attempts - Retorna histórico de tentativas do usuário"""
         attempts = self.service.get_user_attempts(user_id)
         formatted = []
@@ -122,10 +122,10 @@ class QuizController:
         num_questions: int = 5,
         difficulty: str = "Médio",
         context: str = "",
-        user_id: int = None,
+        user_id: int | None = None,
         is_public: bool = False,
         persist: bool = True,
-        client_ip: str = None,
+        client_ip: str | None = None,
     ) -> dict:
         """Gera quiz por tema utilizando IA"""
         from api.services.ai_service import generate_quiz_by_topic, AIServiceError
@@ -218,7 +218,7 @@ class QuizController:
 class UploadController:
     """Controller para upload de arquivos (TXT, PDF, DOCX)"""
 
-    def __init__(self, repository: QuizRepository = None):
+    def __init__(self, repository: QuizRepository | None = None):
         self.upload_service = UploadService(repository or QuizRepository())
 
     @timing_decorator
@@ -228,10 +228,10 @@ class UploadController:
         filename: str,
         content: bytes,
         file_type: str,
-        created_by: int,
-        is_public: bool,
+        created_by: int | None = None,
+        is_public: bool = False,
         persist: bool = True,
-        client_ip: str = None,
+        client_ip: str | None = None,
         num_questions: str | int = "auto",
         context: str = "",
     ) -> dict:
