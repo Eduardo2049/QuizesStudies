@@ -1,4 +1,12 @@
 """Servidor HTTP do Quiz - Ponto de entrada da aplicação"""
+import sys
+from pathlib import Path
+
+# Garante que a raiz do repositório está no sys.path
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
 from http.server import ThreadingHTTPServer
 
 from api.utils.config import HOST, PORT
@@ -36,7 +44,3 @@ if __name__ == "__main__":
 # Compatibilidade com a Vercel caso inspecione api/main.py
 class handler(QuizHandler):
     pass
-
-app = handler
-application = handler
-

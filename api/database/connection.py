@@ -24,14 +24,19 @@ def _get_database_url() -> str:
         if "sslmode=" not in url:
             sep = "&" if "?" in url else "?"
             url = f"{url}{sep}sslmode=require"
+        if "connect_timeout=" not in url:
+            sep = "&" if "?" in url else "?"
+            url = f"{url}{sep}connect_timeout=5"
 
     return url
 
 
 def _connect_db():
     clean_url = _get_database_url()
+    if not clean_url:
+        raise ConnectionError("DATABASE_URL não configurada no ambiente.")
     try:
-        conn = psycopg2.connect(clean_url)
+        conn = psycopg2.connect(clean_url, connect_timeout=5)
         try:
             conn.set_client_encoding('UTF8')
         except Exception:
