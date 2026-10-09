@@ -103,6 +103,65 @@ class TestAuthAndSessionSecurity(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertEqual(ctx.exception.message, "Nome de usuário ou e-mail já cadastrado")
 
+    @patch("api.services.auth_service.verify_password")
+    def test_login_runs_dummy_hash_when_user_not_found(self, mock_verify):
+        """Usuário inexistente deve executar verify_password com sentinel para igualar tempo de resposta."""
+        from api.services.auth_service import _DUMMY_SALT, _DUMMY_HASH
+        mock_repo = MagicMock()
+        mock_repo.find_by_username.return_value = None
+        service = AuthService(repository=mock_repo)
+
+        with self.assertRaises(QuizAPIException) as ctx:
+            service.login("usuario_inexistente", "TentativaSenha123*")
+        self.assertEqual(ctx.exception.status_code, 401)
+        self.assertEqual(ctx.exception.message, "Credenciais inválidas")
+        # Garante que verify_password com hash dummy foi executado
+        mock_verify.assert_called_once_with("TentativaSenha123*", _DUMMY_SALT, _DUMMY_HASH)
+
+
+class TestRateLimitingSecurityHardening(unittest.TestCase):
+    """Valida correções do problema A (bloqueio de terceiros) e B (IP compartilhado)."""
+
+    def test_rate_limiter_is_blocked_and_record_and_reset(self):
+        """Valida que is_blocked não consome cota e que chaves compostas isolam ataques a usuários."""
+        from api.handlers.quiz_handler import RateLimiter
+
+        rl = RateLimiter(limit=3, window_seconds=60)
+        attacker_key = "POST:/api/auth/login:fail:192.168.1.100:admin"
+        legitimate_key = "POST:/api/auth/login:fail:10.0.0.5:admin"
+
+        # 1. is_blocked antes de tentativas retorna False sem consumir cota
+        blocked, _ = rl.is_blocked(attacker_key)
+        self.assertFalse(blocked)
+
+        # 2. Atacante erra 3 vezes
+        rl.record(attacker_key)
+        rl.record(attacker_key)
+        rl.record(attacker_key)
+
+        # 3. Atacante fica bloqueado
+        blocked_att, retry_att = rl.is_blocked(attacker_key)
+        self.assertTrue(blocked_att)
+        self.assertGreater(retry_att, 0)
+
+        # 4. Problema A resolvido: O admin legítimo vindo de outro IP NÃO é bloqueado!
+        blocked_legit, _ = rl.is_blocked(legitimate_key)
+        self.assertFalse(blocked_legit, "Admin legítimo não deve ser bloqueado por falhas de terceiros em outro IP")
+
+        # 5. Após sucesso ou desbloqueio, reset limpa a cota
+        rl.reset(attacker_key)
+        blocked_after_reset, _ = rl.is_blocked(attacker_key)
+        self.assertFalse(blocked_after_reset)
+
+    def test_schema_migrations_is_public_default_is_false(self):
+        """Garante que a coluna is_public possui DEFAULT FALSE tanto no CREATE quanto no ALTER TABLE."""
+        from api.database.migrations import SCHEMA_SQL
+
+        self.assertIn("is_public        BOOLEAN NOT NULL DEFAULT FALSE", SCHEMA_SQL)
+        self.assertIn("ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;", SCHEMA_SQL)
+        self.assertNotIn("is_public BOOLEAN NOT NULL DEFAULT TRUE", SCHEMA_SQL)
+
+
 
 class TestAIKeyConfiguration(unittest.TestCase):
     """Valida suporte a Gemini sem exigir OpenRouter."""

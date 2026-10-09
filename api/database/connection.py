@@ -2,6 +2,7 @@
 Gerenciamento otimizado de conexões com PostgreSQL.
 Usa ThreadedConnectionPool com fallback seguro para conexões diretas.
 """
+import os
 import threading
 from contextlib import contextmanager
 import psycopg2
@@ -19,11 +20,13 @@ def _get_database_url() -> str:
     if url.startswith("postgres://"):
         url = "postgresql://" + url[len("postgres://"):]
 
-    # Adiciona sslmode=require automaticamente para bancos em nuvem se não estiver presente
+    # Adiciona sslmode automaticamente para bancos em nuvem se não estiver presente.
+    # Default verify-full para validação completa de certificado conforme auditoria de segurança.
     if url and "localhost" not in url and "127.0.0.1" not in url:
         if "sslmode=" not in url:
+            db_sslmode = os.getenv("DB_SSLMODE", "verify-full")
             sep = "&" if "?" in url else "?"
-            url = f"{url}{sep}sslmode=require"
+            url = f"{url}{sep}sslmode={db_sslmode}"
         if "connect_timeout=" not in url:
             sep = "&" if "?" in url else "?"
             url = f"{url}{sep}connect_timeout=5"

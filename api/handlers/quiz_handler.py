@@ -71,6 +71,40 @@ class RateLimiter:
 
         return True, 0
 
+    def is_blocked(self, key: str) -> tuple[bool, int]:
+        """
+        Retorna (bloqueado, retry_after_segundos) sem registrar consumo.
+        """
+        now = time.time()
+        cutoff = now - self.window
+        with self._lock:
+            reqs = self._requests[key]
+            while reqs and reqs[0] <= cutoff:
+                reqs.popleft()
+            if len(reqs) >= self.limit:
+                retry_after = max(1, int(reqs[0] - cutoff + 1))
+                return True, retry_after
+
+        if self.repo is not None:
+            return self.repo.is_blocked(key, self.limit, self.window)
+
+        return False, 0
+
+    def record(self, key: str, cost: int = 1) -> None:
+        """Registra uma ocorrência/falha para a chave."""
+        now = time.time()
+        with self._lock:
+            self._requests[key].append(now)
+        if self.repo is not None:
+            self.repo.record(key, cost)
+
+    def reset(self, key: str) -> None:
+        """Reseta registros da chave (ex: após login bem-sucedido)."""
+        with self._lock:
+            self._requests.pop(key, None)
+        if self.repo is not None:
+            self.repo.reset(key)
+
     def check_handler(self, handler, route_key: str) -> tuple[bool, int]:
         """Extrai o IP real do handler e verifica o rate-limit."""
         client_ip = HTTPMiddleware.get_client_ip(handler)
@@ -78,7 +112,9 @@ class RateLimiter:
 
 
 # ─── Instâncias de rate-limiters por rota com persistência compartilhada ─────
-_rl_auth = RateLimiter(limit=10, window_seconds=15 * 60, repo=rate_limit_repo)    # login/register: 10/15min
+_rl_auth = RateLimiter(limit=10, window_seconds=15 * 60, repo=rate_limit_repo)    # cadastro/geral: 10/15min
+_rl_login_fail_user_ip = RateLimiter(limit=10, window_seconds=15 * 60, repo=rate_limit_repo)  # falhas por (IP + User): 10/15min
+_rl_login_fail_ip = RateLimiter(limit=30, window_seconds=15 * 60, repo=rate_limit_repo)       # falhas por IP (anti-varredura): 30/15min
 _rl_submit = RateLimiter(limit=30, window_seconds=15 * 60, repo=rate_limit_repo)  # submit: 30/15min
 _rl_upload = RateLimiter(limit=5, window_seconds=60, repo=rate_limit_repo)         # upload: 5/min
 _rl_generate = RateLimiter(limit=10, window_seconds=60, repo=rate_limit_repo)      # generate IA: 10/min
@@ -481,24 +517,43 @@ class QuizHandler(BaseHTTPRequestHandler):
         try:
             # ── 0. Rotas de Autenticação ───────────────────────────────────────
             if request.path == "/api/auth/login":
-                allowed, retry_after = _rl_auth.check_handler(self, "POST:/api/auth/login")
-                if not allowed:
-                    _rate_limited_response(self, retry_after)
-                    return
-
                 payload = self._read_json_body()
                 if payload is None:
                     return
 
-                # Rate-limit adicional por nome de usuário para mitigar força bruta mesmo com IP dinâmico
+                client_ip = HTTPMiddleware.get_client_ip(self)
                 username = str(payload.get("username", "")).strip().lower()
-                if username:
-                    user_allowed, user_retry = _rl_auth.is_allowed(f"POST:/api/auth/login:user:{username}")
-                    if not user_allowed:
-                        _rate_limited_response(self, user_retry)
+
+                fail_user_ip_key = f"POST:/api/auth/login:fail:{client_ip}:{username}" if username else None
+                fail_ip_key = f"POST:/api/auth/login:fail_ip:{client_ip}"
+
+                # 1. Verifica se o par (IP + Usuário) ou o IP excedeu a cota de falhas consecutivas
+                if fail_user_ip_key:
+                    blocked, retry_after = _rl_login_fail_user_ip.is_blocked(fail_user_ip_key)
+                    if blocked:
+                        _rate_limited_response(self, retry_after)
                         return
 
-                response = self.auth_controller.login(payload)
+                blocked_ip, retry_after_ip = _rl_login_fail_ip.is_blocked(fail_ip_key)
+                if blocked_ip:
+                    _rate_limited_response(self, retry_after_ip)
+                    return
+
+                # 2. Executa a autenticação e contabiliza tentativas apenas em caso de falha
+                try:
+                    response = self.auth_controller.login(payload)
+                except QuizAPIException as e:
+                    if e.status_code == 401:
+                        if fail_user_ip_key:
+                            _rl_login_fail_user_ip.record(fail_user_ip_key)
+                        _rl_login_fail_ip.record(fail_ip_key)
+                    raise
+
+                # 3. Em caso de sucesso, logins válidos não gastam cota (mitiga problemas em NAT/escolas)
+                # e resetam o histórico de falhas daquele IP para o usuário legítimo.
+                if fail_user_ip_key:
+                    _rl_login_fail_user_ip.reset(fail_user_ip_key)
+
                 token = response["data"].get("token")
                 status, data = ResponseFormatter.success(response["data"], response["message"])
                 cookie = HTTPMiddleware.session_cookie(token, COOKIE_SECURE, 7 * 24 * 60 * 60)

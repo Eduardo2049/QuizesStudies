@@ -9,6 +9,17 @@ from api.repositories.user_repository import UserRepository
 from api.exceptions.quiz_exceptions import QuizAPIException
 from api.utils.config import ADMIN_USERNAME, ADMIN_PASSWORD, DEBUG
 
+# Salt e hash fixos usados como dummy para equalizar o tempo de resposta
+# quando o usuário não existe (prevenção de enumeração por timing).
+# O hash é computado uma vez no startup para ter o mesmo custo do PBKDF2 real.
+_DUMMY_SALT = "0000000000000000000000000000000000000000000000000000000000000000"
+_DUMMY_HASH = hashlib.pbkdf2_hmac(
+    "sha256",
+    b"__dummy_sentinel_password__",
+    _DUMMY_SALT.encode("utf-8"),
+    iterations=600_000,
+).hex()
+
 
 def hash_password(password: str, salt: str = None) -> tuple[str, str]:
     """
@@ -75,12 +86,20 @@ class AuthService:
                 print(f"⚠️ Erro ao verificar/criar admin inicial: {e}")
 
     def login(self, username: str, password: str) -> dict:
-        """Autentica o usuário e retorna o token de sessão."""
+        """
+        Autentica o usuário e retorna o token de sessão.
+        Executa PBKDF2 mesmo quando o usuário não existe para equalizar o
+        tempo de resposta e impedir enumeração de contas por timing.
+        """
         if not username or not password:
             raise QuizAPIException("Usuário e senha são obrigatórios", 400)
 
         user = self.repo.find_by_username(username)
+
         if not user:
+            # Hash falso: garante que o ramo «não encontrado» leva o mesmo
+            # tempo que o ramo «encontrado» (≈175 ms de PBKDF2).
+            verify_password(password, _DUMMY_SALT, _DUMMY_HASH)
             raise QuizAPIException("Credenciais inválidas", 401)
 
         if not verify_password(password, user["salt"], user["password_hash"]):
