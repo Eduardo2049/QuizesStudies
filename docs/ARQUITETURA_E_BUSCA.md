@@ -89,5 +89,22 @@ Ao receber uma demanda, consulte esta tabela para abrir diretamente os arquivos 
   ```
 - **Rodar um teste específico:**
   ```bash
-  python -m unittest tests/test_file_parser_extended.py
+  python -m unittest tests/test_security_fixes.py
   ```
+
+---
+
+## 🛡️ 5. Modelo de Segurança de Dados e Decisão Arquitetural sobre RLS
+
+### 5.1 Decisão sobre Row-Level Security (RLS) vs. Isolamento na Aplicação
+- **Decisão:** Adoção de **Application-Level Tenant Isolation** (Isolamento Lógico na Camada de Repositório) respaldada por queries SQL estritamente parametrizadas (`WHERE is_public = TRUE OR created_by = %s` e `WHERE user_id = %s`).
+- **Motivação Técnica:** O backend conecta-se ao PostgreSQL através de connection pools em ambiente serverless/Vercel (Neon/PgBouncer) sob uma única role de serviço. A implementação de RLS nativo com `FORCE ROW LEVEL SECURITY` dependeria de variáveis dinâmicas de sessão (`current_setting('app.user_id')`) configuradas a cada requisição via `SET LOCAL`, o que introduziria overhead de roundtrips e riscos de reaproveitamento de estado no pool transacional.
+- **Garantia de Integridade:** Todas as rotas de leitura e correção passam obrigatoriamente pelos repositórios que aplicam os filtros de propriedade. Alunos não podem alterar a flag `is_public` (restrita a administradores).
+- **Alinhamento de Schema:** A coluna `is_public` possui `DEFAULT FALSE` padronizado tanto no `CREATE TABLE` quanto no `ALTER TABLE`, prevenindo que quizzes existentes se tornem públicos inadvertidamente.
+
+### 5.2 Mitigações de Auditoria Implementadas
+1. **Mitigação de Timing Attack no Login:** Quando um nome de usuário não é encontrado, o serviço executa PBKDF2-HMAC-SHA256 (600.000 iterações) contra salt e hash sentinelas (`_DUMMY_SALT`, `_DUMMY_HASH`), equalizando o tempo de resposta (~175 ms) em relação a usuários existentes e impedindo a enumeração de contas por tempo.
+2. **Rate Limiting Baseado em Falhas e Chaves Compostas:** O endpoint `/api/auth/login` isola tentativas com chave composta `(IP + Usuário)` e contabiliza apenas falhas consecutivas. Isso elimina:
+   - **Bloqueio de conta por terceiros (Problema A):** Um atacante forçando tentativas para `admin` só bloqueia o seu próprio IP para aquele usuário, permitindo que o administrador legítimo acesse sua conta normalmente a partir do seu IP.
+   - **Contenção em redes compartilhadas/NAT (Problema B):** Logins bem-sucedidos não gastam cota de rate limit e limpam o contador de falhas daquele IP/usuário.
+3. **Criptografia em Trânsito:** Bancos remotos utilizam `sslmode=verify-full` por padrão (ajustável via `DB_SSLMODE`), garantindo validação completa de certificados TLS/SSL.

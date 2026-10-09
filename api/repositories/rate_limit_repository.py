@@ -102,6 +102,64 @@ class RateLimitRepository:
 
         return True, 0
 
+    def is_blocked(self, key: str, limit: int, window_seconds: int) -> tuple[bool, int]:
+        """
+        Verifica se a chave atingiu o limite na janela sem registrar novo consumo.
+        Retorna (bloqueado, retry_after_segundos).
+        """
+        now = time.time()
+        cutoff = now - window_seconds
+
+        with self._lock:
+            entries = self._memory_storage[key]
+            while entries and entries[0][0] <= cutoff:
+                entries.popleft()
+
+            local_used = sum(t for _, t in entries)
+            if local_used >= limit:
+                oldest = entries[0][0] if entries else now
+                retry_after = max(1, int(oldest - cutoff + 1))
+                return True, retry_after
+
+        try:
+            with get_cursor() as cur:
+                cur.execute(
+                    "SELECT COALESCE(SUM(tokens), 0) AS used FROM rate_limits WHERE key = %s AND timestamp > %s",
+                    (key, cutoff)
+                )
+                row = cur.fetchone()
+                db_used = int(row["used"]) if row and row.get("used") is not None else 0
+                total_used = max(local_used, db_used)
+                if total_used >= limit:
+                    cur.execute(
+                        "SELECT MIN(timestamp) AS oldest FROM rate_limits WHERE key = %s AND timestamp > %s",
+                        (key, cutoff)
+                    )
+                    row_oldest = cur.fetchone()
+                    oldest = float(row_oldest["oldest"]) if row_oldest and row_oldest.get("oldest") is not None else now
+                    retry_after = max(1, int(oldest - cutoff + 1))
+                    return True, retry_after
+        except Exception as e:
+            if DEBUG:
+                print(f"[rate-limit] Erro ao consultar bloqueio no banco ({e})")
+
+        return False, 0
+
+    def record(self, key: str, cost: int = 1) -> None:
+        """Registra consumo ou falha na memória e no banco."""
+        now = time.time()
+        with self._lock:
+            self._memory_storage[key].append((now, cost))
+        try:
+            with get_cursor() as cur:
+                cur.execute(
+                    "INSERT INTO rate_limits (key, timestamp, tokens) VALUES (%s, %s, %s)",
+                    (key, now, cost)
+                )
+        except Exception as e:
+            if DEBUG:
+                print(f"[rate-limit] Falha ao gravar registro no banco ({e})")
+
     def get_usage(self, key: str, window_seconds: int) -> int:
         """Retorna o total consumido na janela atual para a chave."""
         cutoff = time.time() - window_seconds
