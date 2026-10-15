@@ -113,6 +113,8 @@ class RateLimiter:
 
 # ─── Instâncias de rate-limiters por rota com persistência compartilhada ─────
 _rl_auth = RateLimiter(limit=10, window_seconds=15 * 60, repo=rate_limit_repo)    # cadastro/geral: 10/15min
+_rl_forgot_password = RateLimiter(limit=5, window_seconds=15 * 60, repo=rate_limit_repo) # esqueci senha: 5/15min
+_rl_reset_password = RateLimiter(limit=10, window_seconds=15 * 60, repo=rate_limit_repo) # redefinir senha: 10/15min
 _rl_login_fail_user_ip = RateLimiter(limit=10, window_seconds=15 * 60, repo=rate_limit_repo)  # falhas por (IP + User): 10/15min
 _rl_login_fail_ip = RateLimiter(limit=30, window_seconds=15 * 60, repo=rate_limit_repo)       # falhas por IP (anti-varredura): 30/15min
 _rl_submit = RateLimiter(limit=30, window_seconds=15 * 60, repo=rate_limit_repo)  # submit: 30/15min
@@ -321,6 +323,14 @@ class QuizHandler(BaseHTTPRequestHandler):
             if request.path == "/api/auth/me":
                 token = HTTPMiddleware.get_auth_token(self)
                 response = self.auth_controller.get_me(token)
+                status, data = ResponseFormatter.success(response["data"])
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
+            # 0.1 API: Validar token de recuperação de senha
+            if request.path == "/api/auth/verify-reset-token":
+                token = query.get("token", [None])[0]
+                response = self.auth_controller.verify_reset_token(token)
                 status, data = ResponseFormatter.success(response["data"])
                 HTTPMiddleware.send_json_response(self, status, data)
                 return

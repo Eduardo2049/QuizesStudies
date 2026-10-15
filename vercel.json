@@ -7,6 +7,7 @@
     { "source": "/apple-touch-icon.png", "destination": "/web/icons/apple-touch-icon.png" },
     { "source": "/login", "destination": "/web/login.html" },
     { "source": "/register", "destination": "/web/register.html" },
+    { "source": "/reset-password", "destination": "/web/reset-password.html" },
     { "source": "/guest", "destination": "/web/index.html" },
     { "source": "/", "destination": "/web/index.html" },
     { "source": "/api/(.*)", "destination": "/api/index.py?__path=/api/$1" }
