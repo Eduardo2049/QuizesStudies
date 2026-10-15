@@ -10,7 +10,7 @@ Este documento define formalmente os limites de acesso, requisitos de engenharia
    - **Frontend:** HTML5 semântico, Vanilla JavaScript nativo (sem bundlers pesados, sem Webpack/Vite a menos que expressamente solicitado), Vanilla CSS com variáveis CSS (`--ink`, `--teal`, `--coral`, etc.).
    - **Backend:** Python 3.10+ sem frameworks pesados (FastAPI/Django/Flask). A aplicação usa o servidor nativo `ThreadingHTTPServer` estruturado com MVC limpo.
 2. **Qualidade Visual (Aesthetics):**
-   - Suporte contínuo a dois temas: Claro (acolhedor e limpo) e Noturno (paleta Dracula enriquecida com roxo claro `#9767f1`).
+   - Suporte contínuo a dois temas: Claro (acolhedor e limpo) e Noturno (tinta petróleo com coral e teal quentes, derivada da identidade clara).
    - Todos os componentes devem ser responsivos para celulares (a partir de 320px), tablets e desktops.
    - Qualquer novo elemento de interface deve ter foco visível acessível, área de toque confortável (mínimo de 44-48px de altura em mobile) e feedback claro ao usuário.
 3. **Integridade de Testes:**
