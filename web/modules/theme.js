@@ -1,3 +1,4 @@
+import { icon } from './icons.js?v=5';
 /**
  * Módulo de Personalização e Temas (Dark / Light / Sistema)
  * Suporta preferência do sistema operacional e alternância manual salva em localStorage.
@@ -34,7 +35,7 @@ export function applyTheme(theme = currentTheme) {
     metaTheme.name = 'theme-color';
     document.head.appendChild(metaTheme);
   }
-  metaTheme.content = resolved === 'dark' ? '#282a36' : '#f4f0e8';
+  metaTheme.content = resolved === 'dark' ? '#121c1d' : '#f4f0e8';
 
   updateThemeButtonUI();
 }
@@ -70,21 +71,21 @@ function updateThemeButtonUI() {
   const iconEl = btn.querySelector('.theme-icon');
   const labelEl = btn.querySelector('.theme-label');
 
-  let icon = '💻';
+  let iconName = 'monitor';
   let label = 'Tema: Sistema';
   let title = 'Tema: Sistema (clique para alternar)';
 
   if (currentTheme === 'dark') {
-    icon = '🌙';
+    iconName = 'moon';
     label = 'Tema: Escuro';
     title = 'Tema: Escuro (clique para alternar para Claro)';
   } else if (currentTheme === 'light') {
-    icon = '☀️';
+    iconName = 'sun';
     label = 'Tema: Claro';
     title = 'Tema: Claro (clique para alternar para Sistema)';
   }
 
-  if (iconEl) iconEl.textContent = icon;
+  if (iconEl) iconEl.innerHTML = icon(iconName);
   if (labelEl) labelEl.textContent = label;
   btn.title = title;
   btn.setAttribute('aria-label', title);
