@@ -1,3 +1,4 @@
+import { icon } from './icons.js?v=5';
 /**
  * Módulo de Feedback e Estatísticas Pedagógicas
  * Calcula métricas de aproveitamento, ritmo por questão e divisão por disciplinas/seções.
@@ -61,24 +62,24 @@ export function calculateQuizStats(questions, results, totalSeconds = 0) {
   const avgSecondsPerQuestion = total > 0 ? Math.round(totalSeconds / total) : 0;
 
   // Classificação geral
-  let tierBadge = '🎯 Bom Rendimento';
+  let tierBadge = `${icon('target')} Bom Rendimento`;
   let tierColor = 'tier-good';
   let encouragement = 'Você teve um bom aproveitamento! Revise os erros pontuais para consolidar o conteúdo.';
 
   if (percentage >= 85) {
-    tierBadge = '🏆 Desempenho Excepcional';
+    tierBadge = `${icon('trophy')} Desempenho Excepcional`;
     tierColor = 'tier-excellent';
     encouragement = 'Excelente domínio! Você está pronto para os níveis mais desafiadores desta matéria.';
   } else if (percentage >= 70) {
-    tierBadge = '🎯 Acima da Média';
+    tierBadge = `${icon('target')} Acima da Média`;
     tierColor = 'tier-good';
     encouragement = 'Muito bom! Você superou o ponto de corte padrão. Foco nas justificativas das erradas.';
   } else if (percentage >= 50) {
-    tierBadge = '⚖️ Regular / Em Evolução';
+    tierBadge = `${icon('scale')} Regular / Em Evolução`;
     tierColor = 'tier-average';
     encouragement = 'Bom esforço! Recomendamos retreinar o Caderno de Erros ou gerar variações com IA para fixar.';
   } else {
-    tierBadge = '⚠️ Atenção Redobrada';
+    tierBadge = `${icon('warning')} Atenção Redobrada`;
     tierColor = 'tier-attention';
     encouragement = 'Revise a teoria e as explicações didáticas antes de tentar o próximo simulado.';
   }
@@ -142,7 +143,7 @@ export function renderStatsHtml(stats) {
     <div class="stats-overview-card ${tierColor}">
       <div class="stats-tier-header">
         <span class="stats-tier-tag">${tierBadge}</span>
-        <span class="stats-rhythm-badge">⏱️ Ritmo Médio: <strong>${formatDuration(avgSecondsPerQuestion)}</strong> / questão</span>
+        <span class="stats-rhythm-badge">${icon('clock', 14)} Ritmo Médio: <strong>${formatDuration(avgSecondsPerQuestion)}</strong> / questão</span>
       </div>
       <p class="stats-encouragement">${encouragement}</p>
 
@@ -171,7 +172,7 @@ export function renderStatsHtml(stats) {
     ${sections.length > 0 ? `
       <div class="sections-breakdown-card">
         <h3 class="sections-breakdown-title">
-          <span>📊 Desempenho por Disciplina / Matéria</span>
+          <span>${icon('chart')} Desempenho por Disciplina / Matéria</span>
         </h3>
         <div class="sections-list">
           ${sections.map((sec) => {

@@ -96,3 +96,57 @@ class UserRepository:
         with get_cursor() as cur:
             cur.execute("DELETE FROM sessions")
             return cur.rowcount
+
+    def delete_user_sessions(self, user_id: int) -> int:
+        """Remove todas as sessões ativas de um usuário (ex: após redefinir senha)."""
+        with get_cursor() as cur:
+            cur.execute("DELETE FROM sessions WHERE user_id = %s", (user_id,))
+            return cur.rowcount
+
+    # ─── Recuperação de Senha ────────────────────────────────────────────────
+
+    def create_password_reset(self, token_hash: str, user_id: int, expires_minutes: int = 30) -> dict:
+        """Registra solicitação de recuperação de senha e invalida tokens anteriores não usados."""
+        expires_at = datetime.now() + timedelta(minutes=expires_minutes)
+        with get_cursor() as cur:
+            cur.execute("UPDATE password_resets SET used = TRUE WHERE user_id = %s AND used = FALSE", (user_id,))
+            cur.execute("""
+                INSERT INTO password_resets (token_hash, user_id, expires_at, used)
+                VALUES (%s, %s, %s, FALSE)
+                RETURNING id, token_hash, user_id, expires_at, used, created_at
+            """, (token_hash, user_id, expires_at))
+            return dict(cur.fetchone())
+
+    def find_password_reset(self, token_hash: str) -> dict | None:
+        """Busca solicitação válida, não expirada e não utilizada pelo hash do token."""
+        with get_cursor() as cur:
+            cur.execute("""
+                SELECT pr.id, pr.token_hash, pr.user_id, pr.expires_at, pr.used, pr.created_at,
+                       u.email, u.username
+                FROM password_resets pr
+                JOIN users u ON pr.user_id = u.id
+                WHERE pr.token_hash = %s AND pr.used = FALSE AND pr.expires_at > NOW()
+            """, (token_hash,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def mark_password_reset_used(self, token_hash: str) -> bool:
+        """Marca a solicitação como utilizada após a redefinição de senha."""
+        with get_cursor() as cur:
+            cur.execute("""
+                UPDATE password_resets
+                SET used = TRUE
+                WHERE token_hash = %s AND used = FALSE
+                RETURNING id
+            """, (token_hash,))
+            return cur.fetchone() is not None
+
+    def cleanup_expired_resets(self) -> int:
+        """Remove solicitações expiradas ou já utilizadas com mais de 7 dias."""
+        with get_cursor() as cur:
+            cur.execute("""
+                DELETE FROM password_resets
+                WHERE expires_at <= NOW() OR (used = TRUE AND created_at <= NOW() - INTERVAL '7 days')
+            """)
+            return cur.rowcount
+

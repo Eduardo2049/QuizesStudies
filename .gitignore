@@ -23,3 +23,6 @@ replacements.txt
 
 # Overrides de desenvolvimento Docker (não deve ir para produção)
 docker-compose.override.yml
+
+# Baseline visual (screenshots locais)
+design-baseline/

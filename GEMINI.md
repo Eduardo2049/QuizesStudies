@@ -67,5 +67,5 @@ O agente tem total liberdade para:
 
 - **Backend:** Python 3.10+ sem frameworks pesados; utiliza `http.server.ThreadingHTTPServer` com arquitetura em camadas (`handlers` -> `controllers` -> `services` -> `repositories`).
 - **Banco de Dados:** PostgreSQL com fallback automático para SQLite em memória caso o PostgreSQL não esteja acessível.
-- **Frontend:** HTML5 semântico, Vanilla CSS com suporte a temas Claro e Noturno (Dracula), JavaScript modular nativo ES Modules.
+- **Frontend:** HTML5 semântico, Vanilla CSS com suporte a temas Claro e Noturno (petróleo), JavaScript modular nativo ES Modules.
 - **Validação de Testes:** Execute sempre `python -m unittest discover tests` para assegurar que todas as suítes permaneçam 100% aprovadas.

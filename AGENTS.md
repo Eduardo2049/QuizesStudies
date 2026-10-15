@@ -67,5 +67,20 @@ O agente tem total liberdade para:
 
 - **Backend:** Python 3.10+ sem frameworks pesados; utiliza `http.server.ThreadingHTTPServer` com arquitetura em camadas (`handlers` -> `controllers` -> `services` -> `repositories`).
 - **Banco de Dados:** PostgreSQL com fallback automático para SQLite em memória caso o PostgreSQL não esteja acessível.
-- **Frontend:** HTML5 semântico, Vanilla CSS com suporte a temas Claro e Noturno (Dracula), JavaScript modular nativo ES Modules.
+- **Frontend:** HTML5 semântico, Vanilla CSS com suporte a temas Claro (papel/coral/teal) e Noturno (tinta petróleo derivada da mesma identidade), JavaScript modular nativo ES Modules.
 - **Validação de Testes:** Execute sempre `python -m unittest discover tests` para assegurar que todas as suítes permaneçam 100% aprovadas.
+
+---
+
+## 🎨 5. Regras para Redesign de Interface (`web/`)
+
+Referência completa: `docs/DESIGN_UPGRADE.md`. Resumo obrigatório:
+
+- Somente Vanilla CSS/JS. Proibido Tailwind, Bootstrap, React/Vue, GSAP e ícones/fontes via CDN.
+- A CSP (`vercel.json` e `api/middleware/http_middleware.py`) só permite `'self'`: fontes ficam em `web/fonts/` (woff2 + `font-display: swap`) e ícones são SVG inline via `web/modules/icons.js`. Não usar emojis como ícones de interface.
+- Não alterar `package.json`, `Dockerfile`, `migrations.py` nem regras de negócio em `api/` por causa de mudanças visuais. Servir novos tipos estáticos exige apenas o mapeamento de `Content-Type` em `quiz_handler.py`.
+- Manter IDs, classes usadas por `app.js` e atributos `aria-*` existentes.
+- Contraste mínimo WCAG AA; respeitar `prefers-reduced-motion`; alvos de toque ≥ 44px no mobile; texto de rótulo ≥ 12px.
+- Usar os tokens de `:root` (cor, `--space-*`, `--text-*`, `--radius-*`, `--dur-*`) em vez de valores soltos.
+- Subir o `?v=` de `styles.css` e `app.js` nos HTMLs a cada mudança visual (cache de 1 dia).
+- Antes de concluir: `python -m unittest discover tests` e, se possível, `python tests/visual/capture_baseline.py --label after` (requer Playwright instalado).
