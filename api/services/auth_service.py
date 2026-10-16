@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import secrets
 from api.repositories.user_repository import UserRepository
+from api.services.email_service import EmailService
 from api.exceptions.quiz_exceptions import QuizAPIException
 from api.utils.config import ADMIN_USERNAME, ADMIN_PASSWORD, DEBUG
 
@@ -52,8 +53,9 @@ def verify_password(password: str, salt: str, password_hash: str) -> bool:
 class AuthService:
     """Regras de negócio para autenticação de usuários e controle de sessões"""
 
-    def __init__(self, repository: UserRepository = None):
+    def __init__(self, repository: UserRepository = None, email_service: EmailService = None):
         self.repo = repository or UserRepository()
+        self.email_service = email_service or EmailService()
 
     def seed_admin_if_needed(self):
         """Garante a existência do usuário administrador e sincroniza sua senha com ADMIN_PASSWORD."""
@@ -162,3 +164,108 @@ class AuthService:
             return False
         token_hash = _hash_token(token)
         return self.repo.delete_session(token_hash)
+
+    # ─── Recuperação de Senha ────────────────────────────────────────────────
+
+    def request_password_reset(self, identifier: str, app_url: str = "") -> dict:
+        """
+        Gera solicitação de recuperação de senha.
+        Anti-enumeração: executa hash dummy e devolve a mesma resposta genérica
+        mesmo se o usuário não existir, prevenindo enumeração por timing ou payload.
+        """
+        identifier = (identifier or "").strip()
+        if not identifier:
+            raise QuizAPIException("Informe seu e-mail ou nome de usuário", 400)
+
+        # Localiza por e-mail ou por username
+        user = self.repo.find_by_email(identifier) if "@" in identifier else self.repo.find_by_username(identifier)
+        if not user and "@" not in identifier:
+            user = self.repo.find_by_email(identifier)
+        if not user and "@" in identifier:
+            user = self.repo.find_by_username(identifier)
+
+        if not user:
+            # Hash falso para mitigar timing attacks
+            verify_password("dummy_password", _DUMMY_SALT, _DUMMY_HASH)
+            return {
+                "message": "Se os dados informados estiverem cadastrados, você receberá as instruções para redefinir sua senha.",
+                "email_sent": False,
+                "dev_reset_url": None,
+                "dev_token": None,
+            }
+
+        # Usuário válido: gerar token com alta entropia (32 bytes = 43+ chars)
+        token = secrets.token_urlsafe(32)
+        token_hash = _hash_token(token)
+
+        self.repo.create_password_reset(token_hash, user["id"], expires_minutes=30)
+
+        base_url = (app_url or "http://localhost:8000").rstrip("/")
+        reset_url = f"{base_url}/reset-password?token={token}"
+
+        success, mode = self.email_service.send_password_reset_email(
+            to_email=user["email"],
+            username=user["username"],
+            reset_url=reset_url,
+            token=token,
+        )
+
+        is_simulated = (mode == "simulated")
+        return {
+            "message": "Se os dados informados estiverem cadastrados, você receberá as instruções para redefinir sua senha.",
+            "email_sent": not is_simulated,
+            "dev_reset_url": reset_url if is_simulated else None,
+            "dev_token": token if is_simulated else None,
+        }
+
+    def verify_reset_token(self, token: str) -> dict:
+        """Valida o token de redefinição e retorna dados mascarados para confirmação visual."""
+        token = (token or "").strip()
+        if not token:
+            raise QuizAPIException("Token de recuperação não fornecido", 400)
+
+        token_hash = _hash_token(token)
+        reset = self.repo.find_password_reset(token_hash)
+        if not reset:
+            verify_password("dummy_password", _DUMMY_SALT, _DUMMY_HASH)
+            raise QuizAPIException("Link de recuperação inválido ou expirado", 400)
+
+        email = reset.get("email", "")
+        parts = email.split("@")
+        masked_email = (
+            f"{parts[0][:2]}***@{parts[1]}"
+            if len(parts) == 2 and len(parts[0]) >= 2
+            else email
+        )
+
+        return {
+            "valid": True,
+            "username": reset.get("username", ""),
+            "masked_email": masked_email,
+        }
+
+    def reset_password(self, token: str, new_password: str) -> dict:
+        """Aplica a nova senha com validação de complexidade, invalidação de sessões e queima do token."""
+        token = (token or "").strip()
+        if not token:
+            raise QuizAPIException("Token de recuperação não fornecido", 400)
+
+        if not new_password or len(new_password) < 8:
+            raise QuizAPIException("A nova senha deve ter pelo menos 8 caracteres", 400)
+
+        token_hash = _hash_token(token)
+        reset = self.repo.find_password_reset(token_hash)
+        if not reset:
+            verify_password("dummy_password", _DUMMY_SALT, _DUMMY_HASH)
+            raise QuizAPIException("Link de recuperação inválido ou expirado", 400)
+
+        user_id = reset["user_id"]
+        pwd_hash, salt = hash_password(new_password)
+
+        self.repo.update_password_and_role(user_id, pwd_hash, salt)
+        self.repo.mark_password_reset_used(token_hash)
+        self.repo.delete_user_sessions(user_id)
+
+        return {
+            "message": "Senha redefinida com sucesso! Você já pode entrar com sua nova senha.",
+        }

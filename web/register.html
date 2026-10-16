@@ -1,16 +1,16 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title id="pageTitle">Cadastrar — Quiz Study</title>
   <meta name="description" content="Crie sua conta no Quiz Study para realizar simulados interativos e acompanhar seu desempenho.">
-  <link rel="icon" type="image/svg+xml" href="/web/icons/favicon.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/web/icons/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/web/icons/favicon-16x16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/web/icons/apple-touch-icon.png">
-  <link rel="shortcut icon" href="/web/icons/favicon.ico">
-  <link rel="stylesheet" href="/web/styles.css?v=3">
+  <link rel="icon" type="image/svg+xml" href="/web/icons/favicon.svg?v=2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/web/icons/favicon-32x32.png?v=2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/web/icons/favicon-16x16.png?v=2">
+  <link rel="apple-touch-icon" sizes="180x180" href="/web/icons/apple-touch-icon.png?v=2">
+  <link rel="shortcut icon" href="/web/icons/favicon.ico?v=2">
+  <link rel="stylesheet" href="/web/styles.css?v=13">
   <!-- Script de prevenção de FOUC de tema (execução imediata, bloqueante) -->
   <script src="/web/modules/theme-boot.js"></script>
   <!-- Vercel Web Analytics + Speed Insights (stubs de fila, bloqueantes, antes dos loaders) -->
@@ -23,7 +23,7 @@
     <div class="login-card">
       <header class="login-header">
         <div class="login-brand">
-          <img src="/web/icons/favicon.svg" alt="Quiz Study" class="login-brand-icon" width="56" height="56">
+          <img src="/web/icons/favicon.svg?v=2" alt="Quiz Study" class="login-brand-icon" width="56" height="56">
         </div>
         <p class="eyebrow" id="headerEyebrow">Quiz Study · crie sua conta</p>
         <h1 class="login-title" id="headerTitle">Cadastro de<br><em>Estudante</em></h1>
@@ -37,15 +37,18 @@
       </nav>
 
       <!-- Formulário de Login (Oculto inicialmente na rota /register) -->
-      <form id="pageLoginForm" class="auth-form-card" hidden autocomplete="off" novalidate>
+      <form id="pageLoginForm" class="auth-form-card" hidden novalidate>
         <div class="form-group">
           <label for="loginUsername">Usuário</label>
-          <input type="text" id="loginUsername" name="username" placeholder="Digite seu usuário" required autocomplete="off">
+          <input type="text" id="loginUsername" name="username" placeholder="Digite seu usuário" required autocomplete="username">
         </div>
 
         <div class="form-group">
-          <label for="loginPassword">Senha</label>
-          <input type="password" id="loginPassword" name="password" placeholder="Digite sua senha" required autocomplete="new-password">
+          <div class="form-label-row">
+            <label for="loginPassword">Senha</label>
+            <a href="/reset-password" class="auth-sublink">Esqueci minha senha</a>
+          </div>
+          <input type="password" id="loginPassword" name="password" placeholder="Digite sua senha" required autocomplete="current-password">
         </div>
 
         <div id="loginFeedback" class="form-feedback" hidden></div>
@@ -57,20 +60,20 @@
       </form>
 
       <!-- Formulário de Cadastro (Ativo inicialmente na rota /register) -->
-      <form id="pageRegisterForm" class="auth-form-card" autocomplete="off" novalidate>
+      <form id="pageRegisterForm" class="auth-form-card" novalidate>
         <div class="form-group">
           <label for="regUsername">Usuário</label>
-          <input type="text" id="regUsername" name="username" placeholder="Escolha um nome de usuário" required autocomplete="off" autofocus>
+          <input type="text" id="regUsername" name="username" placeholder="Escolha um nome de usuário" required autocomplete="username" autofocus>
         </div>
 
         <div class="form-group">
           <label for="regEmail">E-mail</label>
-          <input type="email" id="regEmail" name="email" placeholder="seuemail@exemplo.com" required autocomplete="off">
+          <input type="email" id="regEmail" name="email" placeholder="seuemail@exemplo.com" required autocomplete="email">
         </div>
 
         <div class="form-group">
           <label for="regPassword">Senha</label>
-          <input type="password" id="regPassword" name="password" placeholder="Mínimo de 6 caracteres" required autocomplete="new-password">
+          <input type="password" id="regPassword" name="password" placeholder="Mínimo de 8 caracteres" required autocomplete="new-password">
         </div>
 
         <div id="registerFeedback" class="form-feedback" hidden></div>
@@ -81,6 +84,12 @@
         </button>
       </form>
 
+      <div class="auth-divider" aria-hidden="true"><span>ou</span></div>
+
+      <button id="btnGuestAccess" class="secondary auth-submit-btn auth-guest-btn" type="button">
+        Continuar como convidado
+      </button>
+
       <footer class="login-footer">
         <p class="login-footer-hint" id="footerHint">
           Já possui uma conta? <a href="/login" id="linkToggle" class="auth-link">Entre aqui</a>
@@ -89,6 +98,6 @@
     </div>
   </div>
 
-  <script type="module" src="/web/modules/auth_page.js"></script>
+  <script type="module" src="/web/modules/auth_page.js?v=5"></script>
 </body>
 </html>

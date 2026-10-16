@@ -113,6 +113,8 @@ class RateLimiter:
 
 # ─── Instâncias de rate-limiters por rota com persistência compartilhada ─────
 _rl_auth = RateLimiter(limit=10, window_seconds=15 * 60, repo=rate_limit_repo)    # cadastro/geral: 10/15min
+_rl_forgot_password = RateLimiter(limit=5, window_seconds=15 * 60, repo=rate_limit_repo) # esqueci senha: 5/15min
+_rl_reset_password = RateLimiter(limit=10, window_seconds=15 * 60, repo=rate_limit_repo) # redefinir senha: 10/15min
 _rl_login_fail_user_ip = RateLimiter(limit=10, window_seconds=15 * 60, repo=rate_limit_repo)  # falhas por (IP + User): 10/15min
 _rl_login_fail_ip = RateLimiter(limit=30, window_seconds=15 * 60, repo=rate_limit_repo)       # falhas por IP (anti-varredura): 30/15min
 _rl_submit = RateLimiter(limit=30, window_seconds=15 * 60, repo=rate_limit_repo)  # submit: 30/15min
@@ -325,6 +327,14 @@ class QuizHandler(BaseHTTPRequestHandler):
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
+            # 0.1 API: Validar token de recuperação de senha
+            if request.path == "/api/auth/verify-reset-token":
+                token = query.get("token", [None])[0]
+                response = self.auth_controller.verify_reset_token(token)
+                status, data = ResponseFormatter.success(response["data"])
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
             # 1. API: Listar quizzes
             if request.path == "/api/quizzes":
                 allowed, retry_after = _rl_read.check_handler(self, "GET:/api/quizzes")
@@ -435,6 +445,24 @@ class QuizHandler(BaseHTTPRequestHandler):
                     HTTPMiddleware.send_json_response(self, status, data)
                 return
 
+            # 3.2.1 Servir HTML de Recuperação de Senha
+            if request.path in ("/reset-password", "/reset-password.html", "/recuperar-senha", "/recuperar-senha.html"):
+                reset_file = WEB_DIR / "reset-password.html"
+                if reset_file.is_file():
+                    content = reset_file.read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(content)))
+                    HTTPMiddleware.add_cors_headers(self)
+                    HTTPMiddleware.add_security_headers(self)
+                    HTTPMiddleware.add_cache_headers(self, cache=False)
+                    self.end_headers()
+                    self.wfile.write(content)
+                else:
+                    status, data = ResponseFormatter.not_found("reset-password.html não encontrado")
+                    HTTPMiddleware.send_json_response(self, status, data)
+                return
+
             # 3.3 Servir Favicon na raiz (/favicon.ico, /favicon.svg, /favicon.png, /apple-touch-icon.png)
             if request.path in ("/favicon.ico", "/favicon.svg", "/favicon.png", "/apple-touch-icon.png"):
                 fav_name = request.path.lstrip("/").split("?", 1)[0]
@@ -471,6 +499,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                         "image/svg+xml" if static_file.suffix == ".svg" else
                         "image/png" if static_file.suffix == ".png" else
                         "image/x-icon" if static_file.suffix == ".ico" else
+                        "font/woff2" if static_file.suffix == ".woff2" else
                         "application/octet-stream"
                     )
                     try:
@@ -581,6 +610,40 @@ class QuizHandler(BaseHTTPRequestHandler):
                 status, data = ResponseFormatter.success(response["data"], response["message"])
                 clear_cookie = HTTPMiddleware.session_cookie(None, COOKIE_SECURE, 0)
                 HTTPMiddleware.send_json_response(self, status, data, set_cookie=clear_cookie)
+                return
+
+            if request.path == "/api/auth/forgot-password":
+                allowed, retry_after = _rl_forgot_password.check_handler(self, "POST:/api/auth/forgot-password")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
+
+                payload = self._read_json_body()
+                if payload is None:
+                    return
+
+                host = self.headers.get("Host", f"localhost:{PORT}")
+                proto = "https" if (self.headers.get("X-Forwarded-Proto") == "https" or COOKIE_SECURE) else "http"
+                app_url = os.getenv("APP_URL", f"{proto}://{host}").rstrip("/")
+
+                response = self.auth_controller.forgot_password(payload, app_url=app_url)
+                status, data = ResponseFormatter.success(response["data"], response["message"])
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
+            if request.path == "/api/auth/reset-password":
+                allowed, retry_after = _rl_reset_password.check_handler(self, "POST:/api/auth/reset-password")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
+
+                payload = self._read_json_body()
+                if payload is None:
+                    return
+
+                response = self.auth_controller.reset_password(payload)
+                status, data = ResponseFormatter.success(response["data"], response["message"])
+                HTTPMiddleware.send_json_response(self, status, data)
                 return
 
             # ── 1. Upload de arquivo (multipart/form-data) ────────────────────

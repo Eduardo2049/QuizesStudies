@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Quiz Study — Treino de Raciocínio</title>
   <meta name="description" content="Plataforma de simulados e treino de raciocínio lógico. Faça upload de provas em PDF, DOCX ou TXT e treine com gabarito automático.">
-  <link rel="icon" type="image/svg+xml" href="/web/icons/favicon.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/web/icons/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/web/icons/favicon-16x16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/web/icons/apple-touch-icon.png">
-  <link rel="shortcut icon" href="/web/icons/favicon.ico">
-  <link rel="stylesheet" href="/web/styles.css?v=3">
+  <link rel="icon" type="image/svg+xml" href="/web/icons/favicon.svg?v=2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/web/icons/favicon-32x32.png?v=2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/web/icons/favicon-16x16.png?v=2">
+  <link rel="apple-touch-icon" sizes="180x180" href="/web/icons/apple-touch-icon.png?v=2">
+  <link rel="shortcut icon" href="/web/icons/favicon.ico?v=2">
+  <link rel="stylesheet" href="/web/styles.css?v=13">
   <!-- Script de prevenção de FOUC de tema (execução imediata, bloqueante) -->
   <script src="/web/modules/theme-boot.js"></script>
   <!-- Vercel Web Analytics + Speed Insights (stubs de fila, bloqueantes, antes dos loaders) -->
@@ -21,10 +21,35 @@
 <body>
   <main class="shell">
     <header class="hero">
-      <div class="hero-brand">
-        <img src="/web/icons/favicon.svg" alt="" class="hero-brand-icon" width="22" height="22" aria-hidden="true">
-        <p class="eyebrow">Quiz Study · prática guiada</p>
+      <div class="hero-bar">
+        <div class="hero-brand">
+          <img src="/web/icons/favicon.svg?v=2" alt="" class="hero-brand-icon" width="22" height="22" aria-hidden="true">
+          <p class="eyebrow">Quiz Study · prática guiada</p>
+        </div>
+        <div class="hero-utils">
+          <button id="themeToggle" class="btn-theme-toggle btn-ghost" type="button" title="Alternar tema (Sistema / Escuro / Claro)">
+            <span class="theme-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 21h8M12 16v5"/></svg></span>
+            <span class="theme-label">Tema</span>
+          </button>
+          <button id="btnOpenAboutModal" class="btn-about btn-ghost" type="button" title="Conheça o propósito e diferenciais do Quiz Study">
+            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg> <span class="btn-label">Por que o Quiz Study?</span>
+          </button>
+          <div id="authControls" class="auth-controls">
+            <div id="userProfile" class="user-profile-badge" hidden>
+              <span class="user-role-badge" id="userRoleBadge">Admin</span>
+              <span class="user-name" id="userName">admin</span>
+              <button id="logoutBtn" class="btn-auth-logout" type="button" title="Sair da conta">Sair</button>
+              <span id="guestActions" class="guest-actions" hidden>
+                <a href="/login" class="guest-action-link" data-guest-exit>Entrar</a>
+                <a href="/register" class="guest-action-link guest-action-link--primary" data-guest-exit>Cadastrar</a>
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <h1>Treino de<br><em>raciocínio</em></h1>
+      <p class="intro">Marque suas respostas com calma. O resultado e o gabarito aparecem somente quando você concluir.</p>
 
       <div class="hero-top">
         <div class="quiz-picker">
@@ -39,34 +64,20 @@
           </div>
         </div>
         <div class="hero-top-buttons">
-          <button id="themeToggle" class="btn-theme-toggle" type="button" title="Alternar tema (Sistema / Escuro / Claro)">
-            <span class="theme-icon">💻</span>
-            <span class="theme-label">Tema</span>
-          </button>
           <button id="btnOpenCatalog" class="btn-catalog" type="button" title="Explorar todos os simulados disponíveis">
-            📚 Explorar Simulados
-          </button>
-          <button id="btnOpenAboutModal" class="btn-about" type="button" title="Conheça o propósito e diferenciais do Quiz Study">
-            💡 Por que o Quiz Study?
+            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h6"/></svg> Explorar Simulados
           </button>
           <button id="addQuizBtn" class="btn-add-quiz" type="button" title="Adicionar novo quiz">
-            <span class="btn-add-icon">＋</span> Adicionar Quiz
+            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Adicionar Quiz
           </button>
-          <div id="authControls" class="auth-controls">
-            <div id="userProfile" class="user-profile-badge" hidden>
-              <span class="user-role-badge" id="userRoleBadge">Admin</span>
-              <span class="user-name" id="userName">admin</span>
-              <button id="logoutBtn" class="btn-auth-logout" type="button" title="Sair da conta">Sair</button>
-            </div>
-          </div>
         </div>
       </div>
 
-      <h1>Treino de<br><em>raciocínio</em></h1>
-      <p class="intro">Marque suas respostas com calma. O resultado e o gabarito aparecem somente quando você concluir.</p>
-
       <div class="hero-actions">
         <button id="startBtn" class="primary start-btn" type="button">Iniciar simulado <span>▶</span></button>
+        <button id="btnSetTimer" class="secondary btn-set-timer" type="button" title="Definir o tempo do simulado">
+          <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg> Tempo
+        </button>
       </div>
       <div class="status">
         <span id="progress">0 de 0 respondidas</span>
@@ -74,7 +85,7 @@
         <div class="timer-wrap">
           <span id="timer" aria-live="polite" title="Clique para definir o tempo">24:00</span>
           <div class="timer-config" id="timerConfig">
-            <label class="timer-config-label" for="timerPreset">⏱</label>
+            <label class="timer-config-label" for="timerPreset"><svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg></label>
             <select id="timerPreset" class="timer-preset-select" title="Definir tempo do simulado">
               <option value="auto">Automático</option>
               <option value="300">5 min</option>
@@ -95,14 +106,14 @@
       <div class="exam-toolbar" id="examToolbar">
         <div class="view-mode-toggle" role="group" aria-label="Modo de visualização">
           <button type="button" id="btnToggleFocus" class="toggle-btn active" title="Exibe 1 questão por vez para foco total">
-            🎯 Modo Foco
+            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg> Modo Foco
           </button>
           <button type="button" id="btnToggleList" class="toggle-btn" title="Exibe todas as questões em scroll contínuo">
-            📜 Modo Lista
+            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg> Modo Lista
           </button>
         </div>
         <button id="btnQuickSubmit" class="primary btn-quick-submit" type="button" title="Conferir respostas do simulado">
-          🏁 Finalizar Simulado
+          <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg> Finalizar Simulado
         </button>
       </div>
 
@@ -123,7 +134,7 @@
     </div>
 
     <div class="shortcuts-hint" id="shortcutsHint">
-      <span>⌨️ <strong>Produtividade:</strong> Use <strong>W A S D</strong> ou <strong>← →</strong> para mover · <strong>1–4</strong> para marcar · <strong>Ctrl+Enter</strong> para finalizar</span>
+      <span><svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg> <strong>Produtividade:</strong> Use <strong>W A S D</strong> ou <strong>← →</strong> para mover · <strong>1–4</strong> para marcar · <strong>Ctrl+Enter</strong> para finalizar</span>
     </div>
 
     <div class="actions">
@@ -141,10 +152,10 @@
       <!-- Alternador de Abas: Upload vs Gerar por Tema -->
       <nav class="modal-tabs" aria-label="Opções para adicionar quiz">
         <button type="button" class="modal-tab-btn active" id="tabUploadFile" data-target="panelUpload">
-          <span>📄 Enviar Arquivo</span>
+          <span><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg> Enviar Arquivo</span>
         </button>
         <button type="button" class="modal-tab-btn" id="tabGenerateTopic" data-target="panelTopic">
-          <span>✦ Gerar por Tema</span>
+          <span><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17v4M17 19h4"/></svg> Gerar por Tema</span>
         </button>
       </nav>
 
@@ -153,7 +164,7 @@
         <p class="modal-subtitle">Envie um arquivo <strong>TXT</strong>, <strong>PDF</strong> ou <strong>DOCX</strong> com questões ou material de estudo. A IA estrutura as questões, gera o gabarito e adapta na quantidade desejada.</p>
 
         <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="Arraste ou clique para selecionar arquivo">
-          <div class="drop-zone-icon">📄</div>
+          <div class="drop-zone-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg></div>
           <p class="drop-zone-label">Arraste o arquivo aqui</p>
           <p class="drop-zone-hint">ou clique para selecionar</p>
           <p class="drop-zone-types">TXT · PDF · DOCX &nbsp;|&nbsp; Máx. 20 MB</p>
@@ -161,7 +172,7 @@
         </div>
 
         <div id="filePreview" class="file-preview" hidden>
-          <span class="file-preview-icon">📎</span>
+          <span class="file-preview-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11l-8.5 8.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L14 7"/></svg></span>
           <span id="filePreviewName" class="file-preview-name"></span>
           <button class="file-preview-remove" id="removeFile" aria-label="Remover arquivo">&times;</button>
         </div>
@@ -290,7 +301,7 @@
         </div>
         <div class="results-footer-right">
           <button id="btnTrainMistakes" class="btn-mistakes" type="button" hidden>
-            🎯 Caderno de Erros (<span id="mistakesCount">0</span>)
+            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg> Caderno de Erros (<span id="mistakesCount">0</span>)
           </button>
           <button id="btnRemixMistakes" class="btn-remix" type="button" hidden>
             ↻ Gerar Novas Variações
@@ -317,17 +328,17 @@
       <div class="about-content">
         <section class="about-pillars">
           <div class="pillar-card">
-            <div class="pillar-icon">⏱️</div>
+            <div class="pillar-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg></div>
             <h3>Fricção Zero</h3>
             <p>Em vez de gastar horas criando flashcards manualmente ou caçando questões desatualizadas, basta arrastar seu PDF/DOCX ou digitar um tema.</p>
           </div>
           <div class="pillar-card">
-            <div class="pillar-icon">🧠</div>
+            <div class="pillar-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 1V4a3 3 0 0 0-3 0z"/><path d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 1"/></svg></div>
             <h3>Retenção & IA Ativa</h3>
             <p>Errou uma questão? A IA não te dá apenas a explicação: ela gera variações inéditas para provar que você entendeu o conceito e não apenas decorou a alternativa.</p>
           </div>
           <div class="pillar-card">
-            <div class="pillar-icon">🎯</div>
+            <div class="pillar-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg></div>
             <h3>Foco no Raciocínio</h3>
             <p>Interface limpa, modo focado com cronômetro de prova, sem distrações, anúncios ou fóruns poluídos que quebram o fluxo de estudos.</p>
           </div>
@@ -382,7 +393,7 @@
       </div>
 
       <div class="modal-actions about-modal-actions">
-        <button id="btnCloseAbout" class="primary btn-close-about" type="button">Entendi, vamos treinar! 🚀</button>
+        <button id="btnCloseAbout" class="primary btn-close-about" type="button">Entendi, vamos treinar!</button>
       </div>
     </div>
   </div>
@@ -390,13 +401,13 @@
   <!-- ── Modal de Confirmação: Finalizar Simulado ────────────────────── -->
   <div id="confirmSubmitModal" class="modal-overlay" hidden aria-modal="true" role="alertdialog" aria-labelledby="confirmSubmitTitle">
     <div class="modal modal--confirm-submit">
-      <div class="confirm-submit-icon">🏁</div>
+      <div class="confirm-submit-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg></div>
       <h2 id="confirmSubmitTitle" class="confirm-submit-title">Finalizar Simulado?</h2>
       <p class="confirm-submit-msg" id="confirmSubmitMsg">
         Você respondeu <strong id="confirmSubmitAnswered">0</strong> de <strong id="confirmSubmitTotal">0</strong> questões.
       </p>
       <p class="confirm-submit-warning" id="confirmSubmitWarning" hidden>
-        <span class="warn-icon">⚠️</span>
+        <span class="warn-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg></span>
         <span class="warn-text">As <strong id="confirmSubmitMissing">0</strong> questões não respondidas serão consideradas <strong>erradas</strong>.</span>
       </p>
       <div class="confirm-submit-actions">
@@ -419,7 +430,7 @@
         <p class="catalog-subtitle">Escolha um simulado para treinar com foco total ou filtre por assunto.</p>
 
         <div class="catalog-search-wrap">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></span>
           <input type="text" id="catalogSearchInput" class="catalog-search-input" placeholder="Pesquisar simulado por tema, matéria ou tipo…" autocomplete="off">
         </div>
 
@@ -427,7 +438,7 @@
           <button type="button" class="catalog-tab-btn active" data-filter="all">Todos</button>
           <button type="button" class="catalog-tab-btn" data-filter="platform">Plataforma</button>
           <button type="button" class="catalog-tab-btn" data-filter="ai">Gerados por IA</button>
-          <button type="button" class="catalog-tab-btn" data-filter="custom">Meus Uploads 📄</button>
+          <button type="button" class="catalog-tab-btn" data-filter="custom">Meus Uploads</button>
         </div>
       </div>
 
@@ -438,7 +449,7 @@
   <!-- ── Modal Genérico de Notificação / Alerta (substitui alert() nativo) ── -->
   <div id="noticeModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="noticeModalTitle">
     <div class="modal modal--notice">
-      <div class="notice-icon" id="noticeIcon">ℹ️</div>
+      <div class="notice-icon" id="noticeIcon"><svg class="ui-icon" viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></div>
       <h2 id="noticeModalTitle" class="notice-title">Aviso</h2>
       <p id="noticeModalMessage" class="notice-msg"></p>
       <div class="modal-actions modal-actions--notice">
@@ -452,7 +463,7 @@
     <div class="modal modal--timer">
       <button class="modal-close" id="closeCustomTimerModal" aria-label="Fechar">&times;</button>
       <div class="timer-modal-header">
-        <span class="timer-modal-icon">⏱️</span>
+        <span class="timer-modal-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg></span>
         <h2 id="customTimerTitle" class="timer-modal-title">Definir Tempo do Simulado</h2>
         <p class="timer-modal-subtitle">Escolha um tempo pré-definido ou digite a duração em minutos.</p>
       </div>
@@ -487,6 +498,6 @@
     </div>
   </div>
 
-  <script type="module" src="/web/app.js?v=3"></script>
+  <script type="module" src="/web/app.js?v=8"></script>
 </body>
 </html>
