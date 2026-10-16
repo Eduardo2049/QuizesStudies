@@ -3737,3 +3737,92 @@ h1 { font-weight: 800; letter-spacing: -0.03em; text-wrap: balance; }
 .auth-divider::before,
 .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .auth-guest-btn { width: 100%; margin-top: 0; }
+
+/* ═══ Cronômetro arrastável e redimensionável (web/modules/timer-drag.js) ═══ */
+#timer {
+  --timer-scale: 1;
+  font-size: calc(12px * var(--timer-scale));
+  padding: calc(10px * var(--timer-scale)) calc(14px * var(--timer-scale));
+  min-width: calc(76px * var(--timer-scale));
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#timer.timer--custom:hover { transform: none; }
+#timer.is-dragging {
+  cursor: grabbing;
+  transform: none;
+  box-shadow: var(--shadow-lift);
+  transition: none;
+}
+#timer.is-resizing { transition: none; }
+
+.timer-resize-handle {
+  position: fixed;
+  z-index: calc(var(--z-timer) + 1);
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.timer-resize-handle::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  border-bottom-right-radius: 3px;
+}
+.timer-resize-handle:hover::before,
+#timer.is-resizing + .timer-resize-handle::before { border-color: var(--accent-text); }
+#timer:not(.running):not(.expired) + .timer-resize-handle { display: none; }
+
+/* Ponteiro preciso: alça discreta, aparece no hover/foco */
+@media (hover: hover) and (pointer: fine) {
+  .timer-resize-handle {
+    opacity: 0;
+    transition: opacity var(--dur-base) ease 300ms;
+  }
+  #timer:hover + .timer-resize-handle,
+  #timer:focus-visible + .timer-resize-handle,
+  #timer.is-resizing + .timer-resize-handle,
+  .timer-resize-handle:hover,
+  .timer-resize-handle:focus-visible {
+    opacity: 1;
+    transition-delay: 0ms;
+  }
+}
+
+@media (max-width: 768px) {
+  #timer {
+    font-size: calc(13px * var(--timer-scale));
+    padding: calc(6px * var(--timer-scale)) calc(10px * var(--timer-scale));
+    min-width: calc(62px * var(--timer-scale));
+  }
+  .timer-resize-handle {
+    z-index: calc(var(--z-timer-mobile) + 1);
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Cronômetro movido: não reserva mais espaço no canto da barra superior */
+@media (max-width: 1100px) {
+  body:has(#timer.running.timer--custom) .hero-utils,
+  body:has(#timer.expired.timer--custom) .hero-utils { margin-right: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timer-resize-handle { transition: none; }
+}
