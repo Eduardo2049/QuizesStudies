@@ -1,5 +1,5 @@
 import { icon } from './modules/icons.js?v=5';
-import { initTheme, toggleTheme } from './modules/theme.js?v=5';
+import { initTheme, toggleTheme } from './modules/theme.js?v=6';
 import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js?v=5';
 import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=5';
 

@@ -94,11 +94,11 @@
 }
 
 [data-theme="dark"] {
-  /* Tema noturno derivado da identidade clara: papel → tinta petróleo, coral e teal quentes */
-  --ink: #f3eee3;
-  --paper: #121c1d;
-  --card-bg: rgba(26, 40, 41, 0.90);
-  --card-solid: #1a2829;
+  /* Tema noturno neutro (padrão de mercado, estilo GitHub Dark): cinza-grafite frio + acentos coral/teal */
+  --ink: #c9d1d9;
+  --paper: #0d1117;
+  --card-bg: rgba(22, 27, 34, 0.92);
+  --card-solid: #161b22;
   --option-bg: rgba(255, 255, 255, 0.04);
   --option-hover: rgba(255, 255, 255, 0.08);
   --option-checked: rgba(111, 209, 199, 0.16);
@@ -110,29 +110,29 @@
   --teal-dark: #8fe0d7;
   --purple: #bd93f9;
   --orange: #f2b866;
-  --btn-primary-text: #121c1d;
-  --btn-teal-text: #121c1d;
-  --btn-orange-text: #121c1d;
+  --btn-primary-text: #0d1117;
+  --btn-teal-text: #0d1117;
+  --btn-orange-text: #0d1117;
   --btn-add-bg: rgba(111, 209, 199, 0.12);
   --btn-add-border: rgba(111, 209, 199, 0.40);
   --btn-add-color: var(--teal);
   --btn-add-hover-bg: rgba(111, 209, 199, 0.22);
   --btn-catalog-bg: rgba(240, 144, 111, 0.12);
   --btn-catalog-border: rgba(240, 144, 111, 0.45);
-  --btn-catalog-color: #f3eee3;
+  --btn-catalog-color: #c9d1d9;
   --btn-catalog-hover-bg: rgba(240, 144, 111, 0.24);
-  --line: #2f4546;
+  --line: #30363d;
   --line-focus: #6fd1c7;
-  --muted: #a9b8b4;
+  --muted: #8b949e;
   --success: #6fdc9a;
   --error: #ff8a7a;
-  --modal-bg: rgba(6, 12, 13, 0.82);
-  --bg-gradient: radial-gradient(circle at 85% 6%, rgba(240, 144, 111, 0.12) 0 16%, transparent 45%), radial-gradient(circle at 12% 94%, rgba(111, 209, 199, 0.10) 0 22%, transparent 50%), linear-gradient(145deg, #0f1819 0%, #162425 100%);
-  --kbd-bg: rgba(255, 255, 255, 0.06);
-  --kbd-border: #4a6365;
-  --kbd-color: #f3eee3;
-  --input-bg: #121c1d;
-  --input-border: #2f4546;
+  --modal-bg: rgba(1, 4, 9, 0.80);
+  --bg-gradient: radial-gradient(circle at 85% 6%, rgba(240, 144, 111, 0.06) 0 16%, transparent 45%), linear-gradient(180deg, #0d1117 0%, #0d1117 100%);
+  --kbd-bg: rgba(110, 118, 129, 0.18);
+  --kbd-border: #3d444d;
+  --kbd-color: #c9d1d9;
+  --input-bg: #0d1117;
+  --input-border: #30363d;
   --focus-ring: rgba(111, 209, 199, 0.35);
   --shadow-card: 0 6px 20px rgba(0, 0, 0, 0.45);
 }
