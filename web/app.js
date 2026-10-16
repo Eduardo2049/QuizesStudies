@@ -1,6 +1,7 @@
-import { initTheme, toggleTheme } from './modules/theme.js';
-import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js';
-import { calculateQuizStats, renderStatsHtml } from './modules/stats.js';
+import { icon } from './modules/icons.js?v=5';
+import { initTheme, toggleTheme } from './modules/theme.js?v=6';
+import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js?v=5';
+import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=5';
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 const quiz = document.querySelector('#quiz');
@@ -196,7 +197,7 @@ function openConfirmSubmitModal(answeredCount, totalCount) {
 }
 
 // ─── Modal Genérico de Notificação (substitui alert() nativo) ───────────────
-export function showNotice(message, title = 'Aviso', icon = 'ℹ️') {
+export function showNotice(message, title = 'Aviso', iconName = 'info') {
   return new Promise((resolve) => {
     const modal = document.getElementById('noticeModal');
     const titleEl = document.getElementById('noticeModalTitle');
@@ -212,7 +213,7 @@ export function showNotice(message, title = 'Aviso', icon = 'ℹ️') {
 
     if (titleEl) titleEl.textContent = title;
     if (msgEl) msgEl.textContent = message;
-    if (iconEl) iconEl.textContent = icon;
+    if (iconEl) iconEl.innerHTML = icon(iconName, 36);
 
     modal.hidden = false;
     document.body.style.overflow = 'hidden';
@@ -435,7 +436,8 @@ function openAboutModal() {
   if (aboutModal) {
     aboutModal.hidden = false;
     document.body.style.overflow = 'hidden';
-    releaseAboutFocus = trapFocus(aboutModal, btnCloseAbout || closeAboutModalBtn);
+    // Foco inicial no fechar do topo: focar o botão do rodapé rolava o modal até o fim
+    releaseAboutFocus = trapFocus(aboutModal, closeAboutModalBtn || btnCloseAbout);
   }
 }
 
@@ -580,6 +582,7 @@ timer?.addEventListener('focus', showTimerConfig);
 timer?.addEventListener('blur', () => hideTimerConfig());
 timer?.addEventListener('click', () => openCustomTimerModal());
 document.querySelector('.timer-config-label')?.addEventListener('click', () => openCustomTimerModal());
+document.querySelector('#btnSetTimer')?.addEventListener('click', () => openCustomTimerModal());
 
 timerPreset?.addEventListener('change', () => {
   const val = timerPreset.value;
@@ -751,7 +754,7 @@ function updateFocusNavigation() {
   if (btnNextQuestion) {
     const isLast = currentQuestionIndex === questions.length - 1;
     if (isLast) {
-      btnNextQuestion.innerHTML = '🏁 Finalizar Simulado';
+      btnNextQuestion.innerHTML = `${icon('flag')} Finalizar Simulado`;
       btnNextQuestion.classList.add('is-final');
     } else {
       btnNextQuestion.innerHTML = 'Próxima →';
@@ -786,7 +789,7 @@ async function loadQuizList() {
     html += '<optgroup label="Quizzes da Plataforma">';
     html += serverQuizzes.map((item) =>
       `<option value="${escapeHtml(item.name)}">
-        ${escapeHtml(item.label)}${item.ai_generated ? ' 🤖' : ''}
+        ${escapeHtml(item.label)}${item.ai_generated ? ' (IA)' : ''}
       </option>`
     ).join('');
     html += '</optgroup>';
@@ -796,7 +799,7 @@ async function loadQuizList() {
     html += '<optgroup label="Seus Quizzes Gerados (Convidado)">';
     html += localQuizzes.map((item) =>
       `<option value="${escapeHtml(item.name)}">
-        ${escapeHtml(item.label)} ✨
+        ${escapeHtml(item.label)} (IA)
       </option>`
     ).join('');
     html += '</optgroup>';
@@ -832,7 +835,7 @@ function renderCustomQuizOptions(serverQuizzes = [], localQuizzes = []) {
     html += '<div class="custom-select-group-header">Quizzes da Plataforma</div>';
     html += serverQuizzes.map((item) => `
       <div class="custom-select-option" role="option" data-value="${escapeHtml(item.name)}" tabindex="0">
-        <span class="custom-select-option-label">${escapeHtml(item.label)}${item.ai_generated ? ' 🤖' : ''}</span>
+        <span class="custom-select-option-label">${escapeHtml(item.label)}${item.ai_generated ? ` <span class="inline-ai">${icon('bot', 14)}</span>` : ''}</span>
         <span class="custom-select-option-check" aria-hidden="true"></span>
       </div>
     `).join('');
@@ -844,7 +847,7 @@ function renderCustomQuizOptions(serverQuizzes = [], localQuizzes = []) {
     html += '<div class="custom-select-group-header">Seus Quizzes Gerados (Convidado)</div>';
     html += localQuizzes.map((item) => `
       <div class="custom-select-option" role="option" data-value="${escapeHtml(item.name)}" tabindex="0">
-        <span class="custom-select-option-label">${escapeHtml(item.label)} ✨</span>
+        <span class="custom-select-option-label">${escapeHtml(item.label)} <span class="inline-ai">${icon('sparkle', 14)}</span></span>
         <span class="custom-select-option-check" aria-hidden="true"></span>
       </div>
     `).join('');
@@ -946,9 +949,9 @@ function updateProgress() {
   if (btnQuickSubmit) {
     btnQuickSubmit.hidden = questions.length === 0;
     if (count > 0) {
-      btnQuickSubmit.textContent = `🏁 Finalizar (${count}/${questions.length})`;
+      btnQuickSubmit.innerHTML = `${icon('flag')} Finalizar (${count}/${questions.length})`;
     } else {
-      btnQuickSubmit.textContent = '🏁 Finalizar Simulado';
+      btnQuickSubmit.innerHTML = `${icon('flag')} Finalizar Simulado`;
     }
   }
 }
@@ -964,7 +967,7 @@ async function handleSubmitQuiz(event) {
   const answeredCount = Object.keys(answers).length;
 
   if (answeredCount === 0) {
-    showNotice('Por favor, marque pelo menos uma resposta antes de conferir.', 'Simulado Incompleto', '⚠️');
+    showNotice('Por favor, marque pelo menos uma resposta antes de conferir.', 'Simulado Incompleto', 'warning');
     return;
   }
 
@@ -1032,7 +1035,7 @@ async function handleSubmitQuiz(event) {
     renderResultModal(data);
     openResultModal();
   } catch (err) {
-    showNotice('Erro ao conferir respostas. Verifique a conexão com o servidor.', 'Erro de Conexão', '❌');
+    showNotice('Erro ao conferir respostas. Verifique a conexão com o servidor.', 'Erro de Conexão', 'error');
   } finally {
     if (submitBtn) {
       submitBtn.disabled = false;
@@ -1066,13 +1069,13 @@ function renderResultModal(data) {
     resultScoreBadge.className = 'results-badge';
     if (percentage >= 80) {
       resultScoreBadge.classList.add('excellent');
-      resultScoreBadge.textContent = '🎯 Excelente!';
+      resultScoreBadge.innerHTML = `${icon('target')} Excelente!`;
     } else if (percentage >= 60) {
       resultScoreBadge.classList.add('good');
-      resultScoreBadge.textContent = '👍 Bom trabalho!';
+      resultScoreBadge.innerHTML = `${icon('thumb')} Bom trabalho!`;
     } else {
       resultScoreBadge.classList.add('practice');
-      resultScoreBadge.textContent = '💡 Continue praticando!';
+      resultScoreBadge.innerHTML = `${icon('bulb')} Continue praticando!`;
     }
   }
 
@@ -1146,7 +1149,7 @@ function renderResultModal(data) {
           </div>
           ${item.explanation ? `
           <div class="result-card-explanation">
-            <strong>💡 Explicação Didática</strong>
+            <strong>${icon('bulb')} Explicação Didática</strong>
             ${escapeHtml(item.explanation)}
           </div>` : ''}
         </article>
@@ -1218,7 +1221,7 @@ btnRemixMistakes?.addEventListener('click', async () => {
 
   const originalContent = btnRemixMistakes.innerHTML;
   btnRemixMistakes.disabled = true;
-  btnRemixMistakes.innerHTML = '<span>⏳</span> Criando variações com IA…';
+  btnRemixMistakes.innerHTML = `${icon('hourglass')} Criando variações com IA…`;
 
   try {
     const response = await fetch('/api/quiz/remix-mistakes', {
@@ -1251,7 +1254,7 @@ btnRemixMistakes?.addEventListener('click', async () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   } catch (err) {
-    showNotice(`Erro ao gerar variações com IA: ${err.message}`, 'Falha na IA', '❌');
+    showNotice(`Erro ao gerar variações com IA: ${err.message}`, 'Falha na IA', 'error');
   } finally {
     btnRemixMistakes.disabled = false;
     btnRemixMistakes.innerHTML = originalContent;
@@ -1347,7 +1350,7 @@ function renderCatalogList() {
     const count = item.question_count || 5;
     const estMinutes = Math.round(count * 2.5);
     const badgeLabel = item.ai_generated
-      ? '✨ IA'
+      ? 'IA'
       : (item.file_type ? item.file_type.toUpperCase() : (item.is_guest ? 'LOCAL' : 'OFICIAL'));
 
     return `
@@ -1357,8 +1360,8 @@ function renderCatalogList() {
           <span class="catalog-card-badge ${item.ai_generated ? 'ai' : ''}">${badgeLabel}</span>
         </div>
         <div class="catalog-card-meta">
-          <span>📝 ${count} questões</span>
-          <span>⏱️ ~${estMinutes} min</span>
+          <span>${icon('note', 14)} ${count} questões</span>
+          <span>${icon('clock', 14)} ~${estMinutes} min</span>
         </div>
         <button type="button" class="primary catalog-card-btn">Iniciar Simulado ▶</button>
       </div>
@@ -1408,7 +1411,7 @@ catalogList?.addEventListener('click', async (e) => {
       firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   } catch (err) {
-    showNotice('Erro ao carregar o simulado selecionado.', 'Erro de Carregamento', '❌');
+    showNotice('Erro ao carregar o simulado selecionado.', 'Erro de Carregamento', 'error');
   }
 });
 
@@ -1603,13 +1606,22 @@ function updateAuthUI() {
   const userRoleBadge = document.querySelector('#userRoleBadge');
   const uploadVisibilityOption = document.querySelector('#uploadVisibilityOption');
 
+  const logoutBtn = document.querySelector('#logoutBtn');
+  const guestActions = document.querySelector('#guestActions');
+
   if (currentUser) {
+    const isGuest = currentUser.role === 'guest';
     if (userProfile) userProfile.hidden = false;
     if (userName) userName.textContent = currentUser.username;
     if (userRoleBadge) {
       userRoleBadge.textContent = currentUser.role;
       userRoleBadge.className = `user-role-badge role-${currentUser.role}`;
+      // "Convidado" já aparece no nome; o selo só repetiria a informação
+      userRoleBadge.hidden = isGuest;
     }
+    // Convidado não tem conta para encerrar: oferece entrar ou cadastrar
+    if (logoutBtn) logoutBtn.hidden = isGuest;
+    if (guestActions) guestActions.hidden = !isGuest;
     if (uploadVisibilityOption) {
       uploadVisibilityOption.hidden = currentUser.role !== 'admin';
     }
@@ -1650,6 +1662,15 @@ async function checkAuth() {
     return false;
   }
 }
+
+// ─── Saída do modo convidado (Entrar / Cadastrar) ──────────────────────────
+document.querySelectorAll('[data-guest-exit]').forEach((link) => {
+  link.addEventListener('click', (event) => {
+    event.preventDefault();
+    clearGuestData();
+    window.location.replace(link.getAttribute('href'));
+  });
+});
 
 // ─── Logout ─────────────────────────────────────────────────────────────────
 document.querySelector('#logoutBtn')?.addEventListener('click', async () => {

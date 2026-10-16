@@ -69,6 +69,17 @@ TRUST_PROXY = os.getenv("TRUST_PROXY", "false").lower() == "true" or os.getenv("
 # Cloudflare Tunnel
 CLOUDFLARE_TUNNEL_TOKEN = os.getenv("CLOUDFLARE_TUNNEL_TOKEN", "")
 
+# E-mail e SMTP (Recuperação de Senha)
+SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "").strip()
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "").strip()
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "noreply@quiz.study").strip()
+SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
+SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "false").lower() in ("true", "1", "yes")
+APP_URL = os.getenv("APP_URL", "").strip()
+
 # Controle de migrações automáticas (true por padrão; defina false se as migrations rodarem no pipeline de CI/CD)
 AUTO_MIGRATE = os.getenv("AUTO_MIGRATE", "true").lower() in ("true", "1", "yes")
+
 

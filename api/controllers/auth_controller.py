@@ -81,3 +81,50 @@ class AuthController:
             "message": "Logout realizado com sucesso",
             "data": {},
         }
+
+    @timing_decorator
+    @error_handler_decorator
+    def forgot_password(self, payload: dict, app_url: str = "") -> dict:
+        """POST /api/auth/forgot-password - Solicita link de redefinição de senha"""
+        if not isinstance(payload, dict):
+            raise QuizAPIException("Payload inválido", 400)
+
+        identifier = payload.get("email") or payload.get("username", "")
+        identifier = str(identifier).strip()
+        if not identifier:
+            raise QuizAPIException("Informe seu e-mail ou nome de usuário", 400)
+
+        result = self.service.request_password_reset(identifier, app_url=app_url)
+        return {
+            "status": "success",
+            "message": result["message"],
+            "data": result,
+        }
+
+    @timing_decorator
+    @error_handler_decorator
+    def verify_reset_token(self, token: str) -> dict:
+        """GET /api/auth/verify-reset-token - Valida se o token de recuperação é válido"""
+        result = self.service.verify_reset_token(token)
+        return {
+            "status": "success",
+            "data": result,
+        }
+
+    @timing_decorator
+    @error_handler_decorator
+    def reset_password(self, payload: dict) -> dict:
+        """POST /api/auth/reset-password - Redefine a senha com o token fornecido"""
+        if not isinstance(payload, dict):
+            raise QuizAPIException("Payload inválido", 400)
+
+        token = str(payload.get("token", "")).strip()
+        new_password = str(payload.get("new_password", ""))
+
+        result = self.service.reset_password(token, new_password)
+        return {
+            "status": "success",
+            "message": result["message"],
+            "data": {},
+        }
+
