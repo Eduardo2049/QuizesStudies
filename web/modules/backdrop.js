@@ -10,6 +10,9 @@ import { icon } from './icons.js?v=6';
  *   3. Liquify: ondas suaves que deformam o plano inteiro.
  *   4. Glyph Dither "horizontal lines": nas manchas mais claras, barras
  *      horizontais com espessura proporcional ao brilho.
+ * Além do bulge, o ponteiro gira o líquido em volta dele (some quando o mouse
+ * para) e desloca as camadas em paralaxe; a rolagem da página também as
+ * desloca. Toque não move o fundo.
  * As camadas 2 e 3 só deslocam coordenadas, então 1–3 viram uma única passada
  * procedural numa textura de resolução reduzida (a imagem é macia). A
  * passada de exibição amplia com filtro bilinear, aplica as cores e desenha as
@@ -28,6 +31,7 @@ const FIELD_SCALE = 0.5;             // campo em px CSS × isto
 const CELL_CSS = 10;                 // célula do glyph dither em px CSS
 const COLUMN_HALF_CSS = 480;         // meia-largura do corredor do conteúdo em px CSS
 const STILL_FRAME_S = 6;             // quadro parado com boa composição
+const POINTER_IDLE_MS = 900;         // sem movimento por esse tempo, o giro começa a sumir
 const MOTION_STORAGE_KEY = 'quiz_backdrop_motion';  // 'on' | 'off'; sem valor, segue o sistema
 // Velocidade de cada camada na cena original: uTime avança speed × 60 por segundo.
 const SPEED = { noise: 0.16, flow: 0.13, liquify: 0.15 };
@@ -117,6 +121,9 @@ const FIELD_SHADER = `${PRECISION}
 uniform vec2 u_res;        // campo em px
 uniform vec3 u_time;       // uTime de cada camada: noise, flow, liquify
 uniform vec2 u_mouse;      // ponteiro em 0..1 (origem embaixo), suavizado
+uniform vec2 u_parallax;   // ponteiro em -1..1 a partir do centro, mais lento
+uniform float u_swirl;     // 0..1: força do giro em volta do ponteiro
+uniform float u_scroll;    // rolagem da página em alturas de tela, suavizada
 ${PERLIN}
 const float TAU = 6.28318530718;
 
@@ -145,7 +152,8 @@ vec2 liquify(vec2 uv, float ar, float time) {
 
 // Flow Field: amount 1, scale 0.2, angle 0.621, phase 0.9, mix radius 0.75.
 // tint recebe o último ruído do campo, que separa as correntes da cor A e da cor B.
-vec2 flow(vec2 uv, float ar, float time, out float tint) {
+// shift desloca o campo de correntes (paralaxe) sem tirar uv da tela.
+vec2 flow(vec2 uv, float ar, float time, vec2 shift, out float tint) {
   const vec2 POS = vec2(0.5786, 0.7192);
   const float RAD = 0.621 * 6.0 * TAU;  // 360° × angle × 6
   vec2 aspect = vec2(ar, 1.0);
@@ -155,7 +163,7 @@ vec2 flow(vec2 uv, float ar, float time, out float tint) {
   vec2 st = uv;
   float n = 0.0;
   for (int i = 0; i < 8; i++) {
-    vec2 scaled = (clamp(st, -1.0, 2.0) - 0.5) * aspect + (1.0 - POS);
+    vec2 scaled = (clamp(st, -1.0, 2.0) - 0.5 + shift) * aspect + (1.0 - POS);
     n = perlin(vec3((scaled - 0.5) * freq, t)) - 0.5;
     st += vec2(cos(n * RAD), sin(n * RAD)) * amt;
   }
@@ -169,12 +177,23 @@ float noiseAt(vec2 st, float time) {
   return mix(0.5, n * 0.5 + 0.5, 1.28);
 }
 
+// Giro do líquido em volta do ponteiro, com proporção corrigida.
+vec2 swirl(vec2 uv, float ar) {
+  vec2 aspect = vec2(ar, 1.0);
+  vec2 d = (uv - u_mouse) * aspect;
+  float ang = u_swirl * 1.6 * exp(-dot(d, d) * 7.0);
+  float c = cos(ang);
+  float s = sin(ang);
+  return u_mouse + (mat2(c, s, -s, c) * d) / aspect;
+}
+
 // Bulge 0.57 / 0.5 em volta do ponteiro, threshold 0.79 e a rampa de cor
 // do original (cosseno entre as duas cores): 0 = base, 1 = mancha plena.
-float fill(vec2 uv, float ar, float time) {
+// shift desloca as manchas (paralaxe e rolagem); o bulge fica preso ao ponteiro.
+float fill(vec2 uv, vec2 shift, float ar, float time) {
   const float SCALE = 4.25;            // mix(1, 14, scale)
   vec2 aspect = vec2(ar, 1.0);
-  vec2 st = (uv - 0.5) * aspect * SCALE;
+  vec2 st = (uv + shift - 0.5) * aspect * SCALE;
   vec2 toMouse = (uv - u_mouse) * aspect;
   float r = length(toMouse);
   float falloff = 1.0 - smoothstep(0.0, 0.55, r);
@@ -182,7 +201,7 @@ float fill(vec2 uv, float ar, float time) {
   if (falloff > 0.0) {
     // 0.3135 = bulge amount × raio (mix(0.1, 1, bulge scale) = 0.55)
     vec2 offset = -(toMouse / max(r, 1e-5)) * 0.3135 * falloff * falloff / aspect * r * 5.0;
-    noise = noiseAt((uv - 0.5 + offset * noiseAt(st, time)) * aspect * SCALE, time);
+    noise = noiseAt((uv + shift - 0.5 + offset * noiseAt(st, time)) * aspect * SCALE, time);
   } else {
     noise = noiseAt(st, time);
   }
@@ -192,9 +211,14 @@ float fill(vec2 uv, float ar, float time) {
 
 void main() {
   float ar = u_res.x / u_res.y;
+  // Paralaxe em duas profundidades: as correntes (fundo) andam pouco, as
+  // manchas (frente) mais. Conteúdo vai ao lado oposto do ponteiro e sobe
+  // devagar com a rolagem.
+  vec2 far = u_parallax * 0.02 - vec2(0.0, u_scroll * 0.05);
+  vec2 near = u_parallax * 0.05 - vec2(0.0, u_scroll * 0.15);
   float tint;
-  vec2 uv = flow(liquify(gl_FragCoord.xy / u_res, ar, u_time.z), ar, u_time.y, tint);
-  gl_FragColor = vec4(fill(uv, ar, u_time.x), smoothstep(-0.9, 0.3, tint), 0.0, 1.0);
+  vec2 uv = flow(liquify(gl_FragCoord.xy / u_res, ar, u_time.z), ar, u_time.y, far, tint);
+  gl_FragColor = vec4(fill(swirl(uv, ar), near, ar, u_time.x), smoothstep(-0.9, 0.3, tint), 0.0, 1.0);
 }
 `;
 
@@ -327,7 +351,9 @@ function createBackdrop(canvas, gl) {
   let contextLost = false;
   const size = { fieldW: 1, fieldH: 1, cell: CELL_CSS };
   // Ponteiro em 0..1 com origem embaixo; começa (e fica, no toque) no centro.
-  const pointer = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5 };
+  // px/py: paralaxe em -1..1; amt: força do giro; last: último movimento.
+  const pointer = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5, px: 0, py: 0, amt: 0, last: 0 };
+  let scroll = 0;
   const toggle = document.querySelector('[data-backdrop-toggle]');
   let choice = null;                 // escolha feita no botão nesta página
 
@@ -360,7 +386,7 @@ function createBackdrop(canvas, gl) {
   }
 
   function setup() {
-    field = createProgram(gl, FIELD_SHADER, ['u_res', 'u_time', 'u_mouse']);
+    field = createProgram(gl, FIELD_SHADER, ['u_res', 'u_time', 'u_mouse', 'u_parallax', 'u_swirl', 'u_scroll']);
     display = createProgram(gl, DISPLAY_SHADER, [
       'u_field', 'u_res', 'u_cell', 'u_column', 'u_calm', 'u_mix', 'u_base', 'u_colorA', 'u_colorB', 'u_line',
     ]);
@@ -413,6 +439,9 @@ function createBackdrop(canvas, gl) {
     gl.uniform2f(fu.u_res, size.fieldW, size.fieldH);
     gl.uniform3f(fu.u_time, t * SPEED.noise, t * SPEED.flow, t * SPEED.liquify);
     gl.uniform2f(fu.u_mouse, pointer.x, pointer.y);
+    gl.uniform2f(fu.u_parallax, pointer.px, pointer.py);
+    gl.uniform1f(fu.u_swirl, pointer.amt);
+    gl.uniform1f(fu.u_scroll, scroll);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     // 2. Exibição na tela.
@@ -436,10 +465,24 @@ function createBackdrop(canvas, gl) {
   }
 
   function ease(dt) {
-    // Momentum alto, como no original: o bulge segue o ponteiro devagar.
-    const follow = 1 - Math.exp(-dt * 1.5);
+    // Rápido o bastante para o bulge e o giro acompanharem o mouse de forma visível.
+    const follow = 1 - Math.exp(-dt * 6);
     pointer.x += (pointer.tx - pointer.x) * follow;
     pointer.y += (pointer.ty - pointer.y) * follow;
+
+    // O giro cresce com o movimento e some devagar quando o mouse para.
+    const active = pointer.last > 0 && performance.now() - pointer.last < POINTER_IDLE_MS;
+    pointer.amt += ((active ? 1 : 0) - pointer.amt) * (1 - Math.exp(-dt * (active ? 2.5 : 0.9)));
+
+    // Paralaxe: segue a posição do ponteiro (centro = 0) e volta ao centro se ele sair da janela.
+    const inside = pointer.last > 0;
+    const drift = 1 - Math.exp(-dt * 2);
+    pointer.px += ((inside ? pointer.tx * 2 - 1 : 0) - pointer.px) * drift;
+    pointer.py += ((inside ? pointer.ty * 2 - 1 : 0) - pointer.py) * drift;
+
+    // Rolagem só com ponteiro preciso: no celular, rolar com o dedo não move o fundo.
+    const targetScroll = coarsePointer.matches ? 0 : window.scrollY / Math.max(1, window.innerHeight);
+    scroll += (targetScroll - scroll) * (1 - Math.exp(-dt * 3));
   }
 
   function adaptQuality(frameMs) {
@@ -501,6 +544,15 @@ function createBackdrop(canvas, gl) {
     if (event.pointerType === 'touch') return;
     pointer.tx = event.clientX / Math.max(1, window.innerWidth);
     pointer.ty = 1 - event.clientY / Math.max(1, window.innerHeight);
+    if (!pointer.last) {
+      pointer.x = pointer.tx;
+      pointer.y = pointer.ty;
+    }
+    pointer.last = performance.now();
+  }
+
+  function onPointerOut(event) {
+    if (!event.relatedTarget) pointer.last = 0;
   }
 
   function onContextLost(event) {
@@ -530,6 +582,7 @@ function createBackdrop(canvas, gl) {
   document.addEventListener('visibilitychange', update);
   window.addEventListener('resize', onResize, { passive: true });
   window.addEventListener('pointermove', onPointerMove, { passive: true });
+  window.addEventListener('pointerout', onPointerOut, { passive: true });
   reducedMotion.addEventListener?.('change', update);
   canvas.addEventListener('webglcontextlost', onContextLost);
   canvas.addEventListener('webglcontextrestored', onContextRestored);
@@ -551,6 +604,7 @@ function createBackdrop(canvas, gl) {
       document.removeEventListener('visibilitychange', update);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerout', onPointerOut);
       reducedMotion.removeEventListener?.('change', update);
       canvas.remove();
       instance = null;
