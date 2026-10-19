@@ -46,12 +46,7 @@ class QuizService:
         Raises:
             QuizNotFound: Se quiz não encontrado
         """
-        if source_name:
-            quiz_row = self.repository.find_by_name(source_name, user_id)
-        else:
-            quiz_row = self.repository.find_default(user_id)
-
-        questions_data = self.repository.find_questions(quiz_row["id"])
+        quiz_row, questions_data = self.repository.find_with_questions(source_name, user_id)
 
         question_dtos = [
             QuestionDTO(
@@ -86,12 +81,7 @@ class QuizService:
         Returns:
             GradeResultDTO com score, total, percentage e results
         """
-        if source_name:
-            quiz_row = self.repository.find_by_name(source_name, user_id)
-        else:
-            quiz_row = self.repository.find_default(user_id)
-
-        questions_data = self.repository.find_questions(quiz_row["id"])
+        quiz_row, questions_data = self.repository.find_with_questions(source_name, user_id)
 
         # Converter para formato esperado por grade_answers
         questions_for_grading = [

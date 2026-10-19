@@ -102,7 +102,8 @@ class TestPasswordResetAuthService(unittest.TestCase):
         }
         self.mock_repo.find_by_email.return_value = user
 
-        res = self.service.request_password_reset("carlos@escola.com", app_url="https://quiz.study")
+        with patch("api.services.auth_service.DEBUG", True):
+            res = self.service.request_password_reset("carlos@escola.com", app_url="https://quiz.study")
 
         self.assertIn("Se os dados informados estiverem cadastrados", res["message"])
         self.assertIsNotNone(res["dev_token"])
