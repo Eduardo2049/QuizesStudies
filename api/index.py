@@ -10,14 +10,12 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from api.handlers.quiz_handler import QuizHandler
-from api.database.migrations import run_migrations
+from api.handlers.quiz_handler import QuizHandler, _ensure_migrations
 
-# Executa migrações no startup do serverless (cria tabelas e admin se não existirem)
-try:
-    run_migrations()
-except Exception as e:
-    print(f"[vercel] Aviso ao executar migrations na inicialização: {e}")
+# Executa migrações no startup do serverless (cria tabelas e admin se não existirem).
+# Usa o mesmo guard do handler: chamar run_migrations() direto deixava a flag
+# desligada e a primeira requisição /api/* rodava tudo de novo.
+_ensure_migrations()
 
 # Vercel espera uma classe chamada 'handler' herdando de BaseHTTPRequestHandler.
 # NÃO defina 'app' ou 'application', pois a Vercel interpretaria como WSGI/ASGI e falharia.

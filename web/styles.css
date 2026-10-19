@@ -50,7 +50,9 @@
 
 /* ─── Tokens ─────────────────────────────────────────────────────────────── */
 :root {
-  /* Tema Claro Original (Acolhedor, Limpo, Equilibrado) */
+  /* Tema Claro Original (Acolhedor, Limpo, Equilibrado): papel + coral/teal.
+     *-rgb servem para tons translúcidos que acompanham o tema:
+     rgba(var(--teal-rgb), .12). */
   --ink: #182326;
   --paper: #f4f0e8;
   --card-bg: rgba(255, 255, 255, 0.85);
@@ -60,10 +62,12 @@
   --option-checked: #dcebe5;
   --coral: #c9462a;                    /* AA: 4,78:1 com texto branco */
   --coral-dark: #a8341b;
+  --coral-rgb: 240, 144, 111;          /* coral claro dos brilhos e badges, como antes */
   --coral-glow: rgba(201, 70, 42, 0.22);
   --accent-text: #b23a20;              /* coral para texto sobre papel (≥ 5:1) */
   --teal: #176b67;
   --teal-dark: #0f4e4b;
+  --teal-rgb: 23, 107, 103;
   --purple: #7c3aed;
   --orange: #d97706;
   --btn-primary-text: #ffffff;
@@ -94,46 +98,50 @@
 }
 
 [data-theme="dark"] {
-  /* Tema noturno neutro (padrão de mercado, estilo GitHub Dark): cinza-grafite frio + acentos coral/teal */
-  --ink: #c9d1d9;
-  --paper: #0d1117;
-  --card-bg: rgba(22, 27, 34, 0.92);
-  --card-solid: #161b22;
+  /* Tema noturno: paleta da cena "Frosty Gradient" (Unicorn Studio), cinza-preto
+     neutro + azul/roxo. Os nomes --coral/--teal ficaram por compatibilidade:
+     aqui --coral é o acento primário (azul) e --teal o secundário (roxo). */
+  --ink: #d4d4d8;
+  --paper: #171717;
+  --card-bg: rgba(23, 23, 26, 0.90);
+  --card-solid: #1c1c20;
   --option-bg: rgba(255, 255, 255, 0.04);
   --option-hover: rgba(255, 255, 255, 0.08);
-  --option-checked: rgba(111, 209, 199, 0.16);
-  --coral: #f0906f;                    /* botões; texto escuro por cima */
-  --coral-dark: #f7a98d;
-  --coral-glow: rgba(240, 144, 111, 0.30);
-  --accent-text: #f0906f;
-  --teal: #6fd1c7;
-  --teal-dark: #8fe0d7;
-  --purple: #bd93f9;
+  --option-checked: rgba(124, 92, 240, 0.18);
+  --coral: #4359ff;                    /* botões; texto branco por cima (5,1:1) */
+  --coral-dark: #3446e6;
+  --coral-rgb: 67, 89, 255;
+  --coral-glow: rgba(67, 89, 255, 0.35);
+  --accent-text: #8b93ff;
+  --teal: #a78bfa;
+  --teal-dark: #c4b5fd;
+  --teal-rgb: 167, 139, 250;
+  --purple: #c4b5fd;
   --orange: #f2b866;
-  --btn-primary-text: #0d1117;
-  --btn-teal-text: #0d1117;
-  --btn-orange-text: #0d1117;
-  --btn-add-bg: rgba(111, 209, 199, 0.12);
-  --btn-add-border: rgba(111, 209, 199, 0.40);
+  --btn-primary-text: #ffffff;
+  --btn-teal-text: #171717;
+  --btn-orange-text: #171717;
+  --btn-add-bg: rgba(167, 139, 250, 0.12);
+  --btn-add-border: rgba(167, 139, 250, 0.40);
   --btn-add-color: var(--teal);
-  --btn-add-hover-bg: rgba(111, 209, 199, 0.22);
-  --btn-catalog-bg: rgba(240, 144, 111, 0.12);
-  --btn-catalog-border: rgba(240, 144, 111, 0.45);
-  --btn-catalog-color: #c9d1d9;
-  --btn-catalog-hover-bg: rgba(240, 144, 111, 0.24);
-  --line: #30363d;
-  --line-focus: #6fd1c7;
-  --muted: #8b949e;
+  --btn-add-hover-bg: rgba(167, 139, 250, 0.22);
+  --btn-catalog-bg: rgba(67, 89, 255, 0.14);
+  --btn-catalog-border: rgba(67, 89, 255, 0.50);
+  --btn-catalog-color: #d4d4d8;
+  --btn-catalog-hover-bg: rgba(67, 89, 255, 0.26);
+  --line: #2e2e35;
+  --line-focus: #a78bfa;
+  --muted: #9d9da8;
   --success: #6fdc9a;
   --error: #ff8a7a;
-  --modal-bg: rgba(1, 4, 9, 0.80);
-  --bg-gradient: radial-gradient(circle at 85% 6%, rgba(240, 144, 111, 0.06) 0 16%, transparent 45%), linear-gradient(180deg, #0d1117 0%, #0d1117 100%);
-  --kbd-bg: rgba(110, 118, 129, 0.18);
-  --kbd-border: #3d444d;
-  --kbd-color: #c9d1d9;
-  --input-bg: #0d1117;
-  --input-border: #30363d;
-  --focus-ring: rgba(111, 209, 199, 0.35);
+  --modal-bg: rgba(8, 8, 10, 0.80);
+  --bg-gradient: radial-gradient(circle at 85% 6%, rgba(67, 89, 255, 0.10) 0 16%, transparent 45%), linear-gradient(180deg, #171717 0%, #171717 100%);
+  --kbd-bg: rgba(161, 161, 170, 0.14);
+  --kbd-border: #3a3a42;
+  --kbd-color: #d4d4d8;
+  --input-bg: #121214;
+  --input-border: #2e2e35;
+  --focus-ring: rgba(167, 139, 250, 0.35);
   --shadow-card: 0 6px 20px rgba(0, 0, 0, 0.45);
 }
 
@@ -185,7 +193,7 @@ body {
   flex-shrink: 0;
   display: inline-block;
   vertical-align: middle;
-  box-shadow: 0 2px 8px rgba(240, 144, 111, 0.25);
+  box-shadow: 0 2px 8px rgba(var(--coral-rgb), 0.25);
 }
 
 .hero-brand .eyebrow {
@@ -331,12 +339,12 @@ body {
 }
 
 .custom-select-option:hover {
-  background: rgba(23, 107, 103, 0.12);
+  background: rgba(var(--teal-rgb), 0.12);
   color: var(--teal);
 }
 
 .custom-select-option.is-selected {
-  background: rgba(23, 107, 103, 0.18);
+  background: rgba(var(--teal-rgb), 0.18);
   color: var(--teal);
   font-weight: 700;
 }
@@ -742,13 +750,13 @@ button {
 
 .modal-tab-btn:hover {
   color: var(--ink);
-  background: rgba(23, 107, 103, 0.08);
+  background: rgba(var(--teal-rgb), 0.08);
 }
 
 .modal-tab-btn.active {
   color: var(--teal);
   border-bottom-color: var(--teal);
-  background: rgba(23, 107, 103, 0.12);
+  background: rgba(var(--teal-rgb), 0.12);
 }
 
 .modal-panel {
@@ -856,7 +864,7 @@ button {
 .drop-zone:focus,
 .drop-zone--active {
   border-color: var(--teal);
-  background: rgba(23,107,103,.08);
+  background: rgba(var(--teal-rgb), .08);
 }
 .drop-zone--error { border-color: var(--error); }
 
@@ -908,7 +916,7 @@ button {
 
 .upload-spinner {
   width: 18px; height: 18px;
-  border: 2.5px solid rgba(23,107,103,.3);
+  border: 2.5px solid rgba(var(--teal-rgb), .3);
   border-top-color: var(--teal);
   border-radius: 50%;
   animation: spin .7s linear infinite;
@@ -1013,7 +1021,7 @@ button {
   color: var(--accent-text);
 }
 .role-student {
-  background: rgba(23, 107, 103, 0.18);
+  background: rgba(var(--teal-rgb), 0.18);
   color: var(--teal);
 }
 .role-guest {
@@ -1114,13 +1122,13 @@ button {
   width: 52px;
   height: 52px;
   border-radius: 13px;
-  box-shadow: 0 8px 24px rgba(240, 144, 111, 0.25);
+  box-shadow: 0 8px 24px rgba(var(--coral-rgb), 0.25);
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
 }
 
 .login-brand-icon:hover {
   transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 12px 28px rgba(240, 144, 111, 0.35);
+  box-shadow: 0 12px 28px rgba(var(--coral-rgb), 0.35);
 }
 
 .login-title {
@@ -1302,8 +1310,8 @@ button {
 }
 
 .auth-helper-box {
-  background: rgba(139, 233, 253, 0.08);
-  border: 1px dashed rgba(139, 233, 253, 0.35);
+  background: rgba(var(--coral-rgb), 0.08);
+  border: 1px dashed rgba(var(--coral-rgb), 0.35);
   border-radius: 4px;
   padding: 14px;
   font-size: 13px;
@@ -1317,7 +1325,7 @@ button {
   align-items: center;
   gap: 8px;
   font-weight: 700;
-  color: var(--cyan, #8be9fd);
+  color: var(--accent-text);
   margin-bottom: 6px;
   font-size: 13px;
 }
@@ -1325,13 +1333,13 @@ button {
 .token-box {
   margin-top: 10px;
   padding: 10px;
-  background: var(--bg-alt, #191a21);
+  background: var(--input-bg);
   border: 1px solid var(--line);
   border-radius: 4px;
   font-family: 'DM Mono', monospace;
   font-size: 12px;
   word-break: break-all;
-  color: var(--pink, #ff79c6);
+  color: var(--teal);
 }
 
 .btn-proceed-reset {
@@ -1356,15 +1364,15 @@ button {
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  background: rgba(240, 144, 111, 0.12);
-  border: 1px solid rgba(240, 144, 111, 0.25);
+  background: rgba(var(--coral-rgb), 0.12);
+  border: 1px solid rgba(var(--coral-rgb), 0.25);
   border-radius: 4px;
   font-size: 13px;
   color: var(--ink);
 }
 
 .user-identity-badge strong {
-  color: var(--purple, #bd93f9);
+  color: var(--purple);
 }
 
 
@@ -1398,7 +1406,7 @@ button {
   letter-spacing: 0.6px;
   margin-bottom: 10px;
   border-left: 3px solid var(--teal);
-  background: rgba(23, 107, 103, 0.08);
+  background: rgba(var(--teal-rgb), 0.08);
   color: var(--teal);
 }
 
@@ -1410,7 +1418,7 @@ button {
 
 .results-badge.good {
   border-left-color: var(--teal);
-  background: rgba(23, 107, 103, 0.08);
+  background: rgba(var(--teal-rgb), 0.08);
   color: var(--teal);
 }
 
@@ -1567,7 +1575,7 @@ button {
 }
 
 .result-card-explanation {
-  background: rgba(23, 107, 103, 0.08);
+  background: rgba(var(--teal-rgb), 0.08);
   border-left: 3px solid var(--teal);
   padding: 8px 12px;
   border-radius: 0 4px 4px 0;
@@ -1831,7 +1839,7 @@ button {
 }
 
 .comparison-table .highlight-col {
-  background: rgba(23, 107, 103, 0.12);
+  background: rgba(var(--teal-rgb), 0.12);
   color: var(--ink);
   border-left: 2px solid var(--teal);
   border-right: 2px solid var(--teal);
@@ -1842,7 +1850,7 @@ button {
 }
 
 .comparison-table tr:hover td.highlight-col {
-  background: rgba(23, 107, 103, 0.2);
+  background: rgba(var(--teal-rgb), 0.2);
 }
 
 /* ─── Botão Explorar Simulados (Catálogo) ───────────────────────────────── */
@@ -1968,7 +1976,7 @@ button {
 }
 
 .palette-btn.answered {
-  background: rgba(23, 107, 103, 0.15);
+  background: rgba(var(--teal-rgb), 0.15);
   border-color: var(--teal);
   color: var(--teal);
   font-weight: 700;
@@ -2291,9 +2299,9 @@ button {
 }
 
 .catalog-card-badge.ai {
-  background: rgba(23, 107, 103, 0.1);
+  background: rgba(var(--teal-rgb), 0.1);
   color: var(--teal);
-  border-color: rgba(23, 107, 103, 0.25);
+  border-color: rgba(var(--teal-rgb), 0.25);
 }
 
 .catalog-card-meta {
@@ -3342,6 +3350,7 @@ button {
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-fast: 120ms;
   --dur-base: 180ms;
+  --dur-slow: 600ms;
   --shadow-lift: 0 10px 28px rgba(24, 35, 38, 0.10);
 }
 [data-theme="dark"] {
@@ -3597,7 +3606,7 @@ h1 { font-weight: 800; letter-spacing: -0.03em; text-wrap: balance; }
   --state-error-fg: var(--error);
   --state-warning-bg: rgba(217, 119, 6, 0.14);
   --state-warning-fg: #8a4b00;
-  --state-info-bg: rgba(23, 107, 103, 0.12);
+  --state-info-bg: rgba(var(--teal-rgb), 0.12);
   --state-info-fg: var(--teal);
 }
 [data-theme="dark"] {
@@ -3608,10 +3617,10 @@ h1 { font-weight: 800; letter-spacing: -0.03em; text-wrap: balance; }
   --state-error-bg: rgba(255, 138, 122, 0.14);
   --state-warning-bg: rgba(242, 184, 102, 0.16);
   --state-warning-fg: var(--orange);
-  --state-info-bg: rgba(111, 209, 199, 0.14);
+  --state-info-bg: rgba(var(--teal-rgb), 0.14);
 }
 
-/* Marca: sombra acompanha o novo ícone (petróleo + coral) */
+/* Marca: sombra discreta sob o ícone */
 .hero-brand-icon { box-shadow: var(--shadow-sm); }
 
 /* Pressão consistente em botões */
@@ -3825,4 +3834,51 @@ h1 { font-weight: 800; letter-spacing: -0.03em; text-wrap: balance; }
 
 @media (prefers-reduced-motion: reduce) {
   .timer-resize-handle { transition: none; }
+}
+
+/* ─── Fundo animado em WebGL: cena "Frosty Gradient" (ver web/modules/backdrop.js) ── */
+:root {
+  /* Paleta original do tema claro no mesmo modelo: manchas verde-ciano e
+     laranja sobre o papel, linhas teal. As manchas são claras para o texto
+     manter AA por cima delas mesmo com o efeito forte. */
+  --backdrop-base: #f4f0e8;
+  --backdrop-a: #8ee8d4;
+  --backdrop-b: #ffa647;
+  --backdrop-line: #176b67;
+  --backdrop-mix: 0.5;                 /* virada da cor A para a B: meio a meio */
+  /* Força das manchas atrás do conteúdo, por cor, no limite do texto AA */
+  --backdrop-calm: 0.64;
+  --backdrop-calm-b: 0.30;
+}
+[data-theme="dark"] {
+  /* Cores da cena original: cinza-preto, azul, roxo e linhas lavanda */
+  --backdrop-base: #171717;
+  --backdrop-a: #3a4bd9;
+  --backdrop-b: #7c5cf0;
+  --backdrop-line: #8f9bff;
+  --backdrop-mix: 0.7;                 /* predomina o azul */
+  --backdrop-calm: 0.47;
+  --backdrop-calm-b: 0.35;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease-out);
+}
+.backdrop.is-running { opacity: 1; }
+/* Estado vazio é transparente: com o fundo animado, ganha a mesma base dos cards */
+.empty-state { background: var(--card-bg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop { transition: none; }
+}
+
+@media print {
+  .backdrop { display: none; }
 }

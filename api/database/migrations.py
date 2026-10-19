@@ -93,6 +93,12 @@ CREATE TABLE IF NOT EXISTS rate_limits (
 );
 
 CREATE INDEX IF NOT EXISTS idx_rate_limits_key_timestamp ON rate_limits(key, timestamp);
+CREATE INDEX IF NOT EXISTS idx_rate_limits_timestamp ON rate_limits(timestamp);
+
+-- Filtros de visibilidade usados em toda listagem/carregamento de quiz
+CREATE INDEX IF NOT EXISTS idx_quizzes_public_created ON quizzes(is_public, created_at);
+CREATE INDEX IF NOT EXISTS idx_quizzes_created_by ON quizzes(created_by);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 """
 
 

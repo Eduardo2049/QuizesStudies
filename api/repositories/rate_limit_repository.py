@@ -10,6 +10,11 @@ from threading import Lock
 from api.database.connection import get_cursor
 from api.utils.config import DEBUG
 
+# Registros mais velhos que a maior janela em uso (1 h da cota de IA) já não
+# contam; 24 h dá folga. A limpeza é global para não acumular chaves de IPs antigos.
+_RETENTION_SECONDS = 24 * 60 * 60
+_CLEANUP_PROBABILITY = 0.02
+
 
 class RateLimitRepository:
     """
@@ -57,36 +62,47 @@ class RateLimitRepository:
                 retry_after = max(1, int(oldest - cutoff + 1))
                 return False, retry_after
 
-        # 2. Persistência e validação no banco de dados compartilhado (Postgres/Serverless)
+        # 2. Persistência e validação no banco de dados compartilhado (Postgres/Serverless).
+        # Consulta, decisão e INSERT numa única ida ao banco (CTE): o INSERT só
+        # acontece se o consumo couber no limite.
         try:
             with get_cursor() as cur:
                 cur.execute(
-                    "SELECT COALESCE(SUM(tokens), 0) AS used FROM rate_limits WHERE key = %s AND timestamp > %s",
-                    (key, cutoff)
+                    """
+                    WITH usage AS (
+                        SELECT COALESCE(SUM(tokens), 0) AS used, MIN(timestamp) AS oldest
+                        FROM rate_limits
+                        WHERE key = %(key)s AND timestamp > %(cutoff)s
+                    ),
+                    ins AS (
+                        INSERT INTO rate_limits (key, timestamp, tokens)
+                        SELECT %(key)s, %(now)s, %(cost)s
+                        FROM usage
+                        WHERE GREATEST(usage.used, %(local_used)s) + %(cost)s <= %(limit)s
+                        RETURNING 1
+                    )
+                    SELECT usage.used, usage.oldest, (SELECT COUNT(*) FROM ins) AS inserted
+                    FROM usage
+                    """,
+                    {
+                        "key": key,
+                        "cutoff": cutoff,
+                        "now": now,
+                        "cost": cost,
+                        "local_used": local_used,
+                        "limit": limit,
+                    },
                 )
                 row = cur.fetchone()
-                db_used = int(row["used"]) if row and row.get("used") is not None else 0
-                total_used = max(local_used, db_used)
-
-                if total_used + cost > limit:
-                    cur.execute(
-                        "SELECT MIN(timestamp) AS oldest FROM rate_limits WHERE key = %s AND timestamp > %s",
-                        (key, cutoff)
-                    )
-                    row_oldest = cur.fetchone()
-                    oldest = float(row_oldest["oldest"]) if row_oldest and row_oldest.get("oldest") is not None else now
+                if row and not int(row.get("inserted") or 0):
+                    oldest = float(row["oldest"]) if row.get("oldest") is not None else now
                     retry_after = max(1, int(oldest - cutoff + 1))
                     return False, retry_after
 
-                cur.execute(
-                    "INSERT INTO rate_limits (key, timestamp, tokens) VALUES (%s, %s, %s)",
-                    (key, now, cost)
-                )
-
-                if random.random() < 0.05:
+                if random.random() < _CLEANUP_PROBABILITY:
                     cur.execute(
-                        "DELETE FROM rate_limits WHERE key = %s AND timestamp <= %s",
-                        (key, cutoff)
+                        "DELETE FROM rate_limits WHERE timestamp <= %s",
+                        (now - _RETENTION_SECONDS,)
                     )
         except Exception as e:
             if DEBUG:

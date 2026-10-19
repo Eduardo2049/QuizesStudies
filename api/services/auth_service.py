@@ -12,14 +12,11 @@ from api.utils.config import ADMIN_USERNAME, ADMIN_PASSWORD, DEBUG
 
 # Salt e hash fixos usados como dummy para equalizar o tempo de resposta
 # quando o usuário não existe (prevenção de enumeração por timing).
-# O hash é computado uma vez no startup para ter o mesmo custo do PBKDF2 real.
+# O custo vem do PBKDF2 da senha recebida em verify_password, não deste valor:
+# por isso ele é uma constante, e não um hash calculado no import (≈0,4 s a
+# menos em cada cold start da Vercel).
 _DUMMY_SALT = "0000000000000000000000000000000000000000000000000000000000000000"
-_DUMMY_HASH = hashlib.pbkdf2_hmac(
-    "sha256",
-    b"__dummy_sentinel_password__",
-    _DUMMY_SALT.encode("utf-8"),
-    iterations=600_000,
-).hex()
+_DUMMY_HASH = "f" * 64
 
 
 def hash_password(password: str, salt: str = None) -> tuple[str, str]:
@@ -66,9 +63,16 @@ class AuthService:
                     "ADMIN_PASSWORD não definido ou com menos de 8 caracteres. "
                     "Configure uma senha forte no ambiente/Vercel antes de iniciar."
                 )
-            pwd_hash, salt = hash_password(admin_pwd)
-
             admin = self.repo.find_by_username(ADMIN_USERNAME)
+            # Já sincronizado: evita novo PBKDF2 + UPDATE a cada cold start.
+            if (
+                admin
+                and admin.get("role") == "admin"
+                and verify_password(admin_pwd, admin["salt"], admin["password_hash"])
+            ):
+                return
+
+            pwd_hash, salt = hash_password(admin_pwd)
             if not admin:
                 admin = self.repo.create_user(
                     username=ADMIN_USERNAME,
@@ -210,12 +214,15 @@ class AuthService:
             token=token,
         )
 
+        # Token só volta no corpo em DEBUG: sem SMTP em produção, devolvê-lo
+        # permitiria a qualquer um redefinir a senha de qualquer conta.
         is_simulated = (mode == "simulated")
+        expose_token = is_simulated and DEBUG
         return {
             "message": "Se os dados informados estiverem cadastrados, você receberá as instruções para redefinir sua senha.",
-            "email_sent": not is_simulated,
-            "dev_reset_url": reset_url if is_simulated else None,
-            "dev_token": token if is_simulated else None,
+            "email_sent": success and not is_simulated,
+            "dev_reset_url": reset_url if expose_token else None,
+            "dev_token": token if expose_token else None,
         }
 
     def verify_reset_token(self, token: str) -> dict:
