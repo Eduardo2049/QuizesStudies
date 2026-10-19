@@ -67,7 +67,7 @@ O agente tem total liberdade para:
 
 - **Backend:** Python 3.10+ sem frameworks pesados; utiliza `http.server.ThreadingHTTPServer` com arquitetura em camadas (`handlers` -> `controllers` -> `services` -> `repositories`).
 - **Banco de Dados:** PostgreSQL com fallback automático para SQLite em memória caso o PostgreSQL não esteja acessível.
-- **Frontend:** HTML5 semântico, Vanilla CSS com suporte a temas Claro (papel/coral/teal) e Noturno (grafite neutro estilo GitHub Dark, com os acentos coral/teal), JavaScript modular nativo ES Modules.
+- **Frontend:** HTML5 semântico, Vanilla CSS com suporte a temas Claro (papel/coral/teal) e Noturno (cinza-preto neutro com acentos azul/roxo da cena "Frosty Gradient" do Unicorn Studio; no escuro, os tokens `--coral`/`--teal` guardam o azul e o roxo e mantêm o nome por compatibilidade). Os dois temas têm o fundo animado em WebGL (`web/modules/backdrop.js`, cores nos tokens `--backdrop-*`). JavaScript modular nativo ES Modules.
 - **Validação de Testes:** Execute sempre `python -m unittest discover tests` para assegurar que todas as suítes permaneçam 100% aprovadas.
 
 ---

@@ -1,4 +1,4 @@
-import { icon } from './icons.js?v=5';
+import { icon } from './icons.js?v=6';
 /**
  * Módulo de Personalização e Temas (Dark / Light / Sistema)
  * Suporta preferência do sistema operacional e alternância manual salva em localStorage.
@@ -35,7 +35,7 @@ export function applyTheme(theme = currentTheme) {
     metaTheme.name = 'theme-color';
     document.head.appendChild(metaTheme);
   }
-  metaTheme.content = resolved === 'dark' ? '#0d1117' : '#f4f0e8';
+  metaTheme.content = resolved === 'dark' ? '#171717' : '#f4f0e8';
 
   updateThemeButtonUI();
 }
