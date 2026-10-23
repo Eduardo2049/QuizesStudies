@@ -124,3 +124,77 @@ git push origin v1.0.0
 # 6. O GitHub Actions executará o release.yml gerando a release no GitHub
 # A Vercel fará o deploy automático de produção com a main atualizada.
 ```
+
+---
+
+## 🧹 6. Limpar o Banco de Dados (massas de teste)
+
+Workflow manual: `.github/workflows/reset-database.yml`, que roda `scripts/reset_database.py`.
+Ele apaga **dados**, nunca o schema: usa `DELETE` numa única transação (se algo falhar, nada é apagado) e não mexe em tabelas, índices ou migrations.
+
+| Escopo | O que apaga | O que preserva |
+|---|---|---|
+| `content` | Quizzes, questões, tentativas e registros de rate limit | Usuários e sessões |
+| `all` | Tudo de `content` + usuários, sessões e pedidos de redefinição de senha | A conta do admin (`ADMIN_USERNAME`) |
+
+### Configuração (uma vez)
+1. GitHub → **Settings > Environments** → crie `production` e `homolog`.
+2. Em cada um, adicione o secret `DATABASE_URL` com a string de conexão do banco daquele ambiente (a mesma da Vercel).
+3. Opcional, recomendado em `production`: marque **Required reviewers** para exigir aprovação antes de rodar.
+4. Se o admin não se chama `admin`, crie a variável `ADMIN_USERNAME` no Environment.
+
+### Como rodar
+1. GitHub → **Actions → "Manutenção — Limpar Banco de Dados" → Run workflow**.
+2. Escolha o ambiente e o escopo. Deixe **dry_run** marcado na primeira vez: o log mostra quantas linhas *seriam* apagadas em cada tabela.
+3. Para apagar de verdade: desmarque **dry_run** e digite `APAGAR` no campo **confirm**.
+
+### Pela linha de comando
+```bash
+python scripts/reset_database.py --scope content --dry-run   # só conta
+python scripts/reset_database.py --scope all                 # pede para digitar APAGAR
+```
+O script usa o `DATABASE_URL` do `.env`; confira o alvo impresso na primeira linha antes de confirmar.
+
+### Pela Vercel/Neon (sem GitHub)
+A Vercel não executa scripts avulsos. A alternativa é o **SQL Editor** do console da Neon (Vercel → Storage → abrir no Neon):
+```sql
+BEGIN;
+DELETE FROM quiz_attempts; DELETE FROM questions; DELETE FROM quizzes; DELETE FROM rate_limits;
+-- escopo "all" (troque 'admin' se ADMIN_USERNAME for outro):
+DELETE FROM password_resets; DELETE FROM sessions; DELETE FROM users WHERE LOWER(username) <> 'admin';
+COMMIT;
+```
+
+---
+
+## ✉️ 7. Recuperação de Senha por E-mail
+
+O fluxo "Esqueci minha senha" envia o link por SMTP (biblioteca padrão do Python, sem dependências novas).
+**Sem `SMTP_HOST` configurado, nenhum e-mail sai**: o link só aparece nos logs do servidor e, com `DEBUG=true`, na própria tela (útil em desenvolvimento). Em produção o token nunca volta na resposta da API, porque isso permitiria a qualquer pessoa redefinir a senha de qualquer conta.
+
+### Gmail (gratuito, ~500 e-mails/dia)
+1. Ative a verificação em duas etapas na conta Google.
+2. Gere uma **senha de app** em https://myaccount.google.com/apppasswords.
+3. Na Vercel (**Settings > Environment Variables**), cadastre:
+
+| Variável | Valor |
+|---|---|
+| `SMTP_HOST` | `smtp.gmail.com` |
+| `SMTP_PORT` | `587` |
+| `SMTP_USE_TLS` | `true` |
+| `SMTP_USER` | o e-mail da conta |
+| `SMTP_PASSWORD` | a senha de app (16 caracteres, sem espaços) |
+| `SMTP_FROM` | `Quiz Study <o-mesmo-e-mail>` |
+| `APP_URL` | a URL pública, ex.: `https://seu-app.vercel.app` (vai no link do e-mail) |
+
+4. Faça um novo deploy (variáveis só valem para deploys novos).
+
+Qualquer outro provedor SMTP (Brevo, Resend, SendGrid, Mailgun) funciona com as mesmas variáveis.
+
+---
+
+## ⚡ 8. Desempenho: região da função x região do banco
+
+Cada requisição faz várias idas e voltas ao PostgreSQL (sessão, rate limit, consulta). Se a função da Vercel roda nos EUA (`iad1`, o padrão) e o banco está em São Paulo, cada ida e volta custa ~120 ms e o carregamento passa de 1 s.
+- Veja a região do banco no console da Neon (Project settings).
+- Na Vercel, em **Settings > Functions > Function Region**, escolha a mesma região (ex.: `gru1` para `sa-east-1`, `iad1` para `us-east-1`).

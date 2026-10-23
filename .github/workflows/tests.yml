@@ -55,6 +55,7 @@ jobs:
           ADMIN_PASSWORD: "ci-test-password-123"
           AI_PROVIDER: "google"
           GEMINI_API_KEY: "fake-key-for-tests"
+          QUIZ_DB_INTEGRATION: "1"
         run: |
           python -m unittest discover tests -v
 

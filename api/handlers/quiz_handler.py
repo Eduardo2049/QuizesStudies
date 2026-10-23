@@ -11,7 +11,7 @@ from threading import Lock
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
-from api.utils.config import WEB_DIR, DEBUG, COOKIE_SECURE, AUTO_MIGRATE
+from api.utils.config import WEB_DIR, DEBUG, COOKIE_SECURE, AUTO_MIGRATE, PORT
 from api.controllers.quiz_controller import QuizController, UploadController
 from api.controllers.auth_controller import AuthController
 from api.exceptions.quiz_exceptions import QuizAPIException

@@ -1,7 +1,7 @@
-import { icon } from './modules/icons.js?v=5';
-import { initTheme, toggleTheme } from './modules/theme.js?v=6';
+import { icon } from './modules/icons.js?v=6';
+import { initTheme, toggleTheme } from './modules/theme.js?v=9';
 import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js?v=5';
-import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=5';
+import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=6';
 import { initTimerDrag } from './modules/timer-drag.js?v=1';
 
 // ─── Estado global ────────────────────────────────────────────────────────────
@@ -631,7 +631,7 @@ async function loadQuiz(source = selectedSource) {
   loadController?.abort();
   loadController = new AbortController();
   const response = await fetch(`/api/quiz${source ? `?source=${encodeURIComponent(source)}` : ''}`, {
-    cache: 'no-store',
+    cache: 'no-cache', // revalida via ETag: 304 sem corpo quando nada mudou
     signal: loadController.signal,
   });
   if (!response.ok) throw new Error(`Falha ao carregar o questionário (${response.status})`);
@@ -767,7 +767,7 @@ function updateFocusNavigation() {
 async function loadQuizList() {
   let serverQuizzes = [];
   try {
-    const response = await fetch('/api/quizzes', { cache: 'no-store' });
+    const response = await fetch('/api/quizzes', { cache: 'no-cache' });
     if (response.ok) {
       const rawData = await response.json();
       const data = rawData.data || rawData;
@@ -782,6 +782,8 @@ async function loadQuizList() {
 
   if (!serverQuizzes.length && !localQuizzes.length) {
     quizSelector.innerHTML = '<option value="">— Nenhum quiz disponível —</option>';
+    renderCustomQuizOptions([], []);
+    syncCustomQuizSelector();
     return;
   }
 
@@ -1958,10 +1960,18 @@ async function init() {
     getQuestionsCount: () => questions.length,
   });
 
-  const isAuthed = await checkAuth();
-  if (!isAuthed) return;
+  // Sessão, quiz e lista em paralelo: o cookie vai em todas as requisições,
+  // então não é preciso esperar /api/auth/me para buscar os dados.
+  // checkAuth() roda primeiro para limpar o estado de convidado antes dos loads.
+  const authPromise = checkAuth();
+  const dataPromise = Promise.all([loadQuiz(), loadQuizList()]);
+  const isAuthed = await authPromise;
+  if (!isAuthed) {
+    dataPromise.catch(() => {});
+    return;
+  }
   try {
-    await Promise.all([loadQuiz(), loadQuizList()]);
+    await dataPromise;
   } catch (error) {
     if (error.name !== 'AbortError') {
       quiz.innerHTML = '<p class="empty-state">Adicione um quiz usando o botão acima para começar.</p>';

@@ -1,0 +1,90 @@
+name: Manutenção — Limpar Banco de Dados
+
+# Execução apenas manual: Actions > "Manutenção — Limpar Banco de Dados" > Run workflow.
+# Por padrão roda em simulação (só conta as linhas). Para apagar de verdade,
+# desmarque "dry_run" e digite APAGAR no campo de confirmação.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente (GitHub Environment com o secret DATABASE_URL)"
+        type: choice
+        options:
+          - production
+          - homolog
+        default: homolog
+      scope:
+        description: "content = quizzes e tentativas | all = também usuários (exceto admin) e sessões"
+        type: choice
+        options:
+          - content
+          - all
+        default: content
+      dry_run:
+        description: "Simulação: só conta, não apaga nada"
+        type: boolean
+        default: true
+      confirm:
+        description: "Digite APAGAR para confirmar (obrigatório fora da simulação)"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reset-database
+  cancel-in-progress: false
+
+jobs:
+  reset:
+    name: Limpar banco (${{ inputs.environment }} / ${{ inputs.scope }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # O Environment permite secrets separados por ambiente e, se configurado,
+    # aprovação obrigatória (Settings > Environments > Required reviewers).
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Validar confirmação
+        if: ${{ !inputs.dry_run }}
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "APAGAR" ]; then
+            echo "::error::Confirmação ausente. Digite APAGAR no campo 'confirm' ou rode em simulação."
+            exit 1
+          fi
+
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Executar limpeza
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ADMIN_USERNAME: ${{ vars.ADMIN_USERNAME || 'admin' }}
+          # Só vale se a URL não trouxer sslmode; a Neon já envia sslmode=require.
+          DB_SSLMODE: require
+          SCOPE: ${{ inputs.scope }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          TARGET_ENV: ${{ inputs.environment }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Secret DATABASE_URL não encontrado no ambiente '$TARGET_ENV'."
+            exit 1
+          fi
+          if [ "$DRY_RUN" = "true" ]; then
+            python scripts/reset_database.py --scope "$SCOPE" --dry-run
+          else
+            python scripts/reset_database.py --scope "$SCOPE" --yes
+          fi

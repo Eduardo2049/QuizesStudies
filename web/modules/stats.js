@@ -1,4 +1,4 @@
-import { icon } from './icons.js?v=5';
+import { icon } from './icons.js?v=6';
 /**
  * Módulo de Feedback e Estatísticas Pedagógicas
  * Calcula métricas de aproveitamento, ritmo por questão e divisão por disciplinas/seções.

@@ -43,6 +43,60 @@ class QuizRepository:
                 """)
             return [dict(row) for row in cur.fetchall()]
 
+    @staticmethod
+    def _select_by_name(cur, name: str, user_id: int | None) -> dict:
+        if user_id:
+            cur.execute("""
+                SELECT * FROM quizzes
+                WHERE name = %s AND (is_public = TRUE OR created_by = %s)
+            """, (name, user_id))
+        else:
+            cur.execute("""
+                SELECT * FROM quizzes
+                WHERE name = %s AND is_public = TRUE
+            """, (name,))
+        row = cur.fetchone()
+        if not row:
+            raise QuizNotFound(name)
+        return dict(row)
+
+    @staticmethod
+    def _select_default(cur, user_id: int | None) -> dict:
+        if user_id:
+            cur.execute("""
+                SELECT * FROM quizzes
+                WHERE is_public = TRUE OR created_by = %s
+                ORDER BY created_at ASC LIMIT 1
+            """, (user_id,))
+        else:
+            cur.execute("""
+                SELECT * FROM quizzes
+                WHERE is_public = TRUE
+                ORDER BY created_at ASC LIMIT 1
+            """)
+        row = cur.fetchone()
+        if not row:
+            raise QuizNotFound("Nenhum quiz cadastrado")
+        return dict(row)
+
+    @staticmethod
+    def _select_questions(cur, quiz_id: int) -> list[dict]:
+        cur.execute("""
+            SELECT id, quiz_id, question_number, section, context,
+                   question, options, answer, explanation
+            FROM questions
+            WHERE quiz_id = %s
+            ORDER BY question_number ASC
+        """, (quiz_id,))
+        result = []
+        for row in cur.fetchall():
+            q = dict(row)
+            # options vem como JSONB — psycopg2 já deserializa automaticamente
+            if isinstance(q["options"], str):
+                q["options"] = json.loads(q["options"])
+            result.append(q)
+        return result
+
     def find_by_name(self, name: str, user_id: int | None = None) -> dict:
         """
         Encontra um quiz pelo campo `name` (se público ou se pertencente ao usuário).
@@ -51,20 +105,7 @@ class QuizRepository:
             QuizNotFound: Se não existir
         """
         with get_cursor() as cur:
-            if user_id:
-                cur.execute("""
-                    SELECT * FROM quizzes
-                    WHERE name = %s AND (is_public = TRUE OR created_by = %s)
-                """, (name, user_id))
-            else:
-                cur.execute("""
-                    SELECT * FROM quizzes
-                    WHERE name = %s AND is_public = TRUE
-                """, (name,))
-            row = cur.fetchone()
-        if not row:
-            raise QuizNotFound(name)
-        return dict(row)
+            return self._select_by_name(cur, name, user_id)
 
     def find_default(self, user_id: int | None = None) -> dict:
         """
@@ -74,22 +115,7 @@ class QuizRepository:
             QuizNotFound: Se não houver nenhum quiz
         """
         with get_cursor() as cur:
-            if user_id:
-                cur.execute("""
-                    SELECT * FROM quizzes
-                    WHERE is_public = TRUE OR created_by = %s
-                    ORDER BY created_at ASC LIMIT 1
-                """, (user_id,))
-            else:
-                cur.execute("""
-                    SELECT * FROM quizzes
-                    WHERE is_public = TRUE
-                    ORDER BY created_at ASC LIMIT 1
-                """)
-            row = cur.fetchone()
-        if not row:
-            raise QuizNotFound("Nenhum quiz cadastrado")
-        return dict(row)
+            return self._select_default(cur, user_id)
 
     def find_questions(self, quiz_id: int) -> list[dict]:
         """
@@ -100,23 +126,19 @@ class QuizRepository:
                           question, options (list), answer, explanation}]
         """
         with get_cursor() as cur:
-            cur.execute("""
-                SELECT id, quiz_id, question_number, section, context,
-                       question, options, answer, explanation
-                FROM questions
-                WHERE quiz_id = %s
-                ORDER BY question_number ASC
-            """, (quiz_id,))
-            rows = cur.fetchall()
+            return self._select_questions(cur, quiz_id)
 
-        result = []
-        for row in rows:
-            q = dict(row)
-            # options vem como JSONB — psycopg2 já deserializa automaticamente
-            if isinstance(q["options"], str):
-                q["options"] = json.loads(q["options"])
-            result.append(q)
-        return result
+    def find_with_questions(self, name: str | None, user_id: int | None = None) -> tuple[dict, list[dict]]:
+        """
+        Quiz (por `name`, ou o padrão se None) e suas questões numa única transação:
+        evita uma segunda conexão/BEGIN/COMMIT por carregamento.
+
+        Raises:
+            QuizNotFound: Se não existir
+        """
+        with get_cursor() as cur:
+            quiz_row = self._select_by_name(cur, name, user_id) if name else self._select_default(cur, user_id)
+            return quiz_row, self._select_questions(cur, quiz_row["id"])
 
     def name_exists(self, name: str) -> bool:
         """Verifica se já existe um quiz com esse nome."""
