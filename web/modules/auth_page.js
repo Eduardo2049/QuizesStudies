@@ -4,15 +4,39 @@
  * validação de formulários com feedback acessível e controle de sessão HttpOnly.
  */
 
-// Limpeza proativa de qualquer resquício de cache ou usuário anterior ao abrir a tela de autenticação
+// Limpeza de resquícios antigos (versões anteriores guardavam o convidado no localStorage).
+// Os simulados do convidado da aba atual (sessionStorage) são mantidos até o login dar certo:
+// quem abre esta tela e volta sem entrar não perde o que criou.
 localStorage.removeItem('quiz_guest_mode');
 localStorage.removeItem('quiz_guest_data');
 localStorage.removeItem('quiz_guest_quizzes');
-sessionStorage.clear();
+
+function clearGuestSession() {
+  sessionStorage.removeItem('quiz_guest_mode');
+  sessionStorage.removeItem('quiz_guest_data');
+  sessionStorage.removeItem('quiz_guest_quizzes');
+}
+
+/**
+ * Destino depois de entrar (?next=). Só aceita caminhos internos para não virar
+ * um redirecionamento aberto (ex.: ?next=https://site-falso.com ou //site-falso.com).
+ */
+function safeNext() {
+  const raw = new URLSearchParams(window.location.search).get('next') || '/';
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return '/';
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (url.origin !== window.location.origin) return '/';
+    if (['/login', '/register', '/reset-password'].includes(url.pathname)) return '/';
+    return url.pathname + url.search + url.hash;
+  } catch (_) {
+    return '/';
+  }
+}
 
 // ─── Verificação da sessão HttpOnly ──────────────────────────────────────────
 fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' })
-  .then(res => { if (res.ok) window.location.replace('/'); })
+  .then(res => { if (res.ok) window.location.replace(safeNext()); })
   .catch(() => { });
 
 // ─── Elementos da Interface ──────────────────────────────────────────────────
@@ -48,8 +72,8 @@ export function setMode(mode, pushState = true) {
   if (mode === 'register') {
     if (pageTitle) pageTitle.textContent = 'Cadastrar — Quiz Study';
     if (headerEyebrow) headerEyebrow.textContent = 'Quiz Study · crie sua conta';
-    if (headerTitle) headerTitle.innerHTML = 'Cadastro de<br><em>Estudante</em>';
-    if (headerSubtitle) headerSubtitle.textContent = 'Crie seu perfil gratuitamente para responder simulados e acompanhar seu progresso.';
+    if (headerTitle) headerTitle.innerHTML = 'Crie sua<br><em>conta grátis</em>';
+    if (headerSubtitle) headerSubtitle.textContent = 'Seus simulados e seu histórico ficam salvos e acessíveis em qualquer dispositivo. Sem cartão de crédito.';
     tabRegister?.classList.add('active');
     tabRegister?.setAttribute('aria-current', 'page');
     tabLogin?.classList.remove('active');
@@ -58,14 +82,14 @@ export function setMode(mode, pushState = true) {
     if (pageRegisterForm) pageRegisterForm.hidden = false;
     if (footerHint) footerHint.innerHTML = 'Já possui uma conta? <a href="/login" id="linkToggle" class="auth-link">Entre aqui</a>';
     if (pushState && window.location.pathname !== '/register') {
-      history.pushState({ mode: 'register' }, '', '/register');
+      history.pushState({ mode: 'register' }, '', '/register' + window.location.search);
     }
     document.getElementById('regUsername')?.focus();
   } else {
     if (pageTitle) pageTitle.textContent = 'Entrar — Quiz Study';
     if (headerEyebrow) headerEyebrow.textContent = 'Quiz Study · acesso à plataforma';
     if (headerTitle) headerTitle.innerHTML = 'Boas-vindas ao<br><em>Quiz Study</em>';
-    if (headerSubtitle) headerSubtitle.textContent = 'Entre com sua conta para acessar os simulados e acompanhar seu desempenho.';
+    if (headerSubtitle) headerSubtitle.textContent = 'Entre para salvar seus simulados e acompanhar seu desempenho.';
     tabLogin?.classList.add('active');
     tabLogin?.setAttribute('aria-current', 'page');
     tabRegister?.classList.remove('active');
@@ -74,7 +98,7 @@ export function setMode(mode, pushState = true) {
     if (pageLoginForm) pageLoginForm.hidden = false;
     if (footerHint) footerHint.innerHTML = 'Não possui uma conta? <a href="/register" id="linkToggle" class="auth-link">Cadastre-se aqui</a>';
     if (pushState && window.location.pathname !== '/login') {
-      history.pushState({ mode: 'login' }, '', '/login');
+      history.pushState({ mode: 'login' }, '', '/login' + window.location.search);
     }
     document.getElementById('loginUsername')?.focus();
   }
@@ -107,22 +131,36 @@ window.addEventListener('popstate', () => {
   setMode(isRegister ? 'register' : 'login', false);
 });
 
-// Acesso como Visitante
-document.getElementById('btnGuestAccess')?.addEventListener('click', () => {
-  localStorage.removeItem('quiz_guest_mode');
-  localStorage.removeItem('quiz_guest_data');
-  localStorage.removeItem('quiz_guest_quizzes');
-  sessionStorage.setItem('quiz_guest_mode', 'true');
-  window.location.replace('/guest');
+// Acesso como convidado: o servidor cria a sessão (cookie HttpOnly) e a cota de IA
+const btnGuestAccess = document.getElementById('btnGuestAccess');
+btnGuestAccess?.addEventListener('click', async () => {
+  btnGuestAccess.disabled = true;
+  try {
+    const res = await fetch('/api/guest/start', { method: 'POST', credentials: 'same-origin' });
+    if (!res.ok) {
+      const raw = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        window.location.replace(safeNext());
+        return;
+      }
+      throw new Error(raw.message || 'Não foi possível abrir o modo convidado.');
+    }
+    sessionStorage.setItem('quiz_guest_mode', 'true');
+    window.location.replace(safeNext());
+  } catch (err) {
+    const feedback = pageRegisterForm?.hidden ? loginFeedback : registerFeedback;
+    if (feedback) {
+      feedback.textContent = `${err.message} Tente novamente em alguns minutos.`;
+      feedback.className = 'form-feedback feedback-error';
+      feedback.hidden = false;
+    }
+    btnGuestAccess.disabled = false;
+  }
 });
 
 // ─── Submissão do Formulário de Login ─────────────────────────────────────────
 pageLoginForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  localStorage.removeItem('quiz_guest_mode');
-  localStorage.removeItem('quiz_guest_data');
-  localStorage.removeItem('quiz_guest_quizzes');
-  sessionStorage.clear();
   if (loginFeedback) {
     loginFeedback.hidden = true;
     loginFeedback.textContent = '';
@@ -167,14 +205,15 @@ pageLoginForm?.addEventListener('submit', async (e) => {
       return;
     }
 
+    clearGuestSession();
     if (loginFeedback) {
-      loginFeedback.textContent = '✓ Acesso liberado! Redirecionando…';
+      loginFeedback.textContent = 'Acesso liberado. Abrindo seus simulados…';
       loginFeedback.className = 'form-feedback feedback-success';
       loginFeedback.hidden = false;
     }
 
     setTimeout(() => {
-      window.location.replace('/');
+      window.location.replace(safeNext());
     }, 500);
 
   } catch (err) {
@@ -188,7 +227,7 @@ pageLoginForm?.addEventListener('submit', async (e) => {
       submitLoginBtn.disabled = false;
       submitLoginBtn.classList.remove('btn-loading');
       const span = submitLoginBtn.querySelector('span');
-      if (span) span.textContent = 'Acessar Simulados';
+      if (span) span.textContent = 'Entrar na conta';
     }
   }
 });
@@ -214,9 +253,19 @@ pageRegisterForm?.addEventListener('submit', async (e) => {
     return;
   }
 
-  if (password.length < 6) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     if (registerFeedback) {
-      registerFeedback.textContent = 'A senha deve ter no mínimo 6 caracteres.';
+      registerFeedback.textContent = 'Informe um e-mail válido, como nome@exemplo.com.';
+      registerFeedback.className = 'form-feedback feedback-error';
+      registerFeedback.hidden = false;
+    }
+    return;
+  }
+
+  // Mesmo mínimo exigido pelo servidor (auth_service): 8 caracteres
+  if (password.length < 8) {
+    if (registerFeedback) {
+      registerFeedback.textContent = 'A senha deve ter no mínimo 8 caracteres.';
       registerFeedback.className = 'form-feedback feedback-error';
       registerFeedback.hidden = false;
     }
@@ -250,7 +299,7 @@ pageRegisterForm?.addEventListener('submit', async (e) => {
     }
 
     if (registerFeedback) {
-      registerFeedback.textContent = '✓ Conta criada! Conectando…';
+      registerFeedback.textContent = 'Conta criada. Conectando…';
       registerFeedback.className = 'form-feedback feedback-success';
       registerFeedback.hidden = false;
     }
@@ -264,8 +313,9 @@ pageRegisterForm?.addEventListener('submit', async (e) => {
       });
 
       if (loginRes.ok) {
+        clearGuestSession();
         setTimeout(() => {
-          window.location.replace('/');
+          window.location.replace(safeNext());
         }, 500);
         return;
       }
@@ -273,7 +323,7 @@ pageRegisterForm?.addEventListener('submit', async (e) => {
 
     setMode('login');
     if (loginFeedback) {
-      loginFeedback.textContent = '✓ Conta criada com sucesso! Faça login para continuar.';
+      loginFeedback.textContent = 'Conta criada. Entre com seu usuário e senha para continuar.';
       loginFeedback.className = 'form-feedback feedback-success';
       loginFeedback.hidden = false;
     }
@@ -289,7 +339,7 @@ pageRegisterForm?.addEventListener('submit', async (e) => {
       submitRegisterBtn.disabled = false;
       submitRegisterBtn.classList.remove('btn-loading');
       const span = submitRegisterBtn.querySelector('span');
-      if (span) span.textContent = 'Criar Conta';
+      if (span) span.textContent = 'Criar conta grátis';
     }
   }
 });
