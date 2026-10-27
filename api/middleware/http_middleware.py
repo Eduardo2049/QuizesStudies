@@ -78,11 +78,34 @@ class HTTPMiddleware:
         return session_cookie.value if session_cookie else None
 
     @staticmethod
-    def session_cookie(token: str | None, secure: bool, max_age: int) -> str:
+    def _cookie(name: str, value: str | None, secure: bool, max_age: int) -> str:
         attributes = ["Path=/", "HttpOnly", "SameSite=Lax", f"Max-Age={max_age}"]
         if secure:
             attributes.append("Secure")
-        return f"ifuture_session={token or ''}; " + "; ".join(attributes)
+        return f"{name}={value or ''}; " + "; ".join(attributes)
+
+    @staticmethod
+    def session_cookie(token: str | None, secure: bool, max_age: int) -> str:
+        return HTTPMiddleware._cookie("ifuture_session", token, secure, max_age)
+
+    @staticmethod
+    def guest_cookie(guest_id: str | None, secure: bool, max_age: int) -> str:
+        """Cookie HttpOnly do modo convidado (identificador aleatório, sem dados pessoais)."""
+        from api.services.guest_service import GUEST_COOKIE_NAME
+        return HTTPMiddleware._cookie(GUEST_COOKIE_NAME, guest_id, secure, max_age)
+
+    @staticmethod
+    def get_guest_id(handler) -> str | None:
+        """Lê o identificador de convidado do cookie; valores fora do formato são ignorados."""
+        from api.services.guest_service import GUEST_COOKIE_NAME, GuestService
+        cookies = SimpleCookie()
+        try:
+            cookies.load(handler.headers.get("Cookie", ""))
+        except Exception:
+            return None
+        morsel = cookies.get(GUEST_COOKIE_NAME)
+        value = morsel.value if morsel else None
+        return value if GuestService.is_valid_guest_id(value) else None
 
     @staticmethod
     def get_client_ip(handler) -> str:
@@ -92,9 +115,21 @@ class HTTPMiddleware:
         e X-Forwarded-For. Caso contrário, utiliza estritamente o endereço de socket direto
         para impedir spoofing de cabeçalhos por clientes não autenticados.
         """
+        import os
         from api.utils.config import TRUST_PROXY
         socket_ip = getattr(handler, "client_address", ("unknown",))[0]
         if not TRUST_PROXY:
+            return socket_ip
+
+        # Na Vercel, o X-Forwarded-For é reescrito pela plataforma (não aceita IP externo),
+        # mas um CF-Connecting-IP enviado pelo cliente passa direto: confiar nele deixaria
+        # qualquer pessoa trocar de "IP" a cada requisição e furar rate limits e o teto
+        # por IP do convidado. Lá, só os cabeçalhos da própria Vercel valem.
+        if os.getenv("VERCEL") == "1":
+            for header in ("x-vercel-forwarded-for", "x-real-ip", "X-Forwarded-For"):
+                value = handler.headers.get(header)
+                if value:
+                    return str(value.split(",")[0].strip())
             return socket_ip
 
         cf_ip = handler.headers.get("CF-Connecting-IP")
@@ -112,7 +147,7 @@ class HTTPMiddleware:
         handler,
         status: int,
         data: dict,
-        set_cookie: str | None = None,
+        set_cookie: str | list[str] | None = None,
         clear_cookie: bool = False
     ) -> None:
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -122,7 +157,8 @@ class HTTPMiddleware:
         handler.send_header("Content-Length", str(len(body)))
 
         if set_cookie:
-            handler.send_header("Set-Cookie", set_cookie)
+            for cookie in ([set_cookie] if isinstance(set_cookie, str) else set_cookie):
+                handler.send_header("Set-Cookie", cookie)
         elif clear_cookie:
             handler.send_header(
                 "Set-Cookie",

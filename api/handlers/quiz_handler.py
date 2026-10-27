@@ -14,7 +14,8 @@ from urllib.parse import parse_qs, urlparse
 from api.utils.config import WEB_DIR, DEBUG, COOKIE_SECURE, AUTO_MIGRATE, PORT
 from api.controllers.quiz_controller import QuizController, UploadController
 from api.controllers.auth_controller import AuthController
-from api.exceptions.quiz_exceptions import QuizAPIException
+from api.exceptions.quiz_exceptions import QuizAPIException, AuthOrGuestRequired
+from api.services.guest_service import guest_service, GUEST_COOKIE_MAX_AGE
 from api.middleware.http_middleware import HTTPMiddleware, ResponseFormatter
 from api.utils.validators import AnswerValidator
 from api.repositories.rate_limit_repository import rate_limit_repo, RateLimitRepository
@@ -122,6 +123,9 @@ _rl_upload = RateLimiter(limit=5, window_seconds=60, repo=rate_limit_repo)      
 _rl_generate = RateLimiter(limit=10, window_seconds=60, repo=rate_limit_repo)      # generate IA: 10/min
 _rl_remix = RateLimiter(limit=10, window_seconds=60, repo=rate_limit_repo)         # remix IA: 10/min
 _rl_read = RateLimiter(limit=120, window_seconds=60, repo=rate_limit_repo)         # leitura geral: 120/min
+# novas sessões de convidado: 60/15min por IP. Folgado para uma sala de aula atrás do mesmo IP;
+# quem renova o cookie para ganhar cota esbarra no teto por IP do GuestService (GUEST_AI_IP_LIMIT).
+_rl_guest_start = RateLimiter(limit=60, window_seconds=15 * 60, repo=rate_limit_repo)
 
 
 def _rate_limited_response(handler, retry_after: int) -> None:
@@ -335,6 +339,21 @@ class QuizHandler(BaseHTTPRequestHandler):
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
+            # 0.2 API: Situação do modo convidado e cota gratuita de IA
+            if request.path == "/api/guest/status":
+                allowed, retry_after = _rl_read.check_handler(self, "GET:/api/guest/status")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
+                guest_id = HTTPMiddleware.get_guest_id(self)
+                client_ip = HTTPMiddleware.get_client_ip(self)
+                status, data = ResponseFormatter.success({
+                    "active": bool(guest_id),
+                    "ai": guest_service.status(guest_id, client_ip),
+                })
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
             # 1. API: Listar quizzes
             if request.path == "/api/quizzes":
                 allowed, retry_after = _rl_read.check_handler(self, "GET:/api/quizzes")
@@ -378,27 +397,28 @@ class QuizHandler(BaseHTTPRequestHandler):
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
-            # 3. Servir HTML principal
+            # 3. Servir HTML principal — aberto a todos (sem muro de login).
+            # O login só é pedido quando a pessoa tenta uma ação que precisa de conta
+            # ou de sessão de convidado (ex.: usar a IA); isso é decidido no cliente
+            # e garantido no servidor pelos endpoints de cada ação.
             if request.path in ("/", "/guest", "/index.html", "/api/index.py", "/api/index"):
-                if request.path != "/guest":
-                    user = self._get_current_user_or_none()
-                    if not user:
-                        self.send_response(302)
-                        self.send_header("Location", "/login")
-                        token = HTTPMiddleware.get_auth_token(self)
-                        if token:
-                            clear_cookie = HTTPMiddleware.session_cookie(None, COOKIE_SECURE, 0)
-                            self.send_header("Set-Cookie", clear_cookie)
-                        HTTPMiddleware.add_cache_headers(self, cache=False)
-                        self.end_headers()
-                        return
-
                 index_file = WEB_DIR / "index.html"
                 if index_file.is_file():
                     content = index_file.read_bytes()
+                    # Cookie de sessão expirado/inválido: limpa para o cliente começar como visitante.
+                    # Se o banco estiver fora, mantém o cookie (pode ser uma sessão válida).
+                    clear_session = False
+                    token = HTTPMiddleware.get_auth_token(self)
+                    if token:
+                        try:
+                            clear_session = not self.auth_controller.service.validate_token(token)
+                        except Exception:
+                            clear_session = False
                     self.send_response(200)
                     self.send_header("Content-Type", "text/html; charset=utf-8")
                     self.send_header("Content-Length", str(len(content)))
+                    if clear_session:
+                        self.send_header("Set-Cookie", HTTPMiddleware.session_cookie(None, COOKIE_SECURE, 0))
                     HTTPMiddleware.add_cors_headers(self)
                     HTTPMiddleware.add_security_headers(self)
                     HTTPMiddleware.add_cache_headers(self, cache=False)
@@ -526,7 +546,7 @@ class QuizHandler(BaseHTTPRequestHandler):
             HTTPMiddleware.send_json_response(self, status, data)
 
         except QuizAPIException as e:
-            status, data = ResponseFormatter.error(e.message, "QUIZ_ERROR", e.status_code)
+            status, data = ResponseFormatter.error(e.message, e.error_code, e.status_code)
             HTTPMiddleware.send_json_response(self, status, data, clear_cookie=(e.status_code == 401))
         except Exception as e:
             if DEBUG:
@@ -585,8 +605,12 @@ class QuizHandler(BaseHTTPRequestHandler):
 
                 token = response["data"].get("token")
                 status, data = ResponseFormatter.success(response["data"], response["message"])
-                cookie = HTTPMiddleware.session_cookie(token, COOKIE_SECURE, 7 * 24 * 60 * 60)
-                HTTPMiddleware.send_json_response(self, status, data, set_cookie=cookie)
+                cookies = [
+                    HTTPMiddleware.session_cookie(token, COOKIE_SECURE, 7 * 24 * 60 * 60),
+                    # Ao entrar na conta, a sessão de convidado deixa de valer
+                    HTTPMiddleware.guest_cookie(None, COOKIE_SECURE, 0),
+                ]
+                HTTPMiddleware.send_json_response(self, status, data, set_cookie=cookies)
                 return
 
             if request.path == "/api/auth/register":
@@ -608,8 +632,44 @@ class QuizHandler(BaseHTTPRequestHandler):
                 token = HTTPMiddleware.get_auth_token(self)
                 response = self.auth_controller.logout(token)
                 status, data = ResponseFormatter.success(response["data"], response["message"])
-                clear_cookie = HTTPMiddleware.session_cookie(None, COOKIE_SECURE, 0)
-                HTTPMiddleware.send_json_response(self, status, data, set_cookie=clear_cookie)
+                cookies = [
+                    HTTPMiddleware.session_cookie(None, COOKIE_SECURE, 0),
+                    HTTPMiddleware.guest_cookie(None, COOKIE_SECURE, 0),
+                ]
+                HTTPMiddleware.send_json_response(self, status, data, set_cookie=cookies)
+                return
+
+            # ── 0.1 Modo convidado ─────────────────────────────────────────────
+            if request.path == "/api/guest/start":
+                if self._get_current_user_or_none():
+                    status, data = ResponseFormatter.error(
+                        "Você já está conectado à sua conta.", "ALREADY_AUTHENTICATED", 409
+                    )
+                    HTTPMiddleware.send_json_response(self, status, data)
+                    return
+
+                client_ip = HTTPMiddleware.get_client_ip(self)
+                guest_id = HTTPMiddleware.get_guest_id(self)
+                if not guest_id:
+                    # Só novas sessões gastam o limite: reabrir a mesma sessão é livre
+                    allowed, retry_after = _rl_guest_start.check_handler(self, "POST:/api/guest/start")
+                    if not allowed:
+                        _rate_limited_response(self, retry_after)
+                        return
+                    guest_id = guest_service.new_guest_id()
+
+                status, data = ResponseFormatter.success(
+                    {"active": True, "ai": guest_service.status(guest_id, client_ip)},
+                    "Modo convidado ativado",
+                )
+                cookie = HTTPMiddleware.guest_cookie(guest_id, COOKIE_SECURE, GUEST_COOKIE_MAX_AGE)
+                HTTPMiddleware.send_json_response(self, status, data, set_cookie=cookie)
+                return
+
+            if request.path == "/api/guest/end":
+                status, data = ResponseFormatter.success({"active": False}, "Modo convidado encerrado")
+                cookie = HTTPMiddleware.guest_cookie(None, COOKIE_SECURE, 0)
+                HTTPMiddleware.send_json_response(self, status, data, set_cookie=cookie)
                 return
 
             if request.path == "/api/auth/forgot-password":
@@ -652,7 +712,8 @@ class QuizHandler(BaseHTTPRequestHandler):
                 if not allowed:
                     _rate_limited_response(self, retry_after)
                     return
-                self._handle_upload(query.get("guest", ["0"])[0] == "1")
+                # O parâmetro legado ?guest=1 é ignorado: quem decide é a sessão
+                self._handle_upload()
                 return
 
             # ── 1.1 Gerar quiz por tema via IA (application/json) ────────────
@@ -662,14 +723,14 @@ class QuizHandler(BaseHTTPRequestHandler):
                     _rate_limited_response(self, retry_after)
                     return
 
-                # Recurso de IA exige login obrigatório para proteger cotas
-                user = self._require_authenticated_user()
+                # IA exige conta ou sessão de convidado (com cota gratuita)
+                user, guest_id = self._require_user_or_guest()
 
                 payload = self._read_json_body()
                 if payload is None:
                     return
 
-                topic = payload.get("topic", "").strip()
+                topic = str(payload.get("topic", "")).strip()
                 if not topic:
                     status, data = ResponseFormatter.bad_request("O campo 'topic' (tema) é obrigatório")
                     HTTPMiddleware.send_json_response(self, status, data)
@@ -682,16 +743,24 @@ class QuizHandler(BaseHTTPRequestHandler):
                 is_public = requested_public and user and user.get("role") == "admin"
 
                 client_ip = HTTPMiddleware.get_client_ip(self)
-                response = self.quiz_controller.generate_quiz_by_topic(
-                    topic=topic,
-                    num_questions=num_questions,
-                    difficulty=difficulty,
-                    context=context,
-                    user_id=user["id"],
-                    is_public=bool(is_public),
-                    persist=True,
-                    client_ip=client_ip,
-                )
+                reservation = self._reserve_guest_ai(guest_id, client_ip)
+                try:
+                    response = self.quiz_controller.generate_quiz_by_topic(
+                        topic=topic,
+                        num_questions=num_questions,
+                        difficulty=difficulty,
+                        context=context,
+                        user_id=user["id"] if user else None,
+                        is_public=bool(is_public),
+                        persist=bool(user),
+                        client_ip=client_ip,
+                    )
+                except Exception:
+                    if reservation:
+                        reservation.refund()
+                    raise
+                if guest_id:
+                    response["data"]["guest_ai"] = guest_service.status(guest_id, client_ip)
                 status, data = ResponseFormatter.created(
                     response["data"],
                     response["data"].get("message")
@@ -730,8 +799,8 @@ class QuizHandler(BaseHTTPRequestHandler):
                     _rate_limited_response(self, retry_after)
                     return
 
-                # Remix via IA exige usuário autenticado para proteger cota
-                self._require_authenticated_user()
+                # Remix via IA exige conta ou sessão de convidado (com cota gratuita)
+                _user, guest_id = self._require_user_or_guest()
 
                 payload = self._read_json_body()
                 if payload is None:
@@ -744,7 +813,15 @@ class QuizHandler(BaseHTTPRequestHandler):
                     return
 
                 client_ip = HTTPMiddleware.get_client_ip(self)
-                response = self.quiz_controller.remix_mistakes(questions, client_ip=client_ip)
+                reservation = self._reserve_guest_ai(guest_id, client_ip)
+                try:
+                    response = self.quiz_controller.remix_mistakes(questions, client_ip=client_ip)
+                except Exception:
+                    if reservation:
+                        reservation.refund()
+                    raise
+                if guest_id:
+                    response["data"]["guest_ai"] = guest_service.status(guest_id, client_ip)
                 status, data = ResponseFormatter.success(response["data"])
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
@@ -754,7 +831,7 @@ class QuizHandler(BaseHTTPRequestHandler):
             HTTPMiddleware.send_json_response(self, status, data)
 
         except QuizAPIException as e:
-            status, data = ResponseFormatter.error(e.message, "QUIZ_ERROR", e.status_code)
+            status, data = ResponseFormatter.error(e.message, e.error_code, e.status_code)
             HTTPMiddleware.send_json_response(self, status, data, clear_cookie=(e.status_code == 401))
         except Exception as e:
             if DEBUG:
@@ -765,9 +842,14 @@ class QuizHandler(BaseHTTPRequestHandler):
 
     # ─── Helpers ──────────────────────────────────────────────────────────────
 
-    def _handle_upload(self, guest: bool = False):
-        """Processa upload multipart/form-data de arquivo TXT/PDF/DOCX."""
-        user = None if guest else self._require_authenticated_user()
+    def _handle_upload(self):
+        """Processa upload multipart/form-data de arquivo TXT/PDF/DOCX.
+
+        Com conta: salva no banco. Sem conta: o quiz volta só para o navegador
+        (limite de 5 MB) e, se o arquivo precisar de IA, usa a cota do convidado.
+        """
+        user = self._get_current_user_or_none()
+        guest = user is None
 
         content_type = self.headers.get("Content-Type", "")
         if "multipart/form-data" not in content_type:
@@ -830,17 +912,27 @@ class QuizHandler(BaseHTTPRequestHandler):
         num_questions = fields.get("num_questions", "auto")
         context = fields.get("context", "")
         client_ip = HTTPMiddleware.get_client_ip(self)
-        response = self.upload_controller.upload_file(
-            filename,
-            file_content,
-            ext,
-            user["id"] if user else None,
-            bool(is_public),
-            persist=not guest,
-            client_ip=client_ip,
-            num_questions=num_questions,
-            context=context,
-        )
+        guest_id = HTTPMiddleware.get_guest_id(self) if guest else None
+        reservation = guest_service.reservation(guest_id, client_ip) if guest_id else None
+        try:
+            response = self.upload_controller.upload_file(
+                filename,
+                file_content,
+                ext,
+                user["id"] if user else None,
+                bool(is_public),
+                persist=not guest,
+                client_ip=client_ip,
+                num_questions=num_questions,
+                context=context,
+                ai_gate=reservation.acquire if reservation else None,
+            )
+        except Exception:
+            if reservation:
+                reservation.refund()
+            raise
+        if guest_id:
+            response["data"]["guest_ai"] = guest_service.status(guest_id, client_ip)
         status, data = ResponseFormatter.created(
             response["data"],
             response["data"].get("message")
@@ -853,6 +945,25 @@ class QuizHandler(BaseHTTPRequestHandler):
         if not token:
             return None
         return self.auth_controller.service.validate_token(token)
+
+    def _require_user_or_guest(self):
+        """Retorna (usuário, None) com conta ou (None, guest_id) com sessão de convidado."""
+        user = self._get_current_user_or_none()
+        if user:
+            return user, None
+        guest_id = HTTPMiddleware.get_guest_id(self)
+        if not guest_id:
+            raise AuthOrGuestRequired()
+        return None, guest_id
+
+    @staticmethod
+    def _reserve_guest_ai(guest_id: str | None, client_ip: str):
+        """Reserva um uso de IA da cota do convidado (nada a fazer para quem tem conta)."""
+        if not guest_id:
+            return None
+        reservation = guest_service.reservation(guest_id, client_ip)
+        reservation.acquire()
+        return reservation
 
     def _require_authenticated_user(self):
         token = HTTPMiddleware.get_auth_token(self)

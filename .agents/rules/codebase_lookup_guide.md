@@ -13,11 +13,13 @@ Este documento foi criado para evitar a varredura completa do repositório a cad
 - **`web/modules/theme.js`**: Gerenciador de alternância de tema (Claro / Noturno / Sistema) com persistência em `localStorage` e prevenção de FOUC.
 - **`web/modules/shortcuts.js`**: Mapeamento de teclas de atalho (A-D, 1-4, setas para navegação, Ctrl+Enter para finalizar).
 - **`web/modules/stats.js`**: Cálculo de métricas pedagógicas, taxa de acerto por disciplina/seção e ritmo de prova (tempo por questão).
-- **`web/login.html` & `web/register.html`**: Telas dedicadas de login e cadastro.
+- **`web/login.html` & `web/register.html`**: Telas de login e cadastro. Aceitam `?next=` (só caminhos internos) para devolver a pessoa ao ponto onde estava.
+- **Home aberta**: `/` é servida a qualquer visitante. `web/app.js` distingue visitante, convidado e conta (`sessionKind()`), mostra o modal de acesso (`#accessModal`) quando o visitante tenta criar um simulado ou usar a IA, e exibe a cota de IA do convidado (`#guestAiChip`).
 
 ### 2. Camada de Roteamento e Handlers (Backend HTTP)
 - **`api/handlers/quiz_handler.py`**: O roteador central HTTP (`BaseHTTPRequestHandler`). Trata:
   - `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/logout`, `GET /api/auth/me`
+  - `POST /api/guest/start`, `POST /api/guest/end`, `GET /api/guest/status` (sessão de convidado e cota de IA)
   - `GET /api/quizzes`, `GET /api/quiz/{name}`
   - `POST /api/upload` (processamento de arquivos multipart)
   - `POST /api/quiz/generate` (geração de simulado por tema via IA)
@@ -34,6 +36,7 @@ Este documento foi criado para evitar a varredura completa do repositório a cad
   - `generate_answer_key(questions, client_ip)`: Resolve e cria gabarito fundamentado para questões sem resposta.
   - `remix_mistakes_with_ai(questions, client_ip)`: Gera novas questões mutadas com base nos erros do aluno.
 - **`api/services/upload_service.py`**: Validação de peso, extração de texto (via `file_parser.py`), detecção de gabarito, corte pela quantidade escolhida (`num_questions`) e persistência.
+- **`api/services/guest_service.py`**: Modo convidado. Gera o id do cookie `qs_guest` e controla a cota gratuita de IA (`GUEST_AI_LIMIT` usos por `GUEST_AI_WINDOW_HOURS`, com teto por IP `GUEST_AI_IP_LIMIT`). A reserva é atômica e é devolvida se a geração falhar.
 - **`api/services/auth_service.py`**: Criação de hash seguro de senhas com PBKDF2 (600k iterações), geração e validação de tokens de sessão opacos (armazenados como hash SHA-256 no banco).
 
 ### 4. Camada de Dados e Persistência (Repositories & Database)
