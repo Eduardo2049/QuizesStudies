@@ -115,9 +115,21 @@ class HTTPMiddleware:
         e X-Forwarded-For. Caso contrário, utiliza estritamente o endereço de socket direto
         para impedir spoofing de cabeçalhos por clientes não autenticados.
         """
+        import os
         from api.utils.config import TRUST_PROXY
         socket_ip = getattr(handler, "client_address", ("unknown",))[0]
         if not TRUST_PROXY:
+            return socket_ip
+
+        # Na Vercel, o X-Forwarded-For é reescrito pela plataforma (não aceita IP externo),
+        # mas um CF-Connecting-IP enviado pelo cliente passa direto: confiar nele deixaria
+        # qualquer pessoa trocar de "IP" a cada requisição e furar rate limits e o teto
+        # por IP do convidado. Lá, só os cabeçalhos da própria Vercel valem.
+        if os.getenv("VERCEL") == "1":
+            for header in ("x-vercel-forwarded-for", "x-real-ip", "X-Forwarded-For"):
+                value = handler.headers.get(header)
+                if value:
+                    return str(value.split(",")[0].strip())
             return socket_ip
 
         cf_ip = handler.headers.get("CF-Connecting-IP")

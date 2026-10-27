@@ -347,5 +347,32 @@ class TestGuestAccessHTTP(unittest.TestCase):
         self.assertEqual(data["guest_ai"]["remaining"], 1)
 
 
+class TestClientIpBehindVercel(unittest.TestCase):
+    """Na Vercel, um CF-Connecting-IP forjado pelo cliente não pode trocar o IP usado nos limites."""
+
+    class _Handler:
+        def __init__(self, headers):
+            self.headers = headers
+            self.client_address = ("10.1.1.1", 5555)
+
+    def test_spoofed_cf_header_is_ignored_on_vercel(self):
+        from api.middleware.http_middleware import HTTPMiddleware
+
+        handler = self._Handler({
+            "CF-Connecting-IP": "6.6.6.6",
+            "x-vercel-forwarded-for": "200.100.50.25",
+            "X-Forwarded-For": "200.100.50.25",
+        })
+        with patch("api.utils.config.TRUST_PROXY", True), patch.dict("os.environ", {"VERCEL": "1"}):
+            self.assertEqual(HTTPMiddleware.get_client_ip(handler), "200.100.50.25")
+
+    def test_cloudflare_header_still_used_when_self_hosted(self):
+        from api.middleware.http_middleware import HTTPMiddleware
+
+        handler = self._Handler({"CF-Connecting-IP": "177.10.20.30", "X-Forwarded-For": "1.2.3.4"})
+        with patch("api.utils.config.TRUST_PROXY", True), patch.dict("os.environ", {"VERCEL": ""}):
+            self.assertEqual(HTTPMiddleware.get_client_ip(handler), "177.10.20.30")
+
+
 if __name__ == "__main__":
     unittest.main()
