@@ -108,7 +108,7 @@ class QuizController:
                 "data": {
                     "questions": remixed,
                     "count": len(remixed),
-                    "message": f"Geradas {len(remixed)} variações inéditas com sucesso!",
+                    "message": f"{len(remixed)} variações inéditas geradas a partir dos seus erros.",
                 }
             }
         except AIServiceError as e:
@@ -165,7 +165,7 @@ class QuizController:
                     "usage": usage,
                     "model": model,
                     "provider": provider,
-                    "message": f"Quiz '{title}' gerado com sucesso por IA ({len(questions)} questões)!",
+                    "message": f"Simulado '{title}' gerado com {len(questions)} questões. Ele fica salvo só neste navegador.",
                 }
             }
 
@@ -210,7 +210,7 @@ class QuizController:
                 "usage": usage,
                 "model": model,
                 "provider": provider,
-                "message": f"Quiz '{title}' criado e salvo com {len(questions)} questões!",
+                "message": f"Simulado '{title}' criado e salvo na sua conta com {len(questions)} questões.",
             }
         }
 
@@ -234,6 +234,7 @@ class UploadController:
         client_ip: str | None = None,
         num_questions: str | int = "auto",
         context: str = "",
+        ai_gate=None,
     ) -> dict:
         """POST /api/upload - Processa arquivo e cria quiz no banco"""
         result = self.upload_service.process_upload(
@@ -246,6 +247,7 @@ class UploadController:
             client_ip=client_ip,
             num_questions=num_questions,
             context=context,
+            ai_gate=ai_gate,
         )
         return {
             "status": "success",

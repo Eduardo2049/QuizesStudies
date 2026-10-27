@@ -11,6 +11,7 @@ Fluxo:
 7. Retorna dados do quiz criado
 """
 import re
+from typing import Callable
 from api.utils.file_parser import (
     extract_text,
     detect_has_answer_key,
@@ -25,7 +26,7 @@ from api.services.ai_service import (
 )
 from api.utils.config import OPENROUTER_API_KEY, GEMINI_API_KEY
 from api.repositories.quiz_repository import QuizRepository
-from api.exceptions.quiz_exceptions import QuizAPIException
+from api.exceptions.quiz_exceptions import QuizAPIException, AuthOrGuestRequired
 
 
 def _slugify(text: str) -> str:
@@ -47,6 +48,17 @@ class UploadService:
     def __init__(self, repository: QuizRepository | None = None):
         self.repo = repository or QuizRepository()
 
+    @staticmethod
+    def _authorize_ai(created_by: int | None, ai_gate: Callable[[], None] | None, reason: str) -> None:
+        """Libera o uso da IA: conta logada sempre; convidado consome a cota via `ai_gate`."""
+        if created_by is not None:
+            return
+        if ai_gate is None:
+            raise AuthOrGuestRequired(
+                f"{reason} Entre na sua conta ou continue como convidado para usar a IA."
+            )
+        ai_gate()
+
     def process_upload(
         self,
         filename: str,
@@ -58,6 +70,7 @@ class UploadService:
         client_ip: str | None = None,
         num_questions: str | int = "auto",
         context: str = "",
+        ai_gate: Callable[[], None] | None = None,
     ) -> dict:
         """
         Processa upload de arquivo e cria quiz no banco.
@@ -72,6 +85,9 @@ class UploadService:
             client_ip: IP do cliente
             num_questions: Quantidade de questões desejada ('auto' ou 1 a 30)
             context: Diretrizes/foco adicional para adaptação por IA
+            ai_gate: Para convidados, função chamada antes de usar a IA. Consome um
+                uso da cota gratuita (ou lança exceção se esgotada). Sem ela, um
+                visitante sem conta nem sessão de convidado não usa IA.
 
         Returns:
             dict: {quiz_id, name, label, question_count, ai_generated}
@@ -128,14 +144,9 @@ class UploadService:
         # Camada 2: Fallback para IA se o regex não encontrar questões válidas
         # (ex: TXT sem numeração, texto de estudo/resumo, perguntas livres)
         if not is_valid:
-            if created_by is None:
-                raise QuizAPIException(
-                    "O arquivo requer estruturação por Inteligência Artificial. "
-                    "Faça login para utilizar recursos com IA.",
-                    401
-                )
             has_ai_key = bool(GEMINI_API_KEY or OPENROUTER_API_KEY)
             if has_ai_key:
+                self._authorize_ai(created_by, ai_gate, "Este arquivo precisa ser estruturado pela IA.")
                 try:
                     questions = parse_and_structure_questions_with_ai(
                         text, client_ip=client_ip, num_questions=target_qty, context=context
@@ -178,12 +189,7 @@ class UploadService:
             q for q in questions if q.get("answer") is None
         ]
         if questions_without_answers:
-            if created_by is None:
-                raise QuizAPIException(
-                    "O arquivo não possui gabarito e a resolução por Inteligência Artificial requer login. "
-                    "Faça login para utilizar recursos com IA.",
-                    401
-                )
+            self._authorize_ai(created_by, ai_gate, "Este arquivo não tem gabarito e a IA precisa resolvê-lo.")
             try:
                 ai_answers = generate_answer_key(questions_without_answers, client_ip=client_ip)
                 questions = apply_ai_answers(questions, ai_answers)
