@@ -25,7 +25,7 @@ O **Quiz Study** resolve isso unindo a extração instantânea de conteúdo à *
 | **Caderno de Erros com Mutação IA** | **Sim (Gera variações inéditas)** | Não (Apenas repete o card) | Não (Filtra questões estáticas) | Não (Repete o mesmo card) |
 | **Explicação Didática Passo a Passo** | **Sim (Imediata via IA)** | Raras (Geralmente apenas definição) | Sim (Fórum / Comentários de profs) | Apenas se o usuário tiver escrito |
 | **Experiência Limpa e Sem Fricção** | **Sim (Modo foco + cronômetro)** | Não (Gameficado/Anúncios) | Não (Poluído de propagandas e fórum) | Interface crua e curva alta |
-| **Acesso Convidado sem Cadastro** | **Sim (Guest Mode completo)** | Não | Não | Sim (Local) |
+| **Acesso sem Cadastro** | **Sim (home aberta + 3 usos de IA como convidado)** | Parcial (sets públicos) | Não | Sim (Local) |
 
 ---
 
@@ -62,6 +62,9 @@ Edite o `.env`:
 | `OPENROUTER_API_KEY` | Opção 2 IA | Chave do [OpenRouter](https://openrouter.ai) para geração multi-provedor |
 | `OPENROUTER_MODEL` | Não | Modelo OpenRouter (padrão: `google/gemini-2.5-flash`) |
 | `AI_TOKEN_QUOTA_PER_HOUR` | Não | Cota de tokens estimados por hora por IP (padrão: `50000`) |
+| `GUEST_AI_LIMIT` | Não | Usos de IA do convidado por janela (padrão: `3`; `0` desliga a IA para convidados) |
+| `GUEST_AI_WINDOW_HOURS` | Não | Janela da cota do convidado em horas (padrão e máximo: `24`) |
+| `GUEST_AI_IP_LIMIT` | Não | Teto de usos de IA de convidados por IP na janela (padrão: `10`), contra quem apaga cookies para renovar a cota |
 | `TRUST_PROXY` | Não | Confiar em headers de proxy (padrão: `false`, auto `true` na Vercel) |
 | `PORT` | Não | Porta do servidor (padrão: `8000`) |
 | `DEBUG` | Não | Logs detalhados (padrão: `false`) |
@@ -95,7 +98,8 @@ O servidor inicia em `http://localhost:8000` (ou próxima porta livre) e executa
 
 ## Autenticação e Segurança
 
-- **Acesso Convidado / Público**: Qualquer usuário pode navegar livremente, selecionar quizzes públicos da plataforma, responder simulados, conferir pontuações com gabarito explicativo e **gerar simulados inéditos por tema com IA** salvos localmente no navegador.
+- **Visitante (sem cadastro)**: a home abre direto, sem muro de login. Dá para explorar e resolver os simulados públicos, ver o gabarito comentado e enviar arquivos que já tragam gabarito (o simulado fica só no navegador).
+- **Convidado**: quando o visitante tenta criar um simulado ou usar a IA, escolhe entre criar conta grátis, entrar ou **continuar como convidado**. O convidado recebe **3 usos de IA a cada 24 horas** (gerar por tema, arquivo que precise de IA, variações dos erros), contados no servidor por um cookie HttpOnly (`qs_guest`) e com teto por IP. Os simulados ficam só no navegador e o upload vai até 5 MB. Ao esgotar a cota, a tela oferece a conta grátis.
 - **Acesso de Estudantes**: Cadastro via `/register` e autenticação via `/login`.
 - **Acesso de Administrador**:
   - Usuário: `admin`
