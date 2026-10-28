@@ -25,7 +25,7 @@ O **Quiz Study** resolve isso unindo a extração instantânea de conteúdo à *
 | **Caderno de Erros com Mutação IA** | **Sim (Gera variações inéditas)** | Não (Apenas repete o card) | Não (Filtra questões estáticas) | Não (Repete o mesmo card) |
 | **Explicação Didática Passo a Passo** | **Sim (Imediata via IA)** | Raras (Geralmente apenas definição) | Sim (Fórum / Comentários de profs) | Apenas se o usuário tiver escrito |
 | **Experiência Limpa e Sem Fricção** | **Sim (Modo foco + cronômetro)** | Não (Gameficado/Anúncios) | Não (Poluído de propagandas e fórum) | Interface crua e curva alta |
-| **Acesso Convidado sem Cadastro** | **Sim (Guest Mode completo)** | Não | Não | Sim (Local) |
+| **Acesso sem Cadastro** | **Sim (home aberta + 3 usos de IA como convidado)** | Parcial (sets públicos) | Não | Sim (Local) |
 
 ---
 
@@ -62,6 +62,11 @@ Edite o `.env`:
 | `OPENROUTER_API_KEY` | Opção 2 IA | Chave do [OpenRouter](https://openrouter.ai) para geração multi-provedor |
 | `OPENROUTER_MODEL` | Não | Modelo OpenRouter (padrão: `google/gemini-2.5-flash`) |
 | `AI_TOKEN_QUOTA_PER_HOUR` | Não | Cota de tokens estimados por hora por IP (padrão: `50000`) |
+| `AI_DAILY_CALL_LIMIT` | Não | Teto global de chamadas à IA a cada 24 h, somando todos os usuários (padrão: `1000`; `0` desliga). Trava de emergência contra a conta do provedor estourar |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Não | Liga o botão "Entrar com Google". Redirect URI: `<APP_URL>/api/auth/google/callback` (defina `APP_URL` em produção) |
+| `GUEST_AI_LIMIT` | Não | Usos de IA do convidado por janela (padrão: `3`; `0` desliga a IA para convidados) |
+| `GUEST_AI_WINDOW_HOURS` | Não | Janela da cota do convidado em horas (padrão e máximo: `24`) |
+| `GUEST_AI_IP_LIMIT` | Não | Teto de usos de IA de convidados por IP na janela (padrão: `10`), contra quem apaga cookies para renovar a cota |
 | `TRUST_PROXY` | Não | Confiar em headers de proxy (padrão: `false`, auto `true` na Vercel) |
 | `PORT` | Não | Porta do servidor (padrão: `8000`) |
 | `DEBUG` | Não | Logs detalhados (padrão: `false`) |
@@ -95,8 +100,10 @@ O servidor inicia em `http://localhost:8000` (ou próxima porta livre) e executa
 
 ## Autenticação e Segurança
 
-- **Acesso Convidado / Público**: Qualquer usuário pode navegar livremente, selecionar quizzes públicos da plataforma, responder simulados, conferir pontuações com gabarito explicativo e **gerar simulados inéditos por tema com IA** salvos localmente no navegador.
-- **Acesso de Estudantes**: Cadastro via `/register` e autenticação via `/login`.
+- **Visitante (sem cadastro)**: a home abre direto, sem muro de login. Dá para explorar e resolver os simulados públicos, ver o gabarito comentado e enviar arquivos que já tragam gabarito (o simulado fica só no navegador).
+- **Convidado**: quando o visitante tenta criar um simulado ou usar a IA, escolhe entre criar conta grátis, entrar ou **continuar como convidado**. O convidado recebe **3 usos de IA a cada 24 horas** (gerar por tema, arquivo que precise de IA, variações dos erros), contados no servidor por um cookie HttpOnly (`qs_guest`) e com teto por IP. Os simulados ficam só no navegador e o upload vai até 5 MB. Ao esgotar a cota, a tela oferece a conta grátis.
+- **Acesso de Estudantes**: Cadastro via `/register` e autenticação via `/login` (ou Google, se configurado). Ao entrar, os simulados criados como convidado na mesma aba são salvos na conta.
+- **Privacidade (LGPD)**: termos em `/termos` e política em `/privacidade`. Em "Minha conta" a pessoa baixa uma cópia dos dados (`GET /api/account/export`) e exclui a conta (`POST /api/account/delete`, com senha). O token de sessão não vai no JSON do login (só no cookie HttpOnly); clientes de API pedem com `"return_token": true`. POSTs vindos de outro site são recusados.
 - **Acesso de Administrador**:
   - Usuário: `admin`
   - Senha: definida pela variável de ambiente `ADMIN_PASSWORD` no seu `.env` (obrigatório antes de iniciar).
@@ -129,7 +136,7 @@ semgrep scan --config auto .
    - Implementação de `RateLimiter` genérico em [`api/handlers/quiz_handler.py`](file:///c:/Users/eduardo.asousa/Projetos/Pessoal/QuizesStudies/api/handlers/quiz_handler.py) protegendo rotas críticas (`/api/auth/*`, `/api/upload`, `/api/quiz/generate`).
    - Resolução confiável do IP de origem seguindo a cadeia segura: `CF-Connecting-IP` → primeiro IP confiável de `X-Forwarded-For` → endereço de socket (`client_address`).
 4. **Cota de Proteção de Tokens de IA por IP (`AI_TOKEN_QUOTA_PER_HOUR`)**:
-   - Limite configurável de tokens consumidos por hora por IP (padrão: **200.000 tokens/hora**, ajustável no `.env`), impedindo o esgotamento malicioso de cotas do Gemini / OpenRouter.
+   - Limite configurável de tokens consumidos por hora por IP (padrão: **50.000 tokens/hora**, ajustável no `.env`), impedindo o esgotamento malicioso de cotas do Gemini / OpenRouter.
 5. **Cabeçalhos de Segurança HTTP e HSTS**:
    - Aplicação de `Strict-Transport-Security` (HSTS com `max-age=63072000; includeSubDomains; preload`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy` e `Referrer-Policy`.
 6. **Validação Rigorosa de Payloads**:

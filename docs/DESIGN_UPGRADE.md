@@ -23,6 +23,7 @@
 
 | Skill | Papel no projeto | Quando usar |
 |---|---|---|
+| **landing-page-design** (elayadesign, **instalada** em `.claude/skills/`) | Regras visuais e de conversão adotadas pelo projeto; tradução para Vanilla CSS em `docs/DESIGN_SKILLS.md` | Sempre, em qualquer tela nova ou alterada |
 | **frontend-design** (oficial Anthropic) | Compromisso com uma direção estética antes de codar | Base de qualquer tela nova ou redesenhada |
 | **taste-skill** (Leonxlnx) | Layout, tipografia, espaçamento, motion; 3 dials de intensidade | Montar o esqueleto visual e diferenciar do "visual genérico de IA" |
 | **redesign-skill** (parte do taste-skill) | Audita o que já existe e corrige problemas antes de redesenhar | **Primeira passada em telas já em produção** |

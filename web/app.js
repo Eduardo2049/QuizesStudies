@@ -460,8 +460,19 @@ let loadController;
 let remainingSeconds = 24 * 60; // valor padrão; recalculado em resetTimer()
 let timerInterval;
 
+// ─── Sessão: visitante, convidado ou conta ────────────────────────────────────
+// Visitante (currentUser === null): navega e resolve simulados prontos sem cadastro.
+// Convidado (role 'guest'): escolheu "continuar como convidado"; usa a IA dentro da
+//   cota gratuita contada no servidor e guarda os simulados só nesta aba.
+// Conta (student/admin): simulados e histórico salvos no banco.
+let currentUser = null;
+let guestAI = null;          // { limit, used, remaining, window_hours } do servidor
+let sessionResolved = false; // vira true quando checkAuth() termina
+
 function isGuestMode() {
-  return window.location.pathname === '/guest' || sessionStorage.getItem('quiz_guest_mode') === 'true';
+  if (currentUser) return currentUser.role === 'guest';
+  // Antes da checagem de sessão terminar, a marca da aba permite já ler os simulados locais
+  return !sessionResolved && sessionStorage.getItem('quiz_guest_mode') === 'true';
 }
 
 function clearGuestData() {
@@ -755,7 +766,7 @@ function updateFocusNavigation() {
   if (btnNextQuestion) {
     const isLast = currentQuestionIndex === questions.length - 1;
     if (isLast) {
-      btnNextQuestion.innerHTML = `${icon('flag')} Finalizar Simulado`;
+      btnNextQuestion.innerHTML = `${icon('flag')} Finalizar simulado`;
       btnNextQuestion.classList.add('is-final');
     } else {
       btnNextQuestion.innerHTML = 'Próxima →';
@@ -954,7 +965,7 @@ function updateProgress() {
     if (count > 0) {
       btnQuickSubmit.innerHTML = `${icon('flag')} Finalizar (${count}/${questions.length})`;
     } else {
-      btnQuickSubmit.innerHTML = `${icon('flag')} Finalizar Simulado`;
+      btnQuickSubmit.innerHTML = `${icon('flag')} Finalizar simulado`;
     }
   }
 }
@@ -1218,8 +1229,13 @@ btnTrainMistakes?.addEventListener('click', () => {
   }
 });
 
-// Gerar Variações Inéditas com IA
-btnRemixMistakes?.addEventListener('click', async () => {
+// Gerar Variações Inéditas com IA (exige conta ou convidado com cota)
+btnRemixMistakes?.addEventListener('click', () => {
+  if (!currentWrongQuestions.length) return;
+  requireAiAccess(runRemixMistakes, 'remix');
+});
+
+async function runRemixMistakes() {
   if (!currentWrongQuestions.length) return;
 
   const originalContent = btnRemixMistakes.innerHTML;
@@ -1234,11 +1250,17 @@ btnRemixMistakes?.addEventListener('click', async () => {
       body: JSON.stringify({ questions: currentWrongQuestions }),
     });
 
-    const raw = await response.json();
+    const raw = await readJson(response);
     if (!response.ok) {
+      if (raw?.error === 'GUEST_AI_LIMIT_REACHED' || raw?.error === 'AUTH_REQUIRED') {
+        closeResultModal();
+        handleAccessError(raw, 'remix');
+        return;
+      }
       throw new Error(raw?.data?.message || raw?.message || 'Erro ao comunicar com a IA');
     }
 
+    if (raw.data?.guest_ai) applyGuestStatus(raw.data.guest_ai);
     const remixedQuestions = raw.data?.questions || [];
     if (!remixedQuestions.length) {
       throw new Error('Nenhuma questão gerada.');
@@ -1257,12 +1279,12 @@ btnRemixMistakes?.addEventListener('click', async () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   } catch (err) {
-    showNotice(`Erro ao gerar variações com IA: ${err.message}`, 'Falha na IA', 'error');
+    showNotice(`Não foi possível gerar as variações: ${err.message}. Tente novamente em instantes.`, 'Falha na IA', 'error');
   } finally {
     btnRemixMistakes.disabled = false;
     btnRemixMistakes.innerHTML = originalContent;
   }
-});
+}
 
 // Ações do Modal Explicativo (Sobre / Benchmarking)
 btnOpenAboutModal?.addEventListener('click', openAboutModal);
@@ -1595,25 +1617,58 @@ function showUploadError(msg) {
 }
 
 // ─── Autenticação & Sessão ──────────────────────────────────────────────────
-let currentUser = null;
-
 function clearAuthToken() {
   currentUser = null;
+  guestAI = null;
   clearGuestData();
   updateAuthUI();
 }
 
+/** Link para login/cadastro que traz a pessoa de volta para onde estava. */
+function authHref(path, next = '/') {
+  return `${path}?next=${encodeURIComponent(next)}`;
+}
+
+function sessionKind() {
+  if (!currentUser) return 'visitor';
+  return currentUser.role === 'guest' ? 'guest' : 'user';
+}
+
+function guestAiLabel() {
+  if (!guestAI) return '';
+  return `IA ${guestAI.remaining}/${guestAI.limit}`;
+}
+
+function guestAiDescription() {
+  if (!guestAI) return '';
+  const hours = guestAI.window_hours || 24;
+  if (guestAI.remaining <= 0) {
+    return `Você usou os ${guestAI.limit} usos de IA do modo convidado. A cota renova em até ${hours} horas.`;
+  }
+  const usos = guestAI.remaining === 1 ? 'uso' : 'usos';
+  return `Modo convidado: ${guestAI.remaining} de ${guestAI.limit} ${usos} de IA restantes nas próximas ${hours} horas. Os simulados ficam só neste navegador.`;
+}
+
 function updateAuthUI() {
+  const kind = sessionKind();
+  const isGuest = kind === 'guest';
+  document.body.dataset.session = kind;
+
   const userProfile = document.querySelector('#userProfile');
   const userName = document.querySelector('#userName');
   const userRoleBadge = document.querySelector('#userRoleBadge');
   const uploadVisibilityOption = document.querySelector('#uploadVisibilityOption');
-
+  const visitorActions = document.querySelector('#visitorActions');
   const logoutBtn = document.querySelector('#logoutBtn');
   const guestActions = document.querySelector('#guestActions');
+  const guestAiChip = document.querySelector('#guestAiChip');
+  const guestAiNotice = document.querySelector('#guestAiNotice');
+  const guestAiNoticeText = document.querySelector('#guestAiNoticeText');
+  const uploadSizeLimit = document.querySelector('#uploadSizeLimit');
+
+  if (visitorActions) visitorActions.hidden = kind !== 'visitor';
 
   if (currentUser) {
-    const isGuest = currentUser.role === 'guest';
     if (userProfile) userProfile.hidden = false;
     if (userName) userName.textContent = currentUser.username;
     if (userRoleBadge) {
@@ -1624,6 +1679,8 @@ function updateAuthUI() {
     }
     // Convidado não tem conta para encerrar: oferece entrar ou cadastrar
     if (logoutBtn) logoutBtn.hidden = isGuest;
+    const accountBtn = document.querySelector('#accountBtn');
+    if (accountBtn) accountBtn.hidden = isGuest;
     if (guestActions) guestActions.hidden = !isGuest;
     if (uploadVisibilityOption) {
       uploadVisibilityOption.hidden = currentUser.role !== 'admin';
@@ -1632,57 +1689,388 @@ function updateAuthUI() {
     if (userProfile) userProfile.hidden = true;
     if (uploadVisibilityOption) uploadVisibilityOption.hidden = true;
   }
+
+  if (guestAiChip) {
+    guestAiChip.hidden = !isGuest || !guestAI;
+    guestAiChip.textContent = guestAiLabel();
+    guestAiChip.title = guestAiDescription();
+    guestAiChip.setAttribute('aria-label', guestAiDescription());
+    guestAiChip.classList.toggle('guest-ai-chip--empty', Boolean(guestAI && guestAI.remaining <= 0));
+  }
+  if (guestAiNotice) {
+    guestAiNotice.hidden = !isGuest;
+    guestAiNotice.classList.toggle('guest-ai-notice--empty', Boolean(guestAI && guestAI.remaining <= 0));
+  }
+  if (guestAiNoticeText) guestAiNoticeText.textContent = guestAiDescription() || 'Modo convidado. Os simulados ficam só neste navegador.';
+  if (uploadSizeLimit) uploadSizeLimit.textContent = kind === 'user' ? '20 MB' : '5 MB';
+
+  // Convidado vê o custo antes de gastar
+  if (confirmGenerateTopicBtn) {
+    confirmGenerateTopicBtn.textContent = isGuest && guestAI
+      ? `Gerar simulado · usa 1 de ${guestAI.remaining}`
+      : 'Gerar simulado';
+    if (isGuest && guestAI && guestAI.remaining <= 0) confirmGenerateTopicBtn.textContent = 'Gerar simulado';
+  }
+
+  const introLimit = document.querySelector('#introGuestAiLimit');
+  if (introLimit && guestAI) introLimit.textContent = String(guestAI.limit);
+
+  // Textos e blocos por tipo de sessão (data-show-for="visitor guest user")
+  document.querySelectorAll('[data-show-for]').forEach((el) => {
+    el.hidden = !el.dataset.showFor.split(/\s+/).includes(kind);
+  });
+
+  // Links de login/cadastro voltam para a home depois de entrar
+  document.querySelectorAll('[data-auth-link]').forEach((link) => {
+    link.setAttribute('href', authHref(link.dataset.authLink, link.dataset.next || '/'));
+  });
+}
+
+function setGuestSession(ai) {
+  currentUser = { id: null, username: 'Convidado', role: 'guest' };
+  guestAI = ai || guestAI;
+  sessionStorage.setItem('quiz_guest_mode', 'true');
+}
+
+function applyGuestStatus(ai) {
+  if (!ai) return;
+  guestAI = ai;
+  updateAuthUI();
+}
+
+async function readJson(response) {
+  try {
+    return await response.json();
+  } catch (_) {
+    return {};
+  }
+}
+
+/** Abre a sessão de convidado no servidor (cookie HttpOnly) e atualiza a interface. */
+async function startGuestSession() {
+  const res = await fetch('/api/guest/start', { method: 'POST', credentials: 'same-origin' });
+  const raw = await readJson(res);
+  if (res.status === 409) {
+    // Já existe uma conta conectada nesta aba (ex.: login em outra aba)
+    await checkAuth();
+    return;
+  }
+  if (!res.ok) {
+    throw new Error(raw.message || 'Não foi possível abrir o modo convidado.');
+  }
+  const data = raw.data || raw;
+  setGuestSession(data.ai);
+  updateAuthUI();
+}
+
+/**
+ * Depois do login/cadastro, os simulados criados como convidado (ainda na aba)
+ * vão para a conta. Falhou? Ficam na aba para uma nova tentativa no próximo carregamento.
+ */
+let importedGuestQuizzes = 0;
+async function importGuestQuizzesIntoAccount() {
+  const pending = getGuestQuizzes().filter((q) => Array.isArray(q?.questions) && q.questions.length);
+  if (!pending.length) return;
+  try {
+    const res = await fetch('/api/quizzes/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ quizzes: pending.slice(0, 20) }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const raw = await readJson(res);
+    importedGuestQuizzes = (raw.data || raw).imported || 0;
+  } catch (err) {
+    console.warn('Não foi possível salvar os simulados do convidado na conta:', err);
+    throw err;
+  }
 }
 
 async function checkAuth() {
-  if (window.location.pathname === '/guest') {
-    currentUser = { id: null, username: 'Convidado', role: 'guest' };
-    updateAuthUI();
-    return true;
-  }
-
-  clearGuestData();
+  const wantsGuest = window.location.pathname === '/guest';
+  const [meResult, guestResult] = await Promise.allSettled([
+    fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' }),
+    fetch('/api/guest/status', { cache: 'no-store', credentials: 'same-origin' }),
+  ]);
 
   try {
-    const res = await fetch('/api/auth/me', {
-      cache: 'no-store',
-      credentials: 'same-origin'
-    });
-    if (res.ok) {
-      const raw = await res.json();
-      currentUser = raw.data?.user || raw.user;
-      updateAuthUI();
-      return true;
-    } else {
-      clearAuthToken();
-      window.location.replace('/login');
-      return false;
+    const meRes = meResult.status === 'fulfilled' ? meResult.value : null;
+    if (meRes && meRes.ok) {
+      const raw = await readJson(meRes);
+      currentUser = raw.data?.user || raw.user || null;
+      if (currentUser) {
+        guestAI = null;
+        try {
+          await importGuestQuizzesIntoAccount();
+          clearGuestData();
+        } catch (_) {
+          sessionStorage.removeItem('quiz_guest_mode');
+        }
+        return true;
+      }
     }
+
+    const guestRes = guestResult.status === 'fulfilled' ? guestResult.value : null;
+    const guestRaw = guestRes && guestRes.ok ? await readJson(guestRes) : {};
+    const guestData = guestRaw.data || guestRaw;
+    guestAI = guestData.ai || null;
+
+    if (guestData.active) {
+      setGuestSession(guestData.ai);
+    } else if (wantsGuest) {
+      // Link antigo /guest: abre o modo convidado direto
+      try {
+        await startGuestSession();
+      } catch (err) {
+        console.warn('Não foi possível iniciar o modo convidado:', err);
+        currentUser = null;
+        clearGuestData();
+      }
+    } else {
+      currentUser = null;
+      clearGuestData();
+    }
+    return true;
   } catch (err) {
     console.warn('Erro ao validar sessão:', err);
-    clearAuthToken();
-    window.location.replace('/login');
-    return false;
+    currentUser = null;
+    return true;
+  } finally {
+    sessionResolved = true;
+    if (wantsGuest) {
+      history.replaceState(history.state, '', `/${window.location.search}${window.location.hash}`);
+    }
+    updateAuthUI();
   }
 }
 
-// ─── Saída do modo convidado (Entrar / Cadastrar) ──────────────────────────
-document.querySelectorAll('[data-guest-exit]').forEach((link) => {
-  link.addEventListener('click', (event) => {
-    event.preventDefault();
-    clearGuestData();
-    window.location.replace(link.getAttribute('href'));
+// ─── Modal de acesso: conta grátis ou convidado ─────────────────────────────
+// Só aparece quando a pessoa tenta uma ação que precisa de identidade (criar
+// simulado, usar a IA). Navegar e resolver simulados prontos é livre.
+const accessModal = document.querySelector('#accessModal');
+const accessModalBadge = document.querySelector('#accessModalBadge');
+const accessModalTitle = document.querySelector('#accessModalTitle');
+const accessModalText = document.querySelector('#accessModalText');
+const accessGuestOption = document.querySelector('#accessGuestOption');
+const accessGuestBtn = document.querySelector('#accessGuestBtn');
+const accessFeedback = document.querySelector('#accessFeedback');
+const accessOptions = document.querySelector('#accessOptions');
+let pendingAccessAction = null;
+let releaseAccessFocus = null;
+
+const ACCESS_COPY = {
+  create: {
+    badge: 'Grátis',
+    title: 'Crie simulados com IA',
+    text: 'Escolha como continuar. A conta grátis guarda seus simulados e seu histórico em qualquer dispositivo. No modo convidado você testa agora, sem cadastro.',
+    next: '/?abrir=criar',
+  },
+  remix: {
+    badge: 'Grátis',
+    title: 'Gere novas questões a partir dos seus erros',
+    text: 'A IA cria variações inéditas das questões que você errou. Entre na sua conta ou continue como convidado para usar agora.',
+    next: '/',
+  },
+  limit: {
+    badge: 'Limite do convidado',
+    title: 'Você usou as gerações grátis',
+    text: '',
+    next: '/?abrir=criar',
+  },
+};
+
+function openAccessModal(reason = 'create', onGranted = null) {
+  if (!accessModal) return;
+  const copy = ACCESS_COPY[reason] || ACCESS_COPY.create;
+  const isLimit = reason === 'limit';
+  pendingAccessAction = isLimit ? null : onGranted;
+
+  if (accessModalBadge) accessModalBadge.textContent = copy.badge;
+  if (accessModalTitle) {
+    accessModalTitle.textContent = isLimit && guestAI
+      ? `Você usou as ${guestAI.limit} gerações grátis`
+      : copy.title;
+  }
+  if (accessModalText) {
+    accessModalText.textContent = isLimit
+      ? `Crie uma conta grátis para continuar agora. Os simulados que você já criou continuam neste navegador, e a cota do convidado renova em até ${guestAI?.window_hours || 24} horas.`
+      : copy.text;
+  }
+  if (accessGuestOption) accessGuestOption.hidden = isLimit;
+  accessOptions?.classList.toggle('access-options--single', isLimit);
+  accessModal.querySelector('.modal--access')?.classList.toggle('modal--access-compact', isLimit);
+  accessModalBadge?.classList.toggle('access-badge--warning', isLimit);
+  const limit = guestAI?.limit ?? 3;
+  const windowHours = guestAI?.window_hours ?? 24;
+  const limitEl = document.querySelector('#accessGuestLimit');
+  const windowEl = document.querySelector('#accessGuestWindow');
+  if (limitEl) limitEl.textContent = String(limit);
+  if (windowEl) windowEl.textContent = String(windowHours);
+  if (accessFeedback) {
+    accessFeedback.hidden = true;
+    accessFeedback.textContent = '';
+  }
+  accessModal.querySelectorAll('[data-auth-link]').forEach((link) => {
+    link.dataset.next = copy.next;
+    link.setAttribute('href', authHref(link.dataset.authLink, copy.next));
   });
+  if (accessGuestBtn) accessGuestBtn.disabled = false;
+
+  accessModal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  releaseAccessFocus = trapFocus(accessModal, document.querySelector('#accessRegisterLink'));
+}
+
+function closeAccessModal() {
+  if (!accessModal || accessModal.hidden) return;
+  accessModal.hidden = true;
+  // Pode ter sido aberto por cima do resultado: só libera a rolagem se nada mais estiver aberto
+  const otherOpen = [...document.querySelectorAll('.modal-overlay')].some((m) => !m.hidden);
+  if (!otherOpen) document.body.style.overflow = '';
+  pendingAccessAction = null;
+  releaseAccessFocus?.();
+  releaseAccessFocus = null;
+}
+
+/**
+ * Executa `action` se a sessão permite usar a IA; senão abre o modal de acesso.
+ * Conta: sempre. Convidado: enquanto houver cota. Visitante: escolhe primeiro.
+ */
+function requireAiAccess(action, reason = 'create') {
+  const kind = sessionKind();
+  if (kind === 'user') return action();
+  if (kind === 'guest') {
+    if (guestAI && guestAI.remaining <= 0) {
+      openAccessModal('limit');
+      return undefined;
+    }
+    return action();
+  }
+  openAccessModal(reason, action);
+  return undefined;
+}
+
+/** Trata respostas de erro dos endpoints de IA. Retorna true se já cuidou da situação. */
+function handleAccessError(raw, reason = 'create') {
+  const code = raw?.error;
+  if (code === 'GUEST_AI_LIMIT_REACHED') {
+    if (guestAI) guestAI = { ...guestAI, remaining: 0, used: guestAI.limit };
+    updateAuthUI();
+    closeModal();
+    openAccessModal('limit');
+    return true;
+  }
+  if (code === 'AUTH_REQUIRED') {
+    // A sessão expirou ou o convidado apagou os cookies: volta a ser visitante
+    currentUser = null;
+    clearGuestData();
+    updateAuthUI();
+    closeModal();
+    openAccessModal(reason);
+    return true;
+  }
+  return false;
+}
+
+accessGuestBtn?.addEventListener('click', async () => {
+  const action = pendingAccessAction;
+  accessGuestBtn.disabled = true;
+  try {
+    await startGuestSession();
+    closeAccessModal();
+    await loadQuizList().catch(() => {});
+    if (typeof action === 'function') {
+      if (guestAI && guestAI.remaining <= 0) {
+        openAccessModal('limit');
+      } else {
+        action();
+      }
+    }
+  } catch (err) {
+    if (accessFeedback) {
+      accessFeedback.textContent = `${err.message} Tente novamente em alguns minutos ou crie uma conta grátis.`;
+      accessFeedback.hidden = false;
+    }
+    accessGuestBtn.disabled = false;
+  }
+});
+document.querySelector('#closeAccessModal')?.addEventListener('click', closeAccessModal);
+accessModal?.addEventListener('click', (e) => { if (e.target === accessModal) closeAccessModal(); });
+
+// ─── Minha conta: cópia dos dados e exclusão (LGPD) ─────────────────────────
+const accountModal = document.querySelector('#accountModal');
+const deleteAccountForm = document.querySelector('#deleteAccountForm');
+const deleteAccountPassword = document.querySelector('#deleteAccountPassword');
+const deleteAccountFeedback = document.querySelector('#deleteAccountFeedback');
+const deleteAccountBtn = document.querySelector('#deleteAccountBtn');
+let releaseAccountFocus = null;
+
+function openAccountModal() {
+  if (!accountModal || sessionKind() !== 'user') return;
+  const nameEl = document.querySelector('#accountUsername');
+  if (nameEl) nameEl.textContent = currentUser.username;
+  if (deleteAccountPassword) deleteAccountPassword.value = '';
+  if (deleteAccountFeedback) deleteAccountFeedback.hidden = true;
+  accountModal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  releaseAccountFocus = trapFocus(accountModal, document.querySelector('#accountExportLink'));
+}
+
+function closeAccountModal() {
+  if (!accountModal || accountModal.hidden) return;
+  accountModal.hidden = true;
+  document.body.style.overflow = '';
+  releaseAccountFocus?.();
+  releaseAccountFocus = null;
+}
+
+document.querySelector('#accountBtn')?.addEventListener('click', openAccountModal);
+document.querySelector('#footerAccountBtn')?.addEventListener('click', openAccountModal);
+document.querySelector('#closeAccountModal')?.addEventListener('click', closeAccountModal);
+accountModal?.addEventListener('click', (e) => { if (e.target === accountModal) closeAccountModal(); });
+accountModal?.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAccountModal(); });
+
+deleteAccountForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const password = deleteAccountPassword?.value || '';
+  const showError = (msg) => {
+    if (!deleteAccountFeedback) return;
+    deleteAccountFeedback.textContent = msg;
+    deleteAccountFeedback.hidden = false;
+  };
+  if (!password) {
+    showError('Digite sua senha para confirmar.');
+    deleteAccountPassword?.focus();
+    return;
+  }
+  deleteAccountBtn.disabled = true;
+  try {
+    const res = await fetch('/api/account/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ password }),
+    });
+    const raw = await readJson(res);
+    if (!res.ok) {
+      showError(raw.message || 'Não foi possível excluir a conta. Tente novamente.');
+      return;
+    }
+    clearAuthToken();
+    closeAccountModal();
+    await showNotice('Sua conta e seus dados foram excluídos.', 'Conta excluída', 'info');
+    window.location.replace('/');
+  } catch (_) {
+    showError('Falha na conexão. Tente novamente.');
+  } finally {
+    deleteAccountBtn.disabled = false;
+  }
 });
 
 // ─── Logout ─────────────────────────────────────────────────────────────────
+// Sair da conta volta para a home como visitante (sem muro de login).
 document.querySelector('#logoutBtn')?.addEventListener('click', async () => {
-  clearGuestData();
-  if (isGuestMode()) {
-    clearAuthToken();
-    window.location.replace('/login');
-    return;
-  }
   try {
     await fetch('/api/auth/logout', {
       method: 'POST',
@@ -1690,7 +2078,7 @@ document.querySelector('#logoutBtn')?.addEventListener('click', async () => {
     });
   } catch (_) {}
   clearAuthToken();
-  window.location.replace('/login');
+  window.location.replace('/');
 });
 
 // ─── Upload de Arquivos (Protegido para usuários autenticados) ─────────────
@@ -1720,25 +2108,24 @@ async function doUpload() {
 
   try {
     uploadStatusText.textContent = 'Processando… (pode levar alguns segundos se usar IA)';
-    const response = await fetch(`/api/upload${isGuestMode() ? '?guest=1' : ''}`, {
+    const response = await fetch('/api/upload', {
       method: 'POST',
+      credentials: 'same-origin',
       body: formData
     });
-    const raw = await response.json();
+    const raw = await readJson(response);
     const data = raw.data || raw;
 
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        showUploadError(data.message || 'Faça login para enviar um quiz.');
-      } else {
-        showUploadError(data.message || data.error || 'Erro ao processar o arquivo.');
-      }
       uploadStatus.hidden = true;
       confirmUploadBtn.disabled = false;
+      if (handleAccessError(raw, 'create')) return;
+      showUploadError(data.message || 'Não foi possível processar o arquivo. Tente novamente.');
       return;
     }
 
-    if (isGuestMode()) {
+    if (data.guest_ai) applyGuestStatus(data.guest_ai);
+    if (data.local_only || isGuestMode()) {
       saveGuestQuiz(data);
     }
 
@@ -1777,6 +2164,12 @@ async function doGenerateTopic() {
     return;
   }
 
+  if (sessionKind() === 'guest' && guestAI && guestAI.remaining <= 0) {
+    closeModal();
+    openAccessModal('limit');
+    return;
+  }
+
   uploadStatus.hidden = false;
   uploadStatusText.textContent = 'A IA está elaborando as questões e o gabarito…';
   uploadError.hidden = true;
@@ -1797,29 +2190,31 @@ async function doGenerateTopic() {
   };
 
   try {
-    const response = await fetch(`/api/quiz/generate${isGuestMode() ? '?guest=1' : ''}`, {
+    const response = await fetch('/api/quiz/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
       body: JSON.stringify(payload),
     });
 
-    const raw = await response.json();
+    const raw = await readJson(response);
     const data = raw.data || raw;
 
     if (!response.ok) {
-      showUploadError(data.message || data.error || 'Erro ao gerar quiz por tema.');
       uploadStatus.hidden = true;
       confirmGenerateTopicBtn.disabled = false;
+      if (handleAccessError(raw, 'create')) return;
+      showUploadError(data.message || 'Não foi possível gerar o simulado. Tente novamente.');
       return;
     }
 
-    if (isGuestMode()) {
+    if (data.guest_ai) applyGuestStatus(data.guest_ai);
+    if (data.local_only || isGuestMode()) {
       saveGuestQuiz(data);
     }
 
     uploadStatus.hidden = true;
-    uploadSuccess.textContent = `✓ ${data.message || 'Quiz gerado com sucesso!'}`;
+    uploadSuccess.textContent = `✓ ${data.message || 'Simulado gerado.'}`;
     uploadSuccess.hidden = false;
 
     // Recarregar lista e selecionar novo quiz
@@ -1846,8 +2241,10 @@ async function doGenerateTopic() {
 
 // Eventos do modal de upload / geração
 document.querySelector('#addQuizBtn').addEventListener('click', () => {
-  if (!currentUser) {
-    window.location.replace('/login');
+  // Visitante escolhe entre conta grátis e convidado; convidado sem cota ainda
+  // pode enviar arquivos com gabarito (não usam IA), então o modal abre normalmente.
+  if (sessionKind() === 'visitor') {
+    openAccessModal('create', openModal);
   } else {
     openModal();
   }
@@ -1858,6 +2255,15 @@ confirmUploadBtn.addEventListener('click', doUpload);
 confirmGenerateTopicBtn?.addEventListener('click', doGenerateTopic);
 
 tabUploadFile?.addEventListener('click', () => switchModalTab('upload'));
+
+// Temas de exemplo: preenchem o campo para o primeiro simulado sair em um clique
+document.querySelectorAll('.topic-chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    if (!topicInput) return;
+    topicInput.value = chip.dataset.topic || chip.textContent.trim();
+    topicInput.focus();
+  });
+});
 tabGenerateTopic?.addEventListener('click', () => switchModalTab('topic'));
 
 topicInput?.addEventListener('keydown', (e) => {
@@ -1880,6 +2286,7 @@ document.addEventListener('keydown', (e) => {
     if (resultModal && !resultModal.hidden) closeResultModal();
     if (aboutModal && !aboutModal.hidden) closeAboutModal();
     if (catalogModal && !catalogModal.hidden) closeCatalogModal();
+    if (accessModal && !accessModal.hidden) closeAccessModal();
   }
 });
 
@@ -1947,6 +2354,7 @@ async function init() {
       btnQuickSubmit?.click();
     },
     onCloseModals: () => {
+      closeAccessModal();
       closeCatalogModal();
       closeResultModal();
       closeAboutModal();
@@ -1960,24 +2368,43 @@ async function init() {
     getQuestionsCount: () => questions.length,
   });
 
-  // Sessão, quiz e lista em paralelo: o cookie vai em todas as requisições,
-  // então não é preciso esperar /api/auth/me para buscar os dados.
-  // checkAuth() roda primeiro para limpar o estado de convidado antes dos loads.
+  // Sessão, quiz e lista em paralelo: a home é aberta a todos e o cookie vai em
+  // todas as requisições, então não é preciso esperar a sessão para buscar os dados.
+  const assumedGuest = isGuestMode();
   const authPromise = checkAuth();
   const dataPromise = Promise.all([loadQuiz(), loadQuizList()]);
-  const isAuthed = await authPromise;
-  if (!isAuthed) {
-    dataPromise.catch(() => {});
-    return;
+  await authPromise;
+
+  // Volta do login/cadastro com intenção de criar simulado (?abrir=criar):
+  // abre assim que a sessão é conhecida, sem esperar a lista de simulados
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('abrir') === 'criar') {
+    params.delete('abrir');
+    const query = params.toString();
+    history.replaceState(history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+    if (sessionKind() === 'visitor') {
+      openAccessModal('create', openModal);
+    } else {
+      openModal();
+    }
   }
+
+  if (importedGuestQuizzes > 0) {
+    const plural = importedGuestQuizzes === 1 ? 'simulado do modo convidado foi salvo' : 'simulados do modo convidado foram salvos';
+    showNotice(`${importedGuestQuizzes} ${plural} na sua conta.`, 'Simulados salvos', 'info');
+  }
+
   try {
     await dataPromise;
+    // A sessão real difere do que a aba supunha (ex.: cookie de convidado expirou)
+    if (isGuestMode() !== assumedGuest || importedGuestQuizzes > 0) await loadQuizList();
   } catch (error) {
     if (error.name !== 'AbortError') {
-      quiz.innerHTML = '<p class="empty-state">Adicione um quiz usando o botão acima para começar.</p>';
+      quiz.innerHTML = '<p class="empty-state">Escolha um simulado em "Explorar simulados" ou crie o seu em "Criar simulado".</p>';
       await loadQuizList().catch(() => {});
     }
   }
+
 }
 
 init();

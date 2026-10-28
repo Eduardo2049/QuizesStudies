@@ -66,6 +66,34 @@ ALLOWED_ORIGINS = [
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
 TRUST_PROXY = os.getenv("TRUST_PROXY", "false").lower() == "true" or os.getenv("VERCEL") == "1"
 
+def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
+    """Lê um inteiro do ambiente limitado a [minimum, maximum]; valor inválido usa o padrão."""
+    try:
+        value = int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(value, maximum))
+
+
+# Modo convidado (acesso sem conta) — cota gratuita de IA
+# GUEST_AI_LIMIT: usos de IA por convidado na janela (gerar por tema, upload que precisa de IA, variações).
+# GUEST_AI_IP_LIMIT: teto por IP somando todos os convidados (barra quem apaga cookies para renovar a cota
+#   sem punir redes compartilhadas como escolas e CGNAT de operadoras móveis).
+# A janela é limitada a 24 h porque a tabela rate_limits descarta registros mais antigos que isso.
+GUEST_AI_LIMIT = _env_int("GUEST_AI_LIMIT", 3, 0, 50)
+GUEST_AI_IP_LIMIT = _env_int("GUEST_AI_IP_LIMIT", 10, 1, 500)
+GUEST_AI_WINDOW_SECONDS = _env_int("GUEST_AI_WINDOW_HOURS", 24, 1, 24) * 60 * 60
+
+# Teto global de chamadas à IA por 24 h, somando todos os usuários (trava de emergência
+# contra a conta do provedor estourar). 0 desliga. O plano gratuito do Gemini tem limite
+# diário próprio; ajuste para ficar abaixo dele.
+AI_DAILY_CALL_LIMIT = _env_int("AI_DAILY_CALL_LIMIT", 1000, 0, 1_000_000)
+
+# Entrar com Google (OAuth). Vazio = botão escondido e rotas desligadas.
+# URI de redirecionamento a cadastrar no Google Cloud: <APP_URL>/api/auth/google/callback
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+
 # Cloudflare Tunnel
 CLOUDFLARE_TUNNEL_TOKEN = os.getenv("CLOUDFLARE_TUNNEL_TOKEN", "")
 

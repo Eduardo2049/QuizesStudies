@@ -57,6 +57,47 @@ class UserRepository:
                     WHERE id = %s
                 """, (password_hash, salt, user_id))
 
+    # ─── Direitos do titular (LGPD) ──────────────────────────────────────────
+    def export_user_data(self, user_id: int) -> dict:
+        """Tudo o que o banco guarda sobre a pessoa, sem hashes de senha nem tokens."""
+        with get_cursor() as cur:
+            cur.execute("SELECT id, username, email, role, created_at FROM users WHERE id = %s", (user_id,))
+            user = cur.fetchone()
+            if not user:
+                return {}
+            cur.execute("""
+                SELECT q.id, q.name, q.label, q.original_filename, q.file_type, q.ai_generated,
+                       q.is_public, q.created_at
+                FROM quizzes q WHERE q.created_by = %s ORDER BY q.created_at
+            """, (user_id,))
+            quizzes = [dict(r) for r in cur.fetchall()]
+            for quiz in quizzes:
+                cur.execute("""
+                    SELECT question_number, section, context, question, options, answer, explanation
+                    FROM questions WHERE quiz_id = %s ORDER BY question_number
+                """, (quiz["id"],))
+                quiz["questions"] = [dict(r) for r in cur.fetchall()]
+            cur.execute("""
+                SELECT quiz_name, score, total, percentage, wrong_question_ids, created_at
+                FROM quiz_attempts WHERE user_id = %s ORDER BY created_at
+            """, (user_id,))
+            attempts = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT created_at, expires_at FROM sessions WHERE user_id = %s ORDER BY created_at", (user_id,))
+            sessions = [dict(r) for r in cur.fetchall()]
+        return {"user": dict(user), "quizzes": quizzes, "attempts": attempts, "sessions": sessions}
+
+    def delete_user_and_data(self, user_id: int) -> None:
+        """Exclui a conta e os dados pessoais numa única transação.
+
+        Simulados privados da pessoa são apagados (com as questões, em cascata);
+        simulados públicos continuam na plataforma sem autor. Sessões, links de
+        recuperação e histórico de tentativas caem em cascata com o usuário.
+        """
+        with get_cursor() as cur:
+            cur.execute("DELETE FROM quizzes WHERE created_by = %s AND is_public = FALSE", (user_id,))
+            cur.execute("UPDATE quizzes SET created_by = NULL WHERE created_by = %s", (user_id,))
+            cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+
     # ─── Sessões ──────────────────────────────────────────────────────────────
 
     def create_session(self, token: str, user_id: int, duration_days: int = 7) -> dict:

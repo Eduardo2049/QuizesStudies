@@ -139,9 +139,15 @@ class AuthE2ETestCase(unittest.TestCase):
         self.assertEqual(st, 401, "Esperado 401 para senha incorreta")
 
     def test_02_admin_login_success(self):
-        """Login com credenciais corretas deve retornar 200 e um token."""
+        """Login correto: o navegador recebe só o cookie; o token vem no JSON apenas sob pedido."""
         st, data = _request(
             "/api/auth/login", {"username": "admin", "password": ADMIN_PASSWORD}
+        )
+        self.assertEqual(st, 200, f"Esperado 200, obtido {st}")
+        self.assertNotIn("token", data.get("data", {}), "Token não deve ir no JSON sem return_token")
+
+        st, data = _request(
+            "/api/auth/login", {"username": "admin", "password": ADMIN_PASSWORD, "return_token": True}
         )
         self.assertEqual(st, 200, f"Esperado 200, obtido {st}")
         token = data.get("data", {}).get("token", "")
@@ -158,12 +164,18 @@ class AuthE2ETestCase(unittest.TestCase):
         self.assertEqual(st, 200)
         self.assertEqual(data["data"]["user"]["username"], "admin")
 
-    def test_04_upload_without_token_is_401(self):
-        """Upload sem token deve retornar 401 Unauthorized."""
-        st, _ = _request(
+    def test_04_upload_without_token_is_local_only(self):
+        """Sem conta, o upload com gabarito funciona só no navegador: nada vai para o banco.
+
+        A home é aberta a visitantes; o que exige conta é persistir. Uploads que
+        precisam de IA exigem conta ou sessão de convidado (ver test_guest_access).
+        """
+        st, data = _request(
             "/api/upload", data=self._UPLOAD_BODY, headers=self._UPLOAD_HEADERS
         )
-        self.assertEqual(st, 401, f"Esperado 401 sem token, obtido {st}")
+        self.assertEqual(st, 201, f"Esperado 201 local sem token, obtido {st}: {data}")
+        self.assertTrue(data["data"]["local_only"])
+        self.assertIsNone(data["data"]["quiz_id"])
 
     def test_05_student_auth(self):
         """Registro ou login de estudante deve funcionar."""
@@ -179,7 +191,7 @@ class AuthE2ETestCase(unittest.TestCase):
 
         st, data = _request(
             "/api/auth/login",
-            {"username": "aluno_e2e", "password": "senha_estudante_123"},
+            {"username": "aluno_e2e", "password": "senha_estudante_123", "return_token": True},
         )
         self.assertEqual(st, 200, f"Login do estudante falhou: {st}")
         AuthE2ETestCase.student_token = data["data"]["token"]
