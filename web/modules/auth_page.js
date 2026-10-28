@@ -11,10 +11,10 @@ localStorage.removeItem('quiz_guest_mode');
 localStorage.removeItem('quiz_guest_data');
 localStorage.removeItem('quiz_guest_quizzes');
 
+// Ao entrar, só a marca de convidado sai. Os simulados que ele criou ficam na aba
+// para a home (app.js) enviá-los à conta recém-aberta e depois limpá-los.
 function clearGuestSession() {
   sessionStorage.removeItem('quiz_guest_mode');
-  sessionStorage.removeItem('quiz_guest_data');
-  sessionStorage.removeItem('quiz_guest_quizzes');
 }
 
 /**
@@ -33,6 +33,30 @@ function safeNext() {
     return '/';
   }
 }
+
+// ─── Entrar com Google (só aparece se o servidor estiver configurado) ────────
+const googleBtn = document.getElementById('btnGoogleLogin');
+const googleDivider = document.getElementById('googleDivider');
+fetch('/api/auth/providers', { cache: 'no-store' })
+  .then((res) => (res.ok ? res.json() : {}))
+  .then((raw) => {
+    const enabled = Boolean((raw.data || raw).google);
+    if (googleBtn) googleBtn.hidden = !enabled;
+    if (googleDivider) googleDivider.hidden = !enabled;
+  })
+  .catch(() => {});
+googleBtn?.addEventListener('click', () => {
+  window.location.assign(`/api/auth/google/start?next=${encodeURIComponent(safeNext())}`);
+});
+
+// Erros devolvidos pelo retorno do Google (?erro=)
+const LOGIN_ERRORS = {
+  google_indisponivel: 'O login com Google não está disponível agora. Use usuário e senha.',
+  google_sessao: 'O login com Google expirou ou foi interrompido. Tente de novo.',
+  google_email: 'Use uma conta Google com e-mail verificado.',
+  google_falhou: 'O Google não confirmou o login. Tente de novo ou use usuário e senha.',
+  muitas_tentativas: 'Muitas tentativas seguidas. Aguarde alguns minutos.',
+};
 
 // ─── Verificação da sessão HttpOnly ──────────────────────────────────────────
 fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' })
@@ -349,4 +373,12 @@ if (window.location.pathname === '/register') {
   setMode('register', false);
 } else {
   setMode('login', false);
+}
+
+const loginError = LOGIN_ERRORS[new URLSearchParams(window.location.search).get('erro')];
+if (loginError && loginFeedback) {
+  setMode('login', false);
+  loginFeedback.textContent = loginError;
+  loginFeedback.className = 'form-feedback feedback-error';
+  loginFeedback.hidden = false;
 }

@@ -1679,6 +1679,8 @@ function updateAuthUI() {
     }
     // Convidado não tem conta para encerrar: oferece entrar ou cadastrar
     if (logoutBtn) logoutBtn.hidden = isGuest;
+    const accountBtn = document.querySelector('#accountBtn');
+    if (accountBtn) accountBtn.hidden = isGuest;
     if (guestActions) guestActions.hidden = !isGuest;
     if (uploadVisibilityOption) {
       uploadVisibilityOption.hidden = currentUser.role !== 'admin';
@@ -1701,6 +1703,14 @@ function updateAuthUI() {
   }
   if (guestAiNoticeText) guestAiNoticeText.textContent = guestAiDescription() || 'Modo convidado. Os simulados ficam só neste navegador.';
   if (uploadSizeLimit) uploadSizeLimit.textContent = kind === 'user' ? '20 MB' : '5 MB';
+
+  // Convidado vê o custo antes de gastar
+  if (confirmGenerateTopicBtn) {
+    confirmGenerateTopicBtn.textContent = isGuest && guestAI
+      ? `Gerar simulado · usa 1 de ${guestAI.remaining}`
+      : 'Gerar simulado';
+    if (isGuest && guestAI && guestAI.remaining <= 0) confirmGenerateTopicBtn.textContent = 'Gerar simulado';
+  }
 
   const introLimit = document.querySelector('#introGuestAiLimit');
   if (introLimit && guestAI) introLimit.textContent = String(guestAI.limit);
@@ -1753,6 +1763,30 @@ async function startGuestSession() {
   updateAuthUI();
 }
 
+/**
+ * Depois do login/cadastro, os simulados criados como convidado (ainda na aba)
+ * vão para a conta. Falhou? Ficam na aba para uma nova tentativa no próximo carregamento.
+ */
+let importedGuestQuizzes = 0;
+async function importGuestQuizzesIntoAccount() {
+  const pending = getGuestQuizzes().filter((q) => Array.isArray(q?.questions) && q.questions.length);
+  if (!pending.length) return;
+  try {
+    const res = await fetch('/api/quizzes/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ quizzes: pending.slice(0, 20) }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const raw = await readJson(res);
+    importedGuestQuizzes = (raw.data || raw).imported || 0;
+  } catch (err) {
+    console.warn('Não foi possível salvar os simulados do convidado na conta:', err);
+    throw err;
+  }
+}
+
 async function checkAuth() {
   const wantsGuest = window.location.pathname === '/guest';
   const [meResult, guestResult] = await Promise.allSettled([
@@ -1767,7 +1801,12 @@ async function checkAuth() {
       currentUser = raw.data?.user || raw.user || null;
       if (currentUser) {
         guestAI = null;
-        clearGuestData();
+        try {
+          await importGuestQuizzesIntoAccount();
+          clearGuestData();
+        } catch (_) {
+          sessionStorage.removeItem('quiz_guest_mode');
+        }
         return true;
       }
     }
@@ -1959,6 +1998,76 @@ accessGuestBtn?.addEventListener('click', async () => {
 document.querySelector('#closeAccessModal')?.addEventListener('click', closeAccessModal);
 accessModal?.addEventListener('click', (e) => { if (e.target === accessModal) closeAccessModal(); });
 
+// ─── Minha conta: cópia dos dados e exclusão (LGPD) ─────────────────────────
+const accountModal = document.querySelector('#accountModal');
+const deleteAccountForm = document.querySelector('#deleteAccountForm');
+const deleteAccountPassword = document.querySelector('#deleteAccountPassword');
+const deleteAccountFeedback = document.querySelector('#deleteAccountFeedback');
+const deleteAccountBtn = document.querySelector('#deleteAccountBtn');
+let releaseAccountFocus = null;
+
+function openAccountModal() {
+  if (!accountModal || sessionKind() !== 'user') return;
+  const nameEl = document.querySelector('#accountUsername');
+  if (nameEl) nameEl.textContent = currentUser.username;
+  if (deleteAccountPassword) deleteAccountPassword.value = '';
+  if (deleteAccountFeedback) deleteAccountFeedback.hidden = true;
+  accountModal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  releaseAccountFocus = trapFocus(accountModal, document.querySelector('#accountExportLink'));
+}
+
+function closeAccountModal() {
+  if (!accountModal || accountModal.hidden) return;
+  accountModal.hidden = true;
+  document.body.style.overflow = '';
+  releaseAccountFocus?.();
+  releaseAccountFocus = null;
+}
+
+document.querySelector('#accountBtn')?.addEventListener('click', openAccountModal);
+document.querySelector('#footerAccountBtn')?.addEventListener('click', openAccountModal);
+document.querySelector('#closeAccountModal')?.addEventListener('click', closeAccountModal);
+accountModal?.addEventListener('click', (e) => { if (e.target === accountModal) closeAccountModal(); });
+accountModal?.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAccountModal(); });
+
+deleteAccountForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const password = deleteAccountPassword?.value || '';
+  const showError = (msg) => {
+    if (!deleteAccountFeedback) return;
+    deleteAccountFeedback.textContent = msg;
+    deleteAccountFeedback.hidden = false;
+  };
+  if (!password) {
+    showError('Digite sua senha para confirmar.');
+    deleteAccountPassword?.focus();
+    return;
+  }
+  deleteAccountBtn.disabled = true;
+  try {
+    const res = await fetch('/api/account/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ password }),
+    });
+    const raw = await readJson(res);
+    if (!res.ok) {
+      showError(raw.message || 'Não foi possível excluir a conta. Tente novamente.');
+      return;
+    }
+    clearAuthToken();
+    closeAccountModal();
+    await showNotice('Sua conta e seus dados foram excluídos.', 'Conta excluída', 'info');
+    window.location.replace('/');
+  } catch (_) {
+    showError('Falha na conexão. Tente novamente.');
+  } finally {
+    deleteAccountBtn.disabled = false;
+  }
+});
+
 // ─── Logout ─────────────────────────────────────────────────────────────────
 // Sair da conta volta para a home como visitante (sem muro de login).
 document.querySelector('#logoutBtn')?.addEventListener('click', async () => {
@@ -2146,6 +2255,15 @@ confirmUploadBtn.addEventListener('click', doUpload);
 confirmGenerateTopicBtn?.addEventListener('click', doGenerateTopic);
 
 tabUploadFile?.addEventListener('click', () => switchModalTab('upload'));
+
+// Temas de exemplo: preenchem o campo para o primeiro simulado sair em um clique
+document.querySelectorAll('.topic-chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    if (!topicInput) return;
+    topicInput.value = chip.dataset.topic || chip.textContent.trim();
+    topicInput.focus();
+  });
+});
 tabGenerateTopic?.addEventListener('click', () => switchModalTab('topic'));
 
 topicInput?.addEventListener('keydown', (e) => {
@@ -2256,18 +2374,9 @@ async function init() {
   const authPromise = checkAuth();
   const dataPromise = Promise.all([loadQuiz(), loadQuizList()]);
   await authPromise;
-  try {
-    await dataPromise;
-    // A sessão real difere do que a aba supunha (ex.: cookie de convidado expirou)
-    if (isGuestMode() !== assumedGuest) await loadQuizList();
-  } catch (error) {
-    if (error.name !== 'AbortError') {
-      quiz.innerHTML = '<p class="empty-state">Escolha um simulado em "Explorar simulados" ou crie o seu em "Criar simulado".</p>';
-      await loadQuizList().catch(() => {});
-    }
-  }
 
-  // Volta do login/cadastro com intenção de criar simulado (?abrir=criar)
+  // Volta do login/cadastro com intenção de criar simulado (?abrir=criar):
+  // abre assim que a sessão é conhecida, sem esperar a lista de simulados
   const params = new URLSearchParams(window.location.search);
   if (params.get('abrir') === 'criar') {
     params.delete('abrir');
@@ -2279,6 +2388,23 @@ async function init() {
       openModal();
     }
   }
+
+  if (importedGuestQuizzes > 0) {
+    const plural = importedGuestQuizzes === 1 ? 'simulado do modo convidado foi salvo' : 'simulados do modo convidado foram salvos';
+    showNotice(`${importedGuestQuizzes} ${plural} na sua conta.`, 'Simulados salvos', 'info');
+  }
+
+  try {
+    await dataPromise;
+    // A sessão real difere do que a aba supunha (ex.: cookie de convidado expirou)
+    if (isGuestMode() !== assumedGuest || importedGuestQuizzes > 0) await loadQuizList();
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      quiz.innerHTML = '<p class="empty-state">Escolha um simulado em "Explorar simulados" ou crie o seu em "Criar simulado".</p>';
+      await loadQuizList().catch(() => {});
+    }
+  }
+
 }
 
 init();
