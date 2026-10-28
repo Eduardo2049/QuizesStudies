@@ -19,6 +19,8 @@ Este documento é a referência primária e fixa de arquitetura, permissões, li
 | **Rotas da API, endpoints, cookies, rate limits** | `api/handlers/quiz_handler.py`<br>`api/middleware/http_middleware.py` | Frontend `web/styles.css`<br>Migrations |
 | **Autenticação, login, cadastro, senhas, tokens de sessão** | `api/services/auth_service.py`<br>`api/controllers/auth_controller.py`<br>`api/repositories/user_repository.py` | `api/utils/file_parser.py`<br>`api/services/ai_service.py` |
 | **Acesso sem login, modo convidado e cota gratuita de IA** | `api/services/guest_service.py`<br>`api/handlers/quiz_handler.py` (rotas `/api/guest/*`)<br>`web/app.js` (`checkAuth`, `openAccessModal`, `requireAiAccess`) | `api/repositories/quiz_repository.py`<br>`web/styles.css` |
+| **Termos, privacidade, 404, Minha conta (LGPD)** | `web/termos.html`<br>`web/privacidade.html`<br>`404.html` (na raiz, servido pela Vercel e pelo servidor)<br>`api/repositories/user_repository.py` (`export_user_data`, `delete_user_and_data`) | `api/services/ai_service.py` |
+| **Entrar com Google e importar simulados do convidado** | `api/services/google_auth_service.py`<br>`api/services/import_service.py`<br>`web/modules/auth_page.js` | `web/styles.css` |
 | **Regras de design (skill adotada)** | `.claude/skills/landing-page-design/SKILL.md`<br>`docs/DESIGN_SKILLS.md` | Pasta `api/` |
 | **Banco de dados, tabelas, consultas SQL, migrations** | `api/database/migrations.py`<br>`api/repositories/quiz_repository.py`<br>`api/repositories/user_repository.py` | Toda a pasta `web/` |
 | **Configuração de ambiente, portas, chaves de API** | `api/utils/config.py`<br>`.env.example` | Código de regras de negócio |
