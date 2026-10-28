@@ -257,10 +257,11 @@ def _format_user_friendly_error(status_code: int, raw_text: str) -> str:
 
     lower_msg = (msg or raw_text).lower()
 
-    if "data policy" in lower_msg:
+    if "data policy" in lower_msg or "zdr" in lower_msg or "guardrail" in lower_msg:
         _log_ops(
-            "o OpenRouter recusou os modelos gratuitos pela política de dados da conta: "
-            "libere os endpoints gratuitos em https://openrouter.ai/settings/privacy"
+            "o OpenRouter recusou os modelos gratuitos pela política de dados da conta "
+            "(ex.: só endpoints ZDR): em https://openrouter.ai/settings/privacy desligue a exigência "
+            "de ZDR e permita os endpoints gratuitos"
         )
         return AI_UNAVAILABLE_MESSAGE
     if status_code == 404 or "no endpoints found" in lower_msg or "model not found" in lower_msg:
@@ -316,6 +317,8 @@ _UNSUITABLE_MODEL_HINTS = ("rerank", "safety", "guard", "embed", "moderation", "
 # Pausa de um modelo depois de falhar, para os próximos pedidos irem direto a outro
 _COOLDOWN_RATE_LIMIT = 60
 _COOLDOWN_UNAVAILABLE = 15 * 60
+# Folga no max_tokens de modelos que raciocinam (o esforço "low" usa ~20% do limite)
+_REASONING_TOKEN_HEADROOM = 1.5
 
 _free_models_lock = Lock()
 _free_models_cache: dict = {"fetched_at": 0.0, "models": {}}
@@ -463,6 +466,12 @@ def _call_openrouter(
         # Só pede JSON estruturado a quem declara suporte; sem a lista, confia no prompt
         if params and ("response_format" in params or "structured_outputs" in params):
             payload["response_format"] = {"type": "json_object"}
+        # Os modelos gratuitos atuais raciocinam antes de responder, e o raciocínio gasta o
+        # mesmo max_tokens da resposta: sem limite, o JSON sai cortado ou vazio. Esforço baixo,
+        # raciocínio fora da resposta e uma folga no limite evitam isso.
+        if params is None or "reasoning" in params:
+            payload["reasoning"] = {"effort": "low", "exclude": True}
+            payload["max_tokens"] = int(max_tokens * _REASONING_TOKEN_HEADROOM)
 
         try:
             _log_ai(f"[IA] OpenRouter: tentando '{model}'...")
@@ -493,7 +502,7 @@ def _call_openrouter(
             # Limite diário da conta: os outros modelos gratuitos também recusariam
             _log_ops("limite diário de modelos gratuitos do OpenRouter atingido")
             raise AIServiceError(AI_DAILY_LIMIT_MESSAGE)
-        if resp.status_code in (401, 402, 403) or "data policy" in lower_raw:
+        if resp.status_code in (401, 402, 403) or "data policy" in lower_raw or "zdr" in lower_raw:
             # Problema da conta (chave, créditos, privacidade): trocar de modelo não resolve
             raise AIServiceError(_format_user_friendly_error(resp.status_code, raw))
 

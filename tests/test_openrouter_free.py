@@ -173,6 +173,33 @@ class TestResponseFormat(_FreeModelsTestCase):
         self.assertNotIn("response_format", second)
 
 
+class TestReasoning(_FreeModelsTestCase):
+
+    def test_reasoning_models_get_low_effort_and_extra_tokens(self):
+        self.session.get.return_value = _catalog(
+            _model("pensa/modelo:free", params=("reasoning",)), _model("direto/modelo:free"),
+        )
+        self.session.post.side_effect = [_response(503, raw="{}"), _response(200, VALID_JSON)]
+        with patch.object(ai_service, "OPENROUTER_FREE_MODELS", ["pensa/modelo:free", "direto/modelo:free"]):
+            self.call()
+        thinking, direct = (c.kwargs["json"] for c in self.session.post.call_args_list)
+        self.assertEqual(thinking["reasoning"], {"effort": "low", "exclude": True})
+        self.assertGreater(thinking["max_tokens"], 100)
+        self.assertNotIn("reasoning", direct)
+        self.assertEqual(direct["max_tokens"], 100)
+
+    def test_zdr_account_restriction_is_not_retried(self):
+        self.session.post.side_effect = [
+            _response(404, raw='{"error": {"message": "0 endpoints available. ZDR violation (account settings)"}}'),
+            _response(200, VALID_JSON),
+        ]
+        with patch.object(ai_service, "OPENROUTER_DISCOVER_FREE_MODELS", False), \
+             patch.object(ai_service, "OPENROUTER_FREE_MODELS", ["a/um:free", "b/dois:free"]):
+            with self.assertRaises(ai_service.AIServiceError):
+                self.call()
+        self.assertEqual(self.session.post.call_count, 1)
+
+
 class TestParseJsonResponse(unittest.TestCase):
 
     def test_plain_json(self):
