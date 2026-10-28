@@ -139,9 +139,15 @@ class AuthE2ETestCase(unittest.TestCase):
         self.assertEqual(st, 401, "Esperado 401 para senha incorreta")
 
     def test_02_admin_login_success(self):
-        """Login com credenciais corretas deve retornar 200 e um token."""
+        """Login correto: o navegador recebe só o cookie; o token vem no JSON apenas sob pedido."""
         st, data = _request(
             "/api/auth/login", {"username": "admin", "password": ADMIN_PASSWORD}
+        )
+        self.assertEqual(st, 200, f"Esperado 200, obtido {st}")
+        self.assertNotIn("token", data.get("data", {}), "Token não deve ir no JSON sem return_token")
+
+        st, data = _request(
+            "/api/auth/login", {"username": "admin", "password": ADMIN_PASSWORD, "return_token": True}
         )
         self.assertEqual(st, 200, f"Esperado 200, obtido {st}")
         token = data.get("data", {}).get("token", "")
@@ -185,7 +191,7 @@ class AuthE2ETestCase(unittest.TestCase):
 
         st, data = _request(
             "/api/auth/login",
-            {"username": "aluno_e2e", "password": "senha_estudante_123"},
+            {"username": "aluno_e2e", "password": "senha_estudante_123", "return_token": True},
         )
         self.assertEqual(st, 200, f"Login do estudante falhou: {st}")
         AuthE2ETestCase.student_token = data["data"]["token"]
