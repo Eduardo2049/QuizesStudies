@@ -23,6 +23,7 @@ from api.services.ai_service import (
     generate_answer_key,
     apply_ai_answers,
     parse_and_structure_questions_with_ai,
+    normalize_language,
     AIServiceError,
 )
 from api.utils.config import OPENROUTER_API_KEY, GEMINI_API_KEY
@@ -72,6 +73,7 @@ class UploadService:
         num_questions: str | int = "auto",
         context: str = "",
         ai_gate: Callable[[], None] | None = None,
+        language: str = "",
     ) -> dict:
         """
         Processa upload de arquivo e cria quiz no banco.
@@ -89,6 +91,7 @@ class UploadService:
             ai_gate: Para convidados, função chamada antes de usar a IA. Consome um
                 uso da cota gratuita (ou lança exceção se esgotada). Sem ela, um
                 visitante sem conta nem sessão de convidado não usa IA.
+            language: Idioma das questões quando a IA estrutura o arquivo ("pt-BR" ou "en")
 
         Returns:
             dict: {quiz_id, name, label, question_count, ai_generated}
@@ -151,7 +154,8 @@ class UploadService:
                 self._authorize_ai(created_by, ai_gate, "Este arquivo precisa ser estruturado pela IA.")
                 try:
                     questions = parse_and_structure_questions_with_ai(
-                        text, client_ip=client_ip, num_questions=target_qty, context=context
+                        text, client_ip=client_ip, num_questions=target_qty, context=context,
+                        language=normalize_language(language),
                     )
                     is_valid, error_msg = validate_questions(questions)
                     if is_valid:

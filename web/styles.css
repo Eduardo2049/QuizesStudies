@@ -147,12 +147,17 @@
 
 * { box-sizing: border-box; }
 
+/* Corta estouro lateral sem criar contêiner de rolagem (hidden quebraria position: sticky) */
+html, body { overflow-x: clip; }
+
 /* ─── Acessibilidade: Navegação Aprimorada por Teclado e Foco Visível (WCAG 2.1) ─ */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
+summary:focus-visible,
+[role="button"]:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid var(--teal) !important;
   outline-offset: 2px !important;
@@ -1378,12 +1383,16 @@ button {
 
 /* ─── Result Modal ─────────────────────────────────────────────────────────── */
 .modal--results {
-  max-width: 680px;
   width: 100%;
-  max-height: 88vh;
+  max-width: min(820px, 100%);
+  max-height: 92vh;
+  max-height: 92dvh;
+  /* O modal inteiro rola (placar, estatísticas e questões); só o rodapé fica fixo. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  padding: 32px 36px 24px;
+  padding: 32px 36px 0;
   box-sizing: border-box;
 }
 
@@ -1464,10 +1473,7 @@ button {
 
 /* ─── Scrollable Questions List ─────────────────────────────────────────── */
 .results-list {
-  overflow-y: auto;
-  max-height: calc(88vh - 240px);
-  padding-right: 8px;
-  margin-right: -4px;
+  flex: none;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1600,8 +1606,12 @@ button {
   justify-content: space-between;
   flex-wrap: wrap;
   border-top: 1px solid var(--line);
-  padding-top: 20px;
+  padding: 16px 0 24px;
   margin-top: 4px;
+  background: var(--card-solid);
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
 }
 
 .results-footer-left {
@@ -2352,6 +2362,16 @@ button {
 .theme-icon { font-size: 14px; line-height: 1; }
 .theme-label { font-size: 12px; }
 
+/* Botão de idioma: mostra o código do idioma atual (PT / EN) */
+.lang-code {
+  font: 700 var(--text-xs, 12px)/1 Manrope, sans-serif;
+  min-width: 2ch;
+  text-align: center;
+}
+
+/* Esconde o português por um instante enquanto o i18n.js traduz (ver i18n-boot.js) */
+html.i18n-pending body { visibility: hidden; }
+
 /* ─── Badges de Atalhos de Teclado (Hotkeys) ─────────────────────────────── */
 .option-kbd {
   margin-left: auto;
@@ -2699,7 +2719,7 @@ button {
   .shell {
     padding: 16px 14px 60px;
     max-width: 100%;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   /* ── Top Bar & Timer Fixo Seguro ── */
@@ -3107,7 +3127,14 @@ button {
 
   /* ── Modal de Resultado ── */
   .modal--results {
-    padding: 20px 14px 16px;
+    padding: 20px 14px 0;
+    max-height: 94dvh;
+  }
+
+  /* Rodapé empilhado ocupa muita altura: no celular ele rola junto com o conteúdo. */
+  .results-footer {
+    position: static;
+    padding: 16px 0 18px;
   }
 
   .results-header {
@@ -3132,9 +3159,7 @@ button {
   }
 
   .results-list {
-    max-height: calc(88vh - 280px);
     gap: 10px;
-    padding-right: 4px;
   }
 
   .result-card {
@@ -3641,7 +3666,14 @@ h1 { font-weight: 700; letter-spacing: -0.03em; text-wrap: balance; }
 /* Alvos de toque ≥ 44px no mobile */
 @media (max-width: 768px) {
   button, .timer-chip, .catalog-tab-btn, .modal-tab-btn, .toggle-btn,
-  .custom-select-option, .btn-ghost { min-height: 44px; }
+  .custom-select-option, .btn-ghost, .timer-preset-select { min-height: 44px; }
+  .hero-utils .btn-ghost { min-width: 44px; }
+  .site-footer a, .tab-btn, .auth-back-link, .auth-sublink, .guest-ai-notice-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .tab-btn { min-width: 44px; justify-content: center; }
   .palette-btn { min-width: 44px; width: 44px; height: 44px; }
   .modal-close { min-width: 44px; min-height: 44px; }
 }
@@ -3688,8 +3720,10 @@ h1 { font-weight: 700; letter-spacing: -0.03em; text-wrap: balance; }
 /* Mobile: marca numa linha; utilitários e selo de sessão compactos na seguinte */
 @media (max-width: 768px) {
   .hero-bar { flex-direction: column; align-items: stretch; gap: var(--space-2); }
-  .hero-utils { justify-content: space-between; flex-wrap: nowrap; }
+  /* Com ícones de 44px, os botões de conta descem para a linha de baixo quando não cabem */
+  .hero-utils { justify-content: flex-start; flex-wrap: wrap; gap: var(--space-1) var(--space-2); }
   .hero-utils .auth-controls { width: auto; margin-left: auto; }
+  .hero-utils .guest-action-link { white-space: nowrap; }
   .hero-utils .user-profile-badge { width: auto; padding: 4px 6px 4px 10px; gap: var(--space-2); }
 }
 
@@ -3729,7 +3763,7 @@ h1 { font-weight: 700; letter-spacing: -0.03em; text-wrap: balance; }
 .guest-action-link--primary { background: var(--coral); color: var(--btn-primary-text); }
 .guest-action-link--primary:hover { background: var(--coral-dark); }
 @media (max-width: 768px) {
-  .guest-action-link { min-height: 40px; }
+  .guest-action-link { min-height: 44px; }
 }
 
 /* Login/cadastro: divisor "ou" e respiro entre o formulário e o acesso de convidado */
@@ -4112,6 +4146,9 @@ a.access-cta.primary:hover { color: var(--btn-primary-text); }
   transition: color 300ms var(--ease-out);
 }
 .auth-back-link:hover { color: var(--ink); }
+@media (max-width: 768px) {
+  .auth-back-link { min-height: 44px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .skip-link, .guest-action-link, .access-cta, .auth-back-link { transition: opacity 300ms var(--ease-out); }

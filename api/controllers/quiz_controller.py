@@ -96,13 +96,17 @@ class QuizController:
 
     @timing_decorator
     @error_handler_decorator
-    def remix_mistakes(self, questions: list[dict], client_ip: str | None = None) -> dict:
+    def remix_mistakes(
+        self, questions: list[dict], client_ip: str | None = None, language: str = ""
+    ) -> dict:
         """POST /api/quiz/remix-mistakes - Gera variações inéditas via IA para questões erradas"""
-        from api.services.ai_service import remix_questions_by_ai, AIServiceError
+        from api.services.ai_service import remix_questions_by_ai, normalize_language, AIServiceError
         if not isinstance(questions, list) or not questions:
             raise QuizAPIException("Nenhuma questão enviada para variação.", 400)
         try:
-            remixed = remix_questions_by_ai(questions, client_ip=client_ip)
+            remixed = remix_questions_by_ai(
+                questions, client_ip=client_ip, language=normalize_language(language)
+            )
             return {
                 "status": "success",
                 "data": {
@@ -126,9 +130,10 @@ class QuizController:
         is_public: bool = False,
         persist: bool = True,
         client_ip: str | None = None,
+        language: str = "",
     ) -> dict:
         """Gera quiz por tema utilizando IA"""
-        from api.services.ai_service import generate_quiz_by_topic, AIServiceError
+        from api.services.ai_service import generate_quiz_by_topic, normalize_language, AIServiceError
         from api.services.upload_service import _slugify
 
         try:
@@ -138,6 +143,7 @@ class QuizController:
                 difficulty=difficulty,
                 context=context,
                 client_ip=client_ip,
+                language=normalize_language(language),
             )
         except AIServiceError as e:
             raise QuizAPIException(str(e), 422)
@@ -235,6 +241,7 @@ class UploadController:
         num_questions: str | int = "auto",
         context: str = "",
         ai_gate=None,
+        language: str = "",
     ) -> dict:
         """POST /api/upload - Processa arquivo e cria quiz no banco"""
         result = self.upload_service.process_upload(
@@ -248,6 +255,7 @@ class UploadController:
             num_questions=num_questions,
             context=context,
             ai_gate=ai_gate,
+            language=language,
         )
         return {
             "status": "success",
