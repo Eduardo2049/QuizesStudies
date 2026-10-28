@@ -881,6 +881,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                 num_questions = payload.get("num_questions", 5)
                 difficulty = payload.get("difficulty", "Médio")
                 context = payload.get("context", "")
+                language = payload.get("language", "")
                 requested_public = payload.get("is_public", False) is True
                 is_public = requested_public and user and user.get("role") == "admin"
 
@@ -892,6 +893,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                         num_questions=num_questions,
                         difficulty=difficulty,
                         context=context,
+                        language=language,
                         user_id=user["id"] if user else None,
                         is_public=bool(is_public),
                         persist=bool(user),
@@ -957,7 +959,9 @@ class QuizHandler(BaseHTTPRequestHandler):
                 client_ip = HTTPMiddleware.get_client_ip(self)
                 reservation = self._reserve_guest_ai(guest_id, client_ip)
                 try:
-                    response = self.quiz_controller.remix_mistakes(questions, client_ip=client_ip)
+                    response = self.quiz_controller.remix_mistakes(
+                        questions, client_ip=client_ip, language=payload.get("language", "")
+                    )
                 except Exception:
                     if reservation:
                         reservation.refund()
@@ -1055,6 +1059,7 @@ class QuizHandler(BaseHTTPRequestHandler):
         is_public = requested_public and user and user.get("role") == "admin"
         num_questions = fields.get("num_questions", "auto")
         context = fields.get("context", "")
+        language = fields.get("language", "")
         client_ip = HTTPMiddleware.get_client_ip(self)
         guest_id = HTTPMiddleware.get_guest_id(self) if guest else None
         reservation = guest_service.reservation(guest_id, client_ip) if guest_id else None
@@ -1069,6 +1074,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                 client_ip=client_ip,
                 num_questions=num_questions,
                 context=context,
+                language=language,
                 ai_gate=reservation.acquire if reservation else None,
             )
         except Exception:

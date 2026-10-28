@@ -231,7 +231,7 @@ confirmResetForm?.addEventListener('submit', async (e) => {
       return;
     }
 
-    showFeedback(confirmFeedback, '✓ Senha alterada com sucesso! Redirecionando para o login…', 'success');
+    showFeedback(confirmFeedback, '✓ Senha alterada. Redirecionando para o login…', 'success');
 
     // Desabilita formulário e redireciona para login
     newPasswordInput.disabled = true;
