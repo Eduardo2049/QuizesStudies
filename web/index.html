@@ -16,9 +16,10 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/web/icons/favicon-16x16.png?v=2">
   <link rel="apple-touch-icon" sizes="180x180" href="/web/icons/apple-touch-icon.png?v=2">
   <link rel="shortcut icon" href="/web/icons/favicon.ico?v=2">
-  <link rel="stylesheet" href="/web/styles.css?v=24">
+  <link rel="stylesheet" href="/web/styles.css?v=25">
   <!-- Script de prevenção de FOUC de tema (execução imediata, bloqueante) -->
   <script src="/web/modules/theme-boot.js"></script>
+  <script src="/web/modules/i18n-boot.js?v=1"></script>
   <!-- Vercel Web Analytics + Speed Insights (stubs de fila, bloqueantes, antes dos loaders) -->
   <script src="/web/modules/analytics-boot.js"></script>
   <script defer src="/_vercel/insights/script.js"></script>
@@ -37,6 +38,9 @@
           <button id="themeToggle" class="btn-theme-toggle btn-ghost" type="button" title="Alternar tema (Sistema / Escuro / Claro)">
             <span class="theme-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 21h8M12 16v5"/></svg></span>
             <span class="theme-label">Tema</span>
+          </button>
+          <button id="langToggle" class="btn-theme-toggle btn-ghost btn-lang" type="button" data-lang-toggle translate="no">
+            <span class="lang-code">PT</span>
           </button>
           <button id="backdropMotionToggle" class="btn-theme-toggle btn-ghost" type="button" aria-pressed="false" data-backdrop-toggle hidden>
             <span class="theme-icon"></span>
@@ -368,35 +372,35 @@
       <div class="about-header">
         <span class="about-badge">Propósito e diferenciais</span>
         <h2 id="aboutModalTitle" class="about-title">Por que o Quiz Study existe?</h2>
-        <p class="about-tagline">“Da sua apostila ao simulado ativo em 5 segundos.”</p>
+        <p class="about-tagline">Da sua apostila a um simulado com gabarito comentado.</p>
       </div>
 
       <div class="about-content">
         <section class="about-pillars">
           <div class="pillar-card">
             <div class="pillar-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg></div>
-            <h3>Fricção Zero</h3>
-            <p>Em vez de gastar horas criando flashcards manualmente ou caçando questões desatualizadas, basta arrastar seu PDF/DOCX ou digitar um tema.</p>
+            <h3>Fricção zero</h3>
+            <p>Envie um PDF ou DOCX, ou digite um tema. O simulado sai pronto.</p>
           </div>
           <div class="pillar-card">
             <div class="pillar-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 1V4a3 3 0 0 0-3 0z"/><path d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 1"/></svg></div>
-            <h3>Retenção & IA Ativa</h3>
-            <p>Errou uma questão? A IA não te dá apenas a explicação: ela gera variações inéditas para provar que você entendeu o conceito e não apenas decorou a alternativa.</p>
+            <h3>Retenção com IA</h3>
+            <p>Errou? A IA cria variações da questão para testar se você entendeu o conceito.</p>
           </div>
           <div class="pillar-card">
             <div class="pillar-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg></div>
-            <h3>Foco no Raciocínio</h3>
-            <p>Interface limpa, modo focado com cronômetro de prova, sem distrações, anúncios ou fóruns poluídos que quebram o fluxo de estudos.</p>
+            <h3>Foco no raciocínio</h3>
+            <p>Cronômetro de prova e tela limpa, sem anúncios nem fóruns.</p>
           </div>
         </section>
 
         <section class="about-comparison">
-          <h3 class="comparison-title">Como nos comparamos com outras ferramentas?</h3>
+          <h3 class="comparison-title">Comparação com outras ferramentas</h3>
           <div class="comparison-table-wrap">
             <table class="comparison-table">
               <thead>
                 <tr>
-                  <th>Recurso / Diferencial</th>
+                  <th>Recurso</th>
                   <th class="highlight-col">Quiz Study</th>
                   <th>Quizlet</th>
                   <th>QConcursos / Gran</th>
@@ -405,32 +409,32 @@
               </thead>
               <tbody>
                 <tr>
-                  <td><strong>Criação de simulados</strong></td>
-                  <td class="highlight-col"><strong>Instantânea por PDF/DOCX ou Tema IA</strong></td>
+                  <td><strong>Criação</strong></td>
+                  <td class="highlight-col"><strong>Por arquivo ou tema, na hora</strong></td>
                   <td>Manual ou listas públicas</td>
-                  <td>Banco fixo de bancas</td>
-                  <td>Criação 100% manual</td>
+                  <td>Banco fixo de provas</td>
+                  <td>Manual</td>
                 </tr>
                 <tr>
-                  <td><strong>Caderno de Erros Inteligente</strong></td>
-                  <td class="highlight-col"><strong>Retreino + Variações Inéditas por IA</strong></td>
-                  <td>Apenas repete o card</td>
-                  <td>Filtro de questões estáticas</td>
-                  <td>Repetição espaçada (mesmo card)</td>
+                  <td><strong>Revisão de erros</strong></td>
+                  <td class="highlight-col"><strong>Variações novas por IA</strong></td>
+                  <td>Repete o card</td>
+                  <td>Filtro de questões</td>
+                  <td>Repetição espaçada</td>
                 </tr>
                 <tr>
-                  <td><strong>Explicação pedagógica</strong></td>
-                  <td class="highlight-col"><strong>Passo a passo por IA na hora</strong></td>
-                  <td>Apenas termo/definição</td>
-                  <td>Comentários de fórum / profs</td>
-                  <td>Apenas o verso do card</td>
+                  <td><strong>Explicação</strong></td>
+                  <td class="highlight-col"><strong>Passo a passo por IA</strong></td>
+                  <td>Só termo e definição</td>
+                  <td>Comentários de fórum</td>
+                  <td>Verso do card</td>
                 </tr>
                 <tr>
-                  <td><strong>Privacidade & Material Próprio</strong></td>
-                  <td class="highlight-col"><strong>Simulado sobre seu próprio material</strong></td>
-                  <td>Público / Compartilhado</td>
-                  <td>Não aceita material próprio</td>
-                  <td>Local / Manual</td>
+                  <td><strong>Material próprio</strong></td>
+                  <td class="highlight-col"><strong>Simulado do seu material</strong></td>
+                  <td>Público</td>
+                  <td>Não aceita</td>
+                  <td>Local, manual</td>
                 </tr>
               </tbody>
             </table>
@@ -439,7 +443,7 @@
       </div>
 
       <div class="modal-actions about-modal-actions">
-        <button id="btnCloseAbout" class="primary btn-close-about" type="button">Entendi, vamos treinar!</button>
+        <button id="btnCloseAbout" class="primary btn-close-about" type="button">Entendi, vamos treinar</button>
       </div>
     </div>
   </div>
@@ -611,6 +615,6 @@
   </div>
 
   <script type="module" src="/web/modules/backdrop.js?v=7"></script>
-  <script type="module" src="/web/app.js?v=16"></script>
+  <script type="module" src="/web/app.js?v=17"></script>
 </body>
 </html>

@@ -12,9 +12,14 @@ Uso (com o app rodando, ex.: http://127.0.0.1:8000):
     python tests/visual/capture_baseline.py --browser "C:/caminho/para/chrome.exe"
     python tests/visual/capture_baseline.py --only home,login
 
+    python tests/visual/capture_baseline.py --label after --lang en
+
 A home é aberta a visitantes: "home-visitor" e "home-access" mostram a primeira
 visita (sem login) e o modal de acesso; as demais telas usam o modo convidado (/guest).
-Saída: design-baseline/<label>/<tela>-<dispositivo>-<tema>.png
+Saída: design-baseline/<label>/<tela>-<dispositivo>-<tema>[-<idioma>].png
+
+Em cada largura também confere o layout: rolagem lateral na página conta como
+falha (LAYOUT) e, no celular, alvos de toque menores que 44px aparecem como AVISO.
 Não faz parte da suíte `unittest`; serve para comparar antes/depois.
 """
 import argparse
@@ -48,6 +53,29 @@ SCREENS = {
     "home-about": ("/guest", "document.querySelector('#btnOpenAboutModal')?.click()"),
     "home-timer": ("/guest", "document.querySelector('#btnSetTimer')?.click()"),
 }
+
+# Conferência de layout executada em cada tela, depois da ação e antes da captura
+LAYOUT_CHECK = r"""(() => {
+  const vw = window.innerWidth;
+  const overflow = document.documentElement.scrollWidth - vw;
+  const small = [];
+  if (vw < 600) {
+    for (const el of document.querySelectorAll('a[href], button, input, select, textarea, [role="button"]')) {
+      if (el.closest('[hidden]') || ['checkbox', 'radio', 'hidden', 'file'].includes(el.type)) continue;
+      const r = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      // Ignora o que não aparece (fora da tela, 1px de leitor de tela) e links dentro de texto,
+      // que a WCAG dispensa do tamanho mínimo
+      if (r.width <= 1 || r.height <= 1 || r.bottom <= 0 || r.right <= 0 || style.visibility === 'hidden') continue;
+      if (el.tagName === 'A' && style.display === 'inline') continue;
+      if (r.width < 44 || r.height < 44) {
+        const name = el.id ? '#' + el.id : el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).split(' ')[0] : '');
+        small.push(`${name} ${Math.round(r.width)}x${Math.round(r.height)}`);
+      }
+    }
+  }
+  return { overflow, small };
+})()"""
 
 BROWSER_CANDIDATES = [
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
@@ -255,6 +283,8 @@ def main() -> int:
     parser.add_argument("--out", default="design-baseline")
     parser.add_argument("--browser", help="Caminho do msedge/chrome (detectado automaticamente)")
     parser.add_argument("--only", help="Captura só as telas informadas, separadas por vírgula")
+    parser.add_argument("--lang", choices=("pt-BR", "en"), default="pt-BR",
+                        help="Idioma da interface (padrão: pt-BR)")
     args = parser.parse_args()
 
     executable = find_browser(args.browser)
@@ -270,12 +300,17 @@ def main() -> int:
     out_dir = Path(args.out) / args.label
     out_dir.mkdir(parents=True, exist_ok=True)
     base = args.base_url.rstrip("/")
+    lang_suffix = "" if args.lang == "pt-BR" else f"-{args.lang}"
     failures = 0
+    warnings = 0
 
     browser = Browser(executable)
     try:
         browser.call("Page.enable")
         browser.call("Runtime.enable")
+        # O idioma fica salvo no localStorage da origem, como quando o usuário troca pelo botão
+        browser.goto(base + "/login")
+        browser.evaluate(f"localStorage.setItem('quiz_lang', '{args.lang}')")
         for theme in THEMES:
             browser.call("Emulation.setEmulatedMedia", features=[
                 {"name": "prefers-color-scheme", "value": theme},
@@ -286,7 +321,7 @@ def main() -> int:
                              deviceScaleFactor=1, mobile=width < 600)
                 browser.call("Emulation.setTouchEmulationEnabled", enabled=width < 600)
                 for screen, (path, action) in screens.items():
-                    out_file = out_dir / f"{screen}-{vp_name}-{theme}.png"
+                    out_file = out_dir / f"{screen}-{vp_name}-{theme}{lang_suffix}.png"
                     try:
                         if path == "/":
                             # Primeira visita: sem sessão de conta nem de convidado
@@ -306,8 +341,15 @@ def main() -> int:
                         if action:
                             browser.evaluate(action)
                             time.sleep(0.6)
+                        layout = browser.evaluate(LAYOUT_CHECK) or {}
                         capture(browser, out_file, width, height, full_page=action is None)
                         print("ok   ", out_file)
+                        if layout.get("overflow", 0) > 1:
+                            failures += 1
+                            print(f"LAYOUT {out_file.name}: rolagem lateral de {layout['overflow']}px")
+                        if layout.get("small"):
+                            warnings += 1
+                            print(f"AVISO {out_file.name}: alvos de toque < 44px: {', '.join(layout['small'][:8])}")
                     except Exception as exc:  # noqa: BLE001 - registra e segue para a próxima tela
                         failures += 1
                         print("FALHA", out_file, f"({exc})")
@@ -315,6 +357,7 @@ def main() -> int:
         browser.close()
 
     print(f"Navegador: {executable}\nScreenshots em: {os.fspath(out_dir)}")
+    print(f"Falhas: {failures} · telas com aviso de toque: {warnings}")
     return 1 if failures else 0
 
 
