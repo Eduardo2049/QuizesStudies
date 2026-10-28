@@ -57,7 +57,7 @@ Edite o `.env`:
 | `ALLOWED_ORIGINS` | Não | Lista separada por vírgulas de origens CORS permitidas |
 | `COOKIE_SECURE` | Não | Padrão `true`; use `false` apenas no desenvolvimento HTTP |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Para Tunnel | Token do Cloudflare Zero Trust para expor via túnel HTTPS |
-| `OPENROUTER_API_KEY` | Para IA | Chave do [OpenRouter](https://openrouter.ai). Só modelos gratuitos (`:free`) são usados; libere-os em *Settings → Privacy* |
+| `OPENROUTER_API_KEY` | Para IA | Chave do [OpenRouter](https://openrouter.ai). Só modelos gratuitos (`:free`) são usados; libere-os em *Settings → Privacy* e deixe *ZDR Endpoints Only* desligado (ele bloqueia todos os gratuitos) |
 | `OPENROUTER_FREE_MODELS` | Não | Modelos gratuitos preferidos, em ordem, separados por vírgula |
 | `OPENROUTER_DISCOVER_FREE_MODELS` | Não | Padrão `true`: descobre os modelos gratuitos disponíveis e usa como reserva |
 | `OPENROUTER_MAX_ATTEMPTS` | Não | Modelos tentados por pedido antes de desistir (padrão: `4`) |
