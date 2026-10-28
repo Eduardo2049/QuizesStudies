@@ -528,12 +528,36 @@ def apply_ai_answers(questions: list[dict], ai_answers: list[dict]) -> list[dict
     return questions
 
 
+# Idiomas aceitos para o conteúdo gerado pela IA (código enviado pelo cliente -> nome no prompt).
+AI_LANGUAGES = {
+    "pt-BR": "Português do Brasil (pt-BR)",
+    "en": "inglês (English, en)",
+}
+DEFAULT_AI_LANGUAGE = "pt-BR"
+
+
+def normalize_language(value) -> str:
+    """Converte o idioma pedido pelo cliente num código suportado (padrão pt-BR)."""
+    raw = str(value or "").strip()
+    if raw in AI_LANGUAGES:
+        return raw
+    base = raw.split("-")[0].lower()
+    if base == "pt":
+        return "pt-BR"
+    return base if base in AI_LANGUAGES else DEFAULT_AI_LANGUAGE
+
+
+def _language_rule(language: str, subject: str) -> str:
+    return f"O idioma de {subject} DEVE ser {AI_LANGUAGES[normalize_language(language)]}."
+
+
 def generate_quiz_by_topic(
     topic: str,
     num_questions: int = 5,
     difficulty: str = "Médio",
     context: str = "",
     client_ip: str | None = None,
+    language: str = DEFAULT_AI_LANGUAGE,
 ) -> dict:
     """
     Gera um conjunto completo de questões de quiz sobre um tema especificado via OpenRouter API.
@@ -544,6 +568,7 @@ def generate_quiz_by_topic(
         difficulty: Nível ("Fácil", "Médio", "Difícil")
         context: Diretrizes ou instruções adicionais opcionais
         client_ip: IP do cliente para controle de cota de tokens (opcional).
+        language: Idioma do conteúdo gerado ("pt-BR" ou "en").
 
     Returns:
         dict: {
@@ -571,10 +596,11 @@ def generate_quiz_by_topic(
 
     diff = difficulty if difficulty in ("Fácil", "Médio", "Difícil") else "Médio"
     context_str = context.strip() if context else ""
+    lang = normalize_language(language)
 
     # ── Cache de simulação para evitar requisições idênticas duplicadas ──────
     cache_key = hashlib.sha256(
-        f"{clean_topic.lower()}:{qty}:{diff}:{context_str.lower()}".encode("utf-8")
+        f"{clean_topic.lower()}:{qty}:{diff}:{context_str.lower()}:{lang}".encode("utf-8")
     ).hexdigest()
 
     now = time.time()
@@ -597,7 +623,7 @@ def generate_quiz_by_topic(
     prompt_lines.extend([
         "",
         "Regras obrigatórias:",
-        "1. O idioma das questões DEVE ser Português do Brasil (pt-BR).",
+        f"1. {_language_rule(lang, 'todas as questões, alternativas, explicações e do título')}",
         "2. Todas as questões devem ser inéditas, com enunciados claros, sem ambiguidades.",
         "3. Cada questão deve possuir exatamente 4 ou 5 alternativas em formato de texto limpo (não coloque 'a)', 'b)' dentro do texto da alternativa).",
         "4. Apenas UMA alternativa deve ser a correta.",
@@ -734,7 +760,11 @@ def generate_quiz_by_topic(
     return result
 
 
-def remix_questions_by_ai(questions: list[dict], client_ip: str | None = None) -> list[dict]:
+def remix_questions_by_ai(
+    questions: list[dict],
+    client_ip: str | None = None,
+    language: str = DEFAULT_AI_LANGUAGE,
+) -> list[dict]:
     """
     Gera variações inéditas para uma lista de questões (ex: questões que o aluno errou).
     Mantém o mesmo conceito e nível de dificuldade, mas altera os dados/cenário para
@@ -753,6 +783,7 @@ def remix_questions_by_ai(questions: list[dict], client_ip: str | None = None) -
         "- Cada questão deve ter exatamente entre 4 e 5 opções limpas (sem letras como 'a)' no texto).",
         "- O campo 'answer' deve ser o índice numérico (0 a N-1) da opção correta.",
         "- O campo 'explanation' deve conter uma explicação didática detalhada de 2 a 3 frases.",
+        f"- {_language_rule(language, 'todas as questões, alternativas e explicações')}",
         "",
         "Retorne SOMENTE um JSON válido no formato:",
         '{"questions": [{"id": 1, "section": "Subtema", "question": "Nova pergunta?", "options": ["A", "B", "C", "D"], "answer": 0, "explanation": "..."}]}',
@@ -829,6 +860,7 @@ def parse_and_structure_questions_with_ai(
     client_ip: str | None = None,
     num_questions: int | None = None,
     context: str = "",
+    language: str = DEFAULT_AI_LANGUAGE,
 ) -> list[dict]:
     """
     Analisa texto bruto e despadronizado de uma prova/simulado ou material de estudo (TXT, PDF, DOCX),
@@ -840,6 +872,7 @@ def parse_and_structure_questions_with_ai(
         client_ip: IP do cliente para controle de cota
         num_questions: Quantidade desejada de questões (opcional, 1 a 30)
         context: Instruções adicionais de foco ou adaptação
+        language: Idioma das questões e explicações ("pt-BR" ou "en")
 
     Returns:
         list[dict]: [{id, question, options, answer, explanation, section, context}]
@@ -879,7 +912,7 @@ def parse_and_structure_questions_with_ai(
     prompt_lines.extend([
         "",
         "Instruções obrigatórias:",
-        "1. O idioma de todas as questões e explicações DEVE ser Português do Brasil (pt-BR).",
+        f"1. {_language_rule(language, 'todas as questões e explicações')}",
         "2. Para cada questão, isole o enunciado limpo no campo 'question'.",
         "3. Isole cada alternativa no campo 'options' (como lista de strings, SEM prefixos como 'a)', 'b)', '1.', etc.). Cada questão deve ter exatamente 4 ou 5 alternativas.",
         "4. Resposta ('answer'):",

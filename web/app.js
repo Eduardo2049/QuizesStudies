@@ -1,12 +1,12 @@
 import { icon } from './modules/icons.js?v=6';
 import { initTheme, toggleTheme } from './modules/theme.js?v=9';
 import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js?v=5';
-import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=6';
+import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=7';
 import { initTimerDrag } from './modules/timer-drag.js?v=1';
+import { getLanguage } from './modules/i18n.js?v=1';
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 const quiz = document.querySelector('#quiz');
-const result = document.querySelector('#result');
 const progress = document.querySelector('#progress');
 const percent = document.querySelector('#percent');
 const progressBar = document.querySelector('#progressBar');
@@ -1042,10 +1042,6 @@ async function handleSubmitQuiz(event) {
     clearInterval(timerInterval);
     timerInterval = undefined;
     timer.classList.remove('running');
-    if (result) {
-      result.hidden = true;
-      result.innerHTML = '';
-    }
     renderResultModal(data);
     openResultModal();
   } catch (err) {
@@ -1083,21 +1079,21 @@ function renderResultModal(data) {
     resultScoreBadge.className = 'results-badge';
     if (percentage >= 80) {
       resultScoreBadge.classList.add('excellent');
-      resultScoreBadge.innerHTML = `${icon('target')} Excelente!`;
+      resultScoreBadge.innerHTML = `${icon('target')} Excelente`;
     } else if (percentage >= 60) {
       resultScoreBadge.classList.add('good');
-      resultScoreBadge.innerHTML = `${icon('thumb')} Bom trabalho!`;
+      resultScoreBadge.innerHTML = `${icon('thumb')} Bom trabalho`;
     } else {
       resultScoreBadge.classList.add('practice');
-      resultScoreBadge.innerHTML = `${icon('bulb')} Continue praticando!`;
+      resultScoreBadge.innerHTML = `${icon('bulb')} Continue praticando`;
     }
   }
 
   if (resultSummaryText) {
     if (percentage >= 80) {
-      resultSummaryText.textContent = 'Parabéns! Excelente domínio do conteúdo abordado.';
+      resultSummaryText.textContent = 'Parabéns. Você domina bem este conteúdo.';
     } else if (percentage >= 60) {
-      resultSummaryText.textContent = 'Muito bom! Você acertou a maior parte das questões.';
+      resultSummaryText.textContent = 'Muito bom. Você acertou a maior parte das questões.';
     } else {
       resultSummaryText.textContent = 'Revise detalhadamente cada questão abaixo e tente novamente.';
     }
@@ -1188,10 +1184,6 @@ document.querySelector('#reset').addEventListener('click', () => {
   quiz.reset();
   resetTimer();
   closeResultModal();
-  if (result) {
-    result.hidden = true;
-    result.innerHTML = '';
-  }
   updateProgress();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
@@ -1247,7 +1239,7 @@ async function runRemixMistakes() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify({ questions: currentWrongQuestions }),
+      body: JSON.stringify({ questions: currentWrongQuestions, language: getLanguage() }),
     });
 
     const raw = await readJson(response);
@@ -1422,10 +1414,6 @@ catalogList?.addEventListener('click', async (e) => {
   syncCustomQuizSelector();
   resetTimer();
   closeResultModal();
-  if (result) {
-    result.hidden = true;
-    result.innerHTML = '';
-  }
   quiz.innerHTML = '';
 
   try {
@@ -1455,10 +1443,6 @@ quiz.addEventListener('change', (e) => {
 quizSelector.addEventListener('change', async () => {
   resetTimer();
   closeResultModal();
-  if (result) {
-    result.hidden = true;
-    result.innerHTML = '';
-  }
   quiz.innerHTML = '';
   try {
     await loadQuiz(quizSelector.value);
@@ -2100,6 +2084,7 @@ async function doUpload() {
     uploadQty = String(Math.max(1, Math.min(Number(uploadCustomQty?.value) || 5, 30)));
   }
   formData.append('num_questions', uploadQty);
+  formData.append('language', getLanguage());
 
   const userContext = uploadContext?.value?.trim() || '';
   if (userContext) {
@@ -2140,10 +2125,6 @@ async function doUpload() {
     syncCustomQuizSelector();
     resetTimer();
     closeResultModal();
-    if (result) {
-      result.hidden = true;
-      result.innerHTML = '';
-    }
     quiz.innerHTML = '';
     try { await loadQuiz(data.name); } catch (_) {}
 
@@ -2187,6 +2168,7 @@ async function doGenerateTopic() {
     difficulty: topicDifficulty?.value || 'Médio',
     context: topicContext?.value.trim() || '',
     is_public: document.querySelector('#isPublicQuiz')?.checked || false,
+    language: getLanguage(),
   };
 
   try {
@@ -2224,10 +2206,6 @@ async function doGenerateTopic() {
     syncCustomQuizSelector();
     resetTimer();
     closeResultModal();
-    if (result) {
-      result.hidden = true;
-      result.innerHTML = '';
-    }
     quiz.innerHTML = '';
     try { await loadQuiz(data.name); } catch (_) {}
 

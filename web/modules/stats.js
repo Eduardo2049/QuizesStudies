@@ -64,20 +64,20 @@ export function calculateQuizStats(questions, results, totalSeconds = 0) {
   // Classificação geral
   let tierBadge = `${icon('target')} Bom Rendimento`;
   let tierColor = 'tier-good';
-  let encouragement = 'Você teve um bom aproveitamento! Revise os erros pontuais para consolidar o conteúdo.';
+  let encouragement = 'Você teve um bom aproveitamento. Revise os erros pontuais para consolidar o conteúdo.';
 
   if (percentage >= 85) {
     tierBadge = `${icon('trophy')} Desempenho Excepcional`;
     tierColor = 'tier-excellent';
-    encouragement = 'Excelente domínio! Você está pronto para os níveis mais desafiadores desta matéria.';
+    encouragement = 'Excelente domínio. Você está pronto para os níveis mais desafiadores desta matéria.';
   } else if (percentage >= 70) {
     tierBadge = `${icon('target')} Acima da Média`;
     tierColor = 'tier-good';
-    encouragement = 'Muito bom! Você superou o ponto de corte padrão. Foco nas justificativas das erradas.';
+    encouragement = 'Muito bom. Você superou o ponto de corte padrão. Foco nas justificativas das erradas.';
   } else if (percentage >= 50) {
     tierBadge = `${icon('scale')} Regular / Em Evolução`;
     tierColor = 'tier-average';
-    encouragement = 'Bom esforço! Recomendamos retreinar o Caderno de Erros ou gerar variações com IA para fixar.';
+    encouragement = 'Bom esforço. Recomendamos retreinar o Caderno de Erros ou gerar variações com IA para fixar.';
   } else {
     tierBadge = `${icon('warning')} Atenção Redobrada`;
     tierColor = 'tier-attention';
