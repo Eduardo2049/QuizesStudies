@@ -4,13 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Quiz Study — Treino de Raciocínio</title>
-  <meta name="description" content="Plataforma de simulados e treino de raciocínio lógico. Faça upload de provas em PDF, DOCX ou TXT e treine com gabarito automático.">
+  <meta name="description" content="Transforme PDF, DOCX, TXT ou um tema em simulado com cronômetro e gabarito comentado por IA. Comece grátis, sem cadastro.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Quiz Study">
+  <meta property="og:title" content="Quiz Study — simulados com IA a partir do seu material">
+  <meta property="og:description" content="Envie sua apostila ou digite um tema e treine com simulado cronometrado e gabarito comentado. Comece grátis, sem cadastro.">
+  <meta property="og:image" content="/web/icons/favicon-192.png">
+  <meta name="twitter:card" content="summary">
   <link rel="icon" type="image/svg+xml" href="/web/icons/favicon.svg?v=2">
   <link rel="icon" type="image/png" sizes="32x32" href="/web/icons/favicon-32x32.png?v=2">
   <link rel="icon" type="image/png" sizes="16x16" href="/web/icons/favicon-16x16.png?v=2">
   <link rel="apple-touch-icon" sizes="180x180" href="/web/icons/apple-touch-icon.png?v=2">
   <link rel="shortcut icon" href="/web/icons/favicon.ico?v=2">
-  <link rel="stylesheet" href="/web/styles.css?v=21">
+  <link rel="stylesheet" href="/web/styles.css?v=24">
   <!-- Script de prevenção de FOUC de tema (execução imediata, bloqueante) -->
   <script src="/web/modules/theme-boot.js"></script>
   <!-- Vercel Web Analytics + Speed Insights (stubs de fila, bloqueantes, antes dos loaders) -->
@@ -19,6 +25,7 @@
   <script defer src="/_vercel/speed-insights/script.js"></script>
 </head>
 <body>
+  <a href="#quiz" class="skip-link">Pular para as questões</a>
   <main class="shell">
     <header class="hero">
       <div class="hero-bar">
@@ -39,13 +46,20 @@
             <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg> <span class="btn-label">Por que o Quiz Study?</span>
           </button>
           <div id="authControls" class="auth-controls">
+            <!-- Visitante (sem conta e sem sessão de convidado) -->
+            <div id="visitorActions" class="visitor-actions" hidden>
+              <a href="/login" class="guest-action-link" data-auth-link="/login">Entrar</a>
+              <a href="/register" class="guest-action-link guest-action-link--primary" data-auth-link="/register">Criar conta grátis</a>
+            </div>
             <div id="userProfile" class="user-profile-badge" hidden>
               <span class="user-role-badge" id="userRoleBadge">Admin</span>
               <span class="user-name" id="userName">admin</span>
+              <span id="guestAiChip" class="guest-ai-chip" role="status" hidden></span>
+              <button id="accountBtn" class="btn-auth-logout" type="button" title="Seus dados e exclusão da conta" hidden>Conta</button>
               <button id="logoutBtn" class="btn-auth-logout" type="button" title="Sair da conta">Sair</button>
               <span id="guestActions" class="guest-actions" hidden>
-                <a href="/login" class="guest-action-link" data-guest-exit>Entrar</a>
-                <a href="/register" class="guest-action-link guest-action-link--primary" data-guest-exit>Cadastrar</a>
+                <a href="/login" class="guest-action-link" data-auth-link="/login">Entrar</a>
+                <a href="/register" class="guest-action-link guest-action-link--primary" data-auth-link="/register">Criar conta</a>
               </span>
             </div>
           </div>
@@ -53,7 +67,11 @@
       </div>
 
       <h1>Treino de<br><em>raciocínio</em></h1>
-      <p class="intro">Marque suas respostas com calma. O resultado e o gabarito aparecem somente quando você concluir.</p>
+      <p class="intro" data-show-for="guest user">Marque suas respostas com calma. O resultado e o gabarito aparecem somente quando você concluir.</p>
+      <div class="intro intro--visitor" data-show-for="visitor" hidden>
+        <p>Envie um PDF, DOCX ou TXT, ou digite um tema, e treine com simulado cronometrado e gabarito comentado. Comece agora com um simulado pronto, sem cadastro.</p>
+        <p class="intro-proof">Grátis <span aria-hidden="true">·</span> sem cartão <span aria-hidden="true">·</span> <span id="introGuestAiLimit">3</span> gerações com IA no modo convidado</p>
+      </div>
 
       <div class="hero-top">
         <div class="quiz-picker">
@@ -69,10 +87,10 @@
         </div>
         <div class="hero-top-buttons">
           <button id="btnOpenCatalog" class="btn-catalog" type="button" title="Explorar todos os simulados disponíveis">
-            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h6"/></svg> Explorar Simulados
+            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h6"/></svg> Explorar simulados
           </button>
-          <button id="addQuizBtn" class="btn-add-quiz" type="button" title="Adicionar novo quiz">
-            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Adicionar Quiz
+          <button id="addQuizBtn" class="btn-add-quiz" type="button" title="Enviar um arquivo ou gerar um simulado por tema com IA">
+            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Criar simulado
           </button>
         </div>
       </div>
@@ -110,14 +128,14 @@
       <div class="exam-toolbar" id="examToolbar">
         <div class="view-mode-toggle" role="group" aria-label="Modo de visualização">
           <button type="button" id="btnToggleFocus" class="toggle-btn active" title="Exibe 1 questão por vez para foco total">
-            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg> Modo Foco
+            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg> Modo foco
           </button>
           <button type="button" id="btnToggleList" class="toggle-btn" title="Exibe todas as questões em scroll contínuo">
-            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg> Modo Lista
+            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg> Modo lista
           </button>
         </div>
         <button id="btnQuickSubmit" class="primary btn-quick-submit" type="button" title="Conferir respostas do simulado">
-          <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg> Finalizar Simulado
+          <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg> Finalizar simulado
         </button>
       </div>
 
@@ -147,19 +165,35 @@
     </div>
   </main>
 
+  <footer class="site-footer">
+    <a href="/termos">Termos de uso</a>
+    <span aria-hidden="true">·</span>
+    <a href="/privacidade">Privacidade</a>
+    <span class="site-footer-account" data-show-for="user" hidden>
+      <span aria-hidden="true">·</span>
+      <button type="button" class="footer-link" id="footerAccountBtn">Minha conta</button>
+    </span>
+  </footer>
+
   <!-- ── Modal de Upload / Gerar Quiz ──────────────────────────────────── -->
   <div id="uploadModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="modalTitle">
     <div class="modal">
       <button class="modal-close" id="closeModal" aria-label="Fechar">&times;</button>
-      <h2 id="modalTitle" class="modal-title">Novo Simulado</h2>
+      <h2 id="modalTitle" class="modal-title">Novo simulado</h2>
+
+      <!-- Aviso do modo convidado: cota de IA e onde os simulados ficam -->
+      <p id="guestAiNotice" class="guest-ai-notice" role="status" hidden>
+        <span id="guestAiNoticeText">Modo convidado.</span>
+        <a href="/register" class="guest-ai-notice-link" data-auth-link="/register">Criar conta grátis</a>
+      </p>
 
       <!-- Alternador de Abas: Upload vs Gerar por Tema -->
       <nav class="modal-tabs" aria-label="Opções para adicionar quiz">
         <button type="button" class="modal-tab-btn active" id="tabUploadFile" data-target="panelUpload">
-          <span><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg> Enviar Arquivo</span>
+          <span><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg> Enviar arquivo</span>
         </button>
         <button type="button" class="modal-tab-btn" id="tabGenerateTopic" data-target="panelTopic">
-          <span><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17v4M17 19h4"/></svg> Gerar por Tema</span>
+          <span><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17v4M17 19h4"/></svg> Gerar por tema</span>
         </button>
       </nav>
 
@@ -171,7 +205,7 @@
           <div class="drop-zone-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg></div>
           <p class="drop-zone-label">Arraste o arquivo aqui</p>
           <p class="drop-zone-hint">ou clique para selecionar</p>
-          <p class="drop-zone-types">TXT · PDF · DOCX &nbsp;|&nbsp; Máx. 20 MB</p>
+          <p class="drop-zone-types">TXT · PDF · DOCX &nbsp;|&nbsp; Máx. <span id="uploadSizeLimit">20 MB</span></p>
           <input type="file" id="fileInput" accept=".txt,.pdf,.docx" hidden>
         </div>
 
@@ -183,7 +217,7 @@
 
         <div class="form-row modal-form-row modal-form-row--spacing">
           <div class="form-group flex-1">
-            <label for="uploadNumQuestions">Quantidade de Questões</label>
+            <label for="uploadNumQuestions">Quantidade de questões</label>
             <select id="uploadNumQuestions">
               <option value="auto" selected>Todas do arquivo (Automático)</option>
               <option value="3">3 questões (rápido)</option>
@@ -204,7 +238,7 @@
         </div>
 
         <div class="form-group modal-form-group">
-          <label for="uploadContext">Foco ou Instruções para a IA (Opcional)</label>
+          <label for="uploadContext">Foco ou instruções para a IA (opcional)</label>
           <input type="text" id="uploadContext" placeholder="Ex: Adaptar texto em questões de concurso, focar em conceitos centrais...">
         </div>
       </div>
@@ -214,13 +248,20 @@
         <p class="modal-subtitle">Sem arquivo em mãos? Escolha um tema ou matéria e nossa IA criará um simulado completo com gabarito e explicações didáticas.</p>
 
         <div class="form-group modal-form-group">
-          <label for="topicInput">Tema ou Assunto do Quiz <span class="required">*</span></label>
+          <label for="topicInput">Tema ou assunto do simulado <span class="required">*</span></label>
           <input type="text" id="topicInput" placeholder="Ex: Raciocínio Lógico Proposicional, Python Básico, História do Brasil..." autocomplete="off">
+          <div class="topic-examples" role="group" aria-label="Temas de exemplo">
+            <span class="topic-examples-label">Experimente:</span>
+            <button type="button" class="topic-chip" data-topic="Juros simples e compostos">Juros compostos</button>
+            <button type="button" class="topic-chip" data-topic="Uso da crase na língua portuguesa">Crase</button>
+            <button type="button" class="topic-chip" data-topic="Lógica proposicional e tabela-verdade">Tabela-verdade</button>
+            <button type="button" class="topic-chip" data-topic="Direito constitucional: direitos e garantias fundamentais">Direitos fundamentais</button>
+          </div>
         </div>
 
         <div class="form-row modal-form-row">
           <div class="form-group flex-1">
-            <label for="topicNumQuestions">Quantidade de Questões</label>
+            <label for="topicNumQuestions">Quantidade de questões</label>
             <select id="topicNumQuestions">
               <option value="3">3 questões (rápido)</option>
               <option value="5" selected>5 questões (padrão)</option>
@@ -250,7 +291,7 @@
         </div>
 
         <div class="form-group modal-form-group">
-          <label for="topicContext">Foco ou Diretrizes Adicionais (Opcional)</label>
+          <label for="topicContext">Foco ou diretrizes adicionais (opcional)</label>
           <input type="text" id="topicContext" placeholder="Ex: Focar em tabela-verdade, questões estilo concurso público, etc.">
         </div>
       </div>
@@ -258,6 +299,7 @@
       <!-- Feedback de status comum -->
       <div id="uploadStatus" class="upload-status" hidden>
         <div class="upload-spinner"></div>
+        <div class="upload-skeleton" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
         <span id="uploadStatusText">Processando…</span>
       </div>
 
@@ -271,8 +313,8 @@
 
       <div class="modal-actions">
         <button id="cancelUpload" class="secondary" type="button">Cancelar</button>
-        <button id="confirmUpload" class="primary" type="button" disabled>Enviar Arquivo</button>
-        <button id="confirmGenerateTopic" class="primary" type="button" hidden>Gerar Simulado</button>
+        <button id="confirmUpload" class="primary" type="button" disabled>Enviar arquivo</button>
+        <button id="confirmGenerateTopic" class="primary" type="button" hidden>Gerar simulado</button>
       </div>
     </div>
   </div>
@@ -284,7 +326,7 @@
       
       <div class="results-header">
         <div class="results-badge" id="resultScoreBadge">Desempenho</div>
-        <h2 id="resultModalTitle" class="results-title">Gabarito & Resultado</h2>
+        <h2 id="resultModalTitle" class="results-title">Gabarito e resultado</h2>
         <div class="results-score-wrap">
           <span class="results-score" id="resultScoreNumber">0/0</span>
           <span class="results-percent" id="resultScorePercent">0%</span>
@@ -300,15 +342,15 @@
       <div class="results-footer">
         <div class="results-footer-left">
           <button id="btnRedoQuiz" class="btn-redo" type="button">
-            <span class="icon">↺</span> Refazer Tudo
+            <span class="icon">↺</span> Refazer tudo
           </button>
         </div>
         <div class="results-footer-right">
           <button id="btnTrainMistakes" class="btn-mistakes" type="button" hidden>
-            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg> Caderno de Erros (<span id="mistakesCount">0</span>)
+            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg> Caderno de erros (<span id="mistakesCount">0</span>)
           </button>
           <button id="btnRemixMistakes" class="btn-remix" type="button" hidden>
-            ↻ Gerar Novas Variações
+            ↻ Gerar novas variações
           </button>
           <button id="btnCloseResultModal" class="btn-close-result" type="button">
             Fechar
@@ -324,7 +366,7 @@
       <button class="modal-close" id="closeAboutModal" aria-label="Fechar">&times;</button>
       
       <div class="about-header">
-        <span class="about-badge">Propósito & Diferenciais</span>
+        <span class="about-badge">Propósito e diferenciais</span>
         <h2 id="aboutModalTitle" class="about-title">Por que o Quiz Study existe?</h2>
         <p class="about-tagline">“Da sua apostila ao simulado ativo em 5 segundos.”</p>
       </div>
@@ -406,7 +448,7 @@
   <div id="confirmSubmitModal" class="modal-overlay" hidden aria-modal="true" role="alertdialog" aria-labelledby="confirmSubmitTitle">
     <div class="modal modal--confirm-submit">
       <div class="confirm-submit-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg></div>
-      <h2 id="confirmSubmitTitle" class="confirm-submit-title">Finalizar Simulado?</h2>
+      <h2 id="confirmSubmitTitle" class="confirm-submit-title">Finalizar simulado?</h2>
       <p class="confirm-submit-msg" id="confirmSubmitMsg">
         Você respondeu <strong id="confirmSubmitAnswered">0</strong> de <strong id="confirmSubmitTotal">0</strong> questões.
       </p>
@@ -430,7 +472,7 @@
       
       <div class="catalog-header">
         <span class="catalog-badge">Biblioteca de Estudos</span>
-        <h2 id="catalogModalTitle" class="catalog-title">Explorar Simulados</h2>
+        <h2 id="catalogModalTitle" class="catalog-title">Explorar simulados</h2>
         <p class="catalog-subtitle">Escolha um simulado para treinar com foco total ou filtre por assunto.</p>
 
         <div class="catalog-search-wrap">
@@ -442,11 +484,77 @@
           <button type="button" class="catalog-tab-btn active" data-filter="all">Todos</button>
           <button type="button" class="catalog-tab-btn" data-filter="platform">Plataforma</button>
           <button type="button" class="catalog-tab-btn" data-filter="ai">Gerados por IA</button>
-          <button type="button" class="catalog-tab-btn" data-filter="custom">Meus Uploads</button>
+          <button type="button" class="catalog-tab-btn" data-filter="custom">Meus uploads</button>
         </div>
       </div>
 
       <div id="catalogList" class="catalog-grid"></div>
+    </div>
+  </div>
+
+  <!-- ── Modal de Acesso: conta grátis ou convidado (aparece só ao tentar uma ação) ── -->
+  <div id="accessModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="accessModalTitle" aria-describedby="accessModalText">
+    <div class="modal modal--access">
+      <button class="modal-close" id="closeAccessModal" aria-label="Fechar">&times;</button>
+      <span class="access-badge" id="accessModalBadge">Grátis</span>
+      <h2 id="accessModalTitle" class="access-title">Crie simulados com IA</h2>
+      <p id="accessModalText" class="access-text">Escolha como continuar. A conta grátis guarda seus simulados e seu histórico em qualquer dispositivo. No modo convidado você testa agora, sem cadastro.</p>
+
+      <div class="access-options" id="accessOptions">
+        <section class="access-option access-option--account" aria-labelledby="accessAccountTitle">
+          <div class="access-option-head">
+            <h3 id="accessAccountTitle" class="access-option-title">Conta grátis</h3>
+            <span class="access-option-tag">Recomendado</span>
+          </div>
+          <ul class="access-perks">
+            <li>Simulados salvos na sua conta</li>
+            <li>Arquivos de até 20 MB</li>
+            <li>Sem o limite diário do convidado</li>
+          </ul>
+          <a href="/register" class="primary access-cta" id="accessRegisterLink" data-auth-link="/register">Criar conta grátis</a>
+          <a href="/login" class="access-login-link" id="accessLoginLink" data-auth-link="/login">Já tenho conta</a>
+        </section>
+
+        <section class="access-option access-option--guest" id="accessGuestOption" aria-labelledby="accessGuestTitle">
+          <div class="access-option-head">
+            <h3 id="accessGuestTitle" class="access-option-title">Convidado</h3>
+          </div>
+          <ul class="access-perks">
+            <li><span id="accessGuestLimit">3</span> usos de IA a cada <span id="accessGuestWindow">24</span> horas</li>
+            <li>Simulados ficam só neste navegador</li>
+            <li>Arquivos de até 5 MB</li>
+          </ul>
+          <button id="accessGuestBtn" class="secondary access-cta" type="button">Continuar como convidado</button>
+        </section>
+      </div>
+
+      <p id="accessFeedback" class="form-feedback feedback-error" role="alert" hidden></p>
+    </div>
+  </div>
+
+  <!-- ── Modal Minha conta: cópia dos dados e exclusão (LGPD) ─────────────── -->
+  <div id="accountModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="accountModalTitle">
+    <div class="modal modal--access modal--access-compact">
+      <button class="modal-close" id="closeAccountModal" aria-label="Fechar">&times;</button>
+      <h2 id="accountModalTitle" class="access-title">Minha conta</h2>
+      <p class="access-text">Conectado como <strong id="accountUsername">você</strong>.</p>
+
+      <section class="account-section" aria-labelledby="accountDataTitle">
+        <h3 id="accountDataTitle" class="access-option-title">Seus dados</h3>
+        <p class="account-hint">Baixe uma cópia em JSON de tudo o que guardamos sobre você: conta, simulados e histórico.</p>
+        <a href="/api/account/export" class="secondary access-cta" id="accountExportLink" download="quiz-study-meus-dados.json">Baixar meus dados</a>
+      </section>
+
+      <section class="account-section account-section--danger" aria-labelledby="accountDeleteTitle">
+        <h3 id="accountDeleteTitle" class="access-option-title">Excluir conta</h3>
+        <p class="account-hint">Apaga a conta, os simulados privados e o histórico. Não é possível desfazer.</p>
+        <form id="deleteAccountForm" class="account-delete-form" novalidate>
+          <label for="deleteAccountPassword">Confirme sua senha</label>
+          <input type="password" id="deleteAccountPassword" autocomplete="current-password" required>
+          <p id="deleteAccountFeedback" class="form-feedback feedback-error" role="alert" hidden></p>
+          <button type="submit" class="access-cta btn-danger" id="deleteAccountBtn">Excluir minha conta</button>
+        </form>
+      </section>
     </div>
   </div>
 
@@ -468,7 +576,7 @@
       <button class="modal-close" id="closeCustomTimerModal" aria-label="Fechar">&times;</button>
       <div class="timer-modal-header">
         <span class="timer-modal-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg></span>
-        <h2 id="customTimerTitle" class="timer-modal-title">Definir Tempo do Simulado</h2>
+        <h2 id="customTimerTitle" class="timer-modal-title">Definir tempo do simulado</h2>
         <p class="timer-modal-subtitle">Escolha um tempo pré-definido ou digite a duração em minutos.</p>
       </div>
 
@@ -496,13 +604,13 @@
         <div id="customTimerFeedback" class="form-feedback feedback-error" hidden></div>
         <div class="modal-actions modal-actions--timer">
           <button id="cancelCustomTimer" class="secondary" type="button">Cancelar</button>
-          <button id="applyCustomTimer" class="primary" type="submit">Definir Tempo</button>
+          <button id="applyCustomTimer" class="primary" type="submit">Definir tempo</button>
         </div>
       </form>
     </div>
   </div>
 
   <script type="module" src="/web/modules/backdrop.js?v=7"></script>
-  <script type="module" src="/web/app.js?v=13"></script>
+  <script type="module" src="/web/app.js?v=16"></script>
 </body>
 </html>

@@ -10,8 +10,9 @@ from threading import Lock
 from api.database.connection import get_cursor
 from api.utils.config import DEBUG
 
-# Registros mais velhos que a maior janela em uso (1 h da cota de IA) já não
-# contam; 24 h dá folga. A limpeza é global para não acumular chaves de IPs antigos.
+# Registros mais velhos que a maior janela em uso (24 h da cota de IA do convidado)
+# já não contam. A limpeza é global para não acumular chaves de IPs antigos.
+# Qualquer janela nova maior que 24 h exige aumentar este valor.
 _RETENTION_SECONDS = 24 * 60 * 60
 _CLEANUP_PROBABILITY = 0.02
 
@@ -112,7 +113,11 @@ class RateLimitRepository:
         with self._lock:
             self._memory_storage[key].append((now, cost))
             if self._clean_counter % 100 == 0:
-                expired = [k for k, v in self._memory_storage.items() if not v or v[-1][0] <= cutoff]
+                # A limpeza é global: usa a retenção máxima, não a janela desta chave.
+                # Com a janela da chave atual (ex.: 60 s), chaves de janelas longas
+                # (cota de IA de 1 h, cota de convidado de 24 h) eram zeradas em memória.
+                retention_cutoff = now - _RETENTION_SECONDS
+                expired = [k for k, v in self._memory_storage.items() if not v or v[-1][0] <= retention_cutoff]
                 for k in expired:
                     del self._memory_storage[k]
 

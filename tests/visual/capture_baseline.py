@@ -12,7 +12,8 @@ Uso (com o app rodando, ex.: http://127.0.0.1:8000):
     python tests/visual/capture_baseline.py --browser "C:/caminho/para/chrome.exe"
     python tests/visual/capture_baseline.py --only home,login
 
-A home é capturada no modo convidado (/guest), então não precisa de login.
+A home é aberta a visitantes: "home-visitor" e "home-access" mostram a primeira
+visita (sem login) e o modal de acesso; as demais telas usam o modo convidado (/guest).
 Saída: design-baseline/<label>/<tela>-<dispositivo>-<tema>.png
 Não faz parte da suíte `unittest`; serve para comparar antes/depois.
 """
@@ -39,6 +40,8 @@ SCREENS = {
     "login": ("/login", None),
     "register": ("/register", None),
     "reset-password": ("/reset-password", None),
+    "home-visitor": ("/", None),
+    "home-access": ("/", "document.querySelector('#addQuizBtn')?.click()"),
     "home": ("/guest", None),
     "home-catalog": ("/guest", "document.querySelector('#btnOpenCatalog')?.click()"),
     "home-upload": ("/guest", "document.querySelector('#addQuizBtn')?.click()"),
@@ -285,6 +288,9 @@ def main() -> int:
                 for screen, (path, action) in screens.items():
                     out_file = out_dir / f"{screen}-{vp_name}-{theme}.png"
                     try:
+                        if path == "/":
+                            # Primeira visita: sem sessão de conta nem de convidado
+                            browser.call("Network.clearBrowserCookies")
                         if path == "/guest":
                             # Entra no modo convidado do mesmo jeito que o botão da tela de login
                             browser.goto(base + "/login")
