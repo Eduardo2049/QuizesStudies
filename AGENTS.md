@@ -14,7 +14,7 @@ Este documento é a referência primária e fixa de arquitetura, permissões, li
 | **Comportamento da tela, eventos, estado local, timer** | `web/app.js` | Backend `api/services/`<br>`api/repositories/` |
 | **Atalhos de teclado (hotkeys)** | `web/modules/shortcuts.js`<br>`web/app.js` | Arquivos Python da `api/` |
 | **Estatísticas e análise pedagógica do aluno** | `web/modules/stats.js` | Arquivos de upload ou banco |
-| **IA (Google Gemini / OpenRouter, prompts, limites)** | `api/services/ai_service.py` | `web/styles.css`<br>`api/repositories/` |
+| **IA (OpenRouter com modelos gratuitos, prompts, limites; Gemini comentado para o futuro)** | `api/services/ai_service.py` | `web/styles.css`<br>`api/repositories/` |
 | **Upload e leitura de arquivos (TXT, PDF, DOCX)** | `api/services/upload_service.py`<br>`api/utils/file_parser.py` | `api/services/auth_service.py`<br>`web/modules/` |
 | **Rotas da API, endpoints, cookies, rate limits** | `api/handlers/quiz_handler.py`<br>`api/middleware/http_middleware.py` | Frontend `web/styles.css`<br>Migrations |
 | **Autenticação, login, cadastro, senhas, tokens de sessão** | `api/services/auth_service.py`<br>`api/controllers/auth_controller.py`<br>`api/repositories/user_repository.py` | `api/utils/file_parser.py`<br>`api/services/ai_service.py` |

@@ -26,7 +26,7 @@ from api.services.ai_service import (
     normalize_language,
     AIServiceError,
 )
-from api.utils.config import OPENROUTER_API_KEY, GEMINI_API_KEY
+from api.utils.config import OPENROUTER_API_KEY
 from api.repositories.quiz_repository import QuizRepository
 from api.exceptions.quiz_exceptions import QuizAPIException, AuthOrGuestRequired
 
@@ -149,7 +149,7 @@ class UploadService:
         # Camada 2: Fallback para IA se o regex não encontrar questões válidas
         # (ex: TXT sem numeração, texto de estudo/resumo, perguntas livres)
         if not is_valid:
-            has_ai_key = bool(GEMINI_API_KEY or OPENROUTER_API_KEY)
+            has_ai_key = bool(OPENROUTER_API_KEY)
             if has_ai_key:
                 self._authorize_ai(created_by, ai_gate, "Este arquivo precisa ser estruturado pela IA.")
                 try:

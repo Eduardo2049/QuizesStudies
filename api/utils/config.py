@@ -29,29 +29,37 @@ DATABASE_URL = (
     or os.getenv("POSTGRES_PRISMA_URL")
 )
 
-# Provedores de Inteligência Artificial
-# 1. Google AI Studio (Gratuito direto do Google: 1.500 req/dia)
-GEMINI_API_KEY = (
-    os.getenv("GEMINI_API_KEY")
-    or os.getenv("GOOGLE_API_KEY")
-    or os.getenv("GEMINI_KEY")
-    or os.getenv("GOOGLE_AI_KEY")
-    or ""
-).strip()
-_raw_gemini_model = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest").strip()
-if _raw_gemini_model in ("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "google/gemini-2.5-flash", "gemini-flash-latest", ""):
-    GEMINI_MODEL = "gemini-flash-lite-latest"
-else:
-    GEMINI_MODEL = _raw_gemini_model
-GEMINI_BASE_URL = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai").strip()
-
-# 2. OpenRouter (Multi-provedor com créditos ou modelos gratuitos)
+# Provedor de Inteligência Artificial: OpenRouter, só com modelos gratuitos (id terminado em ":free").
+# Enquanto não houver faturamento, nenhum modelo pago é chamado.
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash").strip()
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").strip()
+# Modelos gratuitos preferidos, em ordem, separados por vírgula. Ids sem ":free" são ignorados.
+_DEFAULT_FREE_MODELS = (
+    "nvidia/nemotron-3.5-lightning:free,"
+    "nvidia/nemotron-3-ultra-550b-a55b:free,"
+    "nvidia/nemotron-3.5-super-vl:free"
+)
+OPENROUTER_FREE_MODELS = [
+    model.strip()
+    for model in (os.getenv("OPENROUTER_FREE_MODELS") or _DEFAULT_FREE_MODELS).split(",")
+    if model.strip().endswith(":free")
+]
+# O catálogo gratuito muda com frequência: com a descoberta ligada, o servidor consulta a lista
+# pública de modelos do OpenRouter (cache de 6 h), descarta os preferidos que saíram do ar e
+# usa os outros gratuitos como reserva.
+OPENROUTER_DISCOVER_FREE_MODELS = os.getenv("OPENROUTER_DISCOVER_FREE_MODELS", "true").lower() == "true"
 
-# 3. Provedor ativo ('google' | 'openrouter' | 'auto')
-AI_PROVIDER = os.getenv("AI_PROVIDER", "google" if GEMINI_API_KEY else "openrouter").strip().lower()
+# Google AI Studio (Gemini) — desativado por enquanto. Para voltar a usar no futuro:
+# descomente o bloco abaixo, o import em ai_service.py e o trecho "Google AI Studio" em _call_openrouter().
+# GEMINI_API_KEY = (
+#     os.getenv("GEMINI_API_KEY")
+#     or os.getenv("GOOGLE_API_KEY")
+#     or os.getenv("GEMINI_KEY")
+#     or os.getenv("GOOGLE_AI_KEY")
+#     or ""
+# ).strip()
+# GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest").strip()
+# GEMINI_BASE_URL = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai").strip()
 
 # Autenticação e Segurança
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
@@ -85,9 +93,14 @@ GUEST_AI_IP_LIMIT = _env_int("GUEST_AI_IP_LIMIT", 10, 1, 500)
 GUEST_AI_WINDOW_SECONDS = _env_int("GUEST_AI_WINDOW_HOURS", 24, 1, 24) * 60 * 60
 
 # Teto global de chamadas à IA por 24 h, somando todos os usuários (trava de emergência
-# contra a conta do provedor estourar). 0 desliga. O plano gratuito do Gemini tem limite
-# diário próprio; ajuste para ficar abaixo dele.
+# contra a conta do provedor estourar). 0 desliga. Os modelos gratuitos do OpenRouter têm
+# limite diário por conta (50 pedidos sem créditos comprados; 1.000 com pelo menos US$ 10
+# comprados); ajuste para ficar abaixo dele.
 AI_DAILY_CALL_LIMIT = _env_int("AI_DAILY_CALL_LIMIT", 1000, 0, 1_000_000)
+
+# Quantos modelos gratuitos tentar em um mesmo pedido antes de desistir (cada tentativa
+# conta no limite diário do OpenRouter).
+OPENROUTER_MAX_ATTEMPTS = _env_int("OPENROUTER_MAX_ATTEMPTS", 4, 1, 8)
 
 # Entrar com Google (OAuth). Vazio = botão escondido e rotas desligadas.
 # URI de redirecionamento a cadastrar no Google Cloud: <APP_URL>/api/auth/google/callback
