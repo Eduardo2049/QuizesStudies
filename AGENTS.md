@@ -21,6 +21,7 @@ Este documento é a referência primária e fixa de arquitetura, permissões, li
 | **Acesso sem login, modo convidado e cota gratuita de IA** | `api/services/guest_service.py`<br>`api/handlers/quiz_handler.py` (rotas `/api/guest/*`)<br>`web/app.js` (`checkAuth`, `openAccessModal`, `requireAiAccess`) | `api/repositories/quiz_repository.py`<br>`web/styles.css` |
 | **Termos, privacidade, 404, Minha conta (LGPD)** | `web/termos.html`<br>`web/privacidade.html`<br>`404.html` (na raiz, servido pela Vercel e pelo servidor)<br>`api/repositories/user_repository.py` (`export_user_data`, `delete_user_and_data`) | `api/services/ai_service.py` |
 | **Entrar com Google e importar simulados do convidado** | `api/services/google_auth_service.py`<br>`api/services/import_service.py`<br>`web/modules/auth_page.js` | `web/styles.css` |
+| **Idiomas da interface (PT/EN) e idioma da IA** | `web/modules/i18n.js`<br>`web/modules/i18n/en.js` (dicionário)<br>`web/modules/i18n-boot.js`<br>`api/services/ai_service.py` (`normalize_language`, campo `language`) | `api/repositories/`<br>`api/database/` |
 | **Regras de design (skill adotada)** | `.claude/skills/landing-page-design/SKILL.md`<br>`docs/DESIGN_SKILLS.md` | Pasta `api/` |
 | **Banco de dados, tabelas, consultas SQL, migrations** | `api/database/migrations.py`<br>`api/repositories/quiz_repository.py`<br>`api/repositories/user_repository.py` | Toda a pasta `web/` |
 | **Configuração de ambiente, portas, chaves de API** | `api/utils/config.py`<br>`.env.example` | Código de regras de negócio |
@@ -86,8 +87,9 @@ Referência completa: `docs/DESIGN_UPGRADE.md` e a skill de design adotada, trad
 - Somente Vanilla CSS/JS. Proibido Tailwind, Bootstrap, React/Vue, GSAP e ícones/fontes via CDN.
 - A CSP (`vercel.json` e `api/middleware/http_middleware.py`) só permite `'self'`: fontes ficam em `web/fonts/` (woff2 + `font-display: swap`) e ícones são SVG inline via `web/modules/icons.js`. Não usar emojis como ícones de interface.
 - Não alterar `package.json`, `Dockerfile`, `migrations.py` nem regras de negócio em `api/` por causa de mudanças visuais. Servir novos tipos estáticos exige apenas o mapeamento de `Content-Type` em `quiz_handler.py`.
-- Manter IDs, classes usadas por `app.js` e atributos `aria-*` existentes.
+- Manter IDs, classes usadas por `app.js` e atributos `aria-*` existentes (`tests/test_ui_contract.py` confere que os IDs usados pelo JS e as referências `for`/`aria-*` existem).
+- Idiomas: o português escrito no HTML e no JS é o texto-fonte. Todo texto visível novo (inclusive `title`, `placeholder`, `aria-label`, `alt`) precisa da tradução em `web/modules/i18n/en.js`, com a chave idêntica ao texto em português; trechos dinâmicos usam `{0}`, `{1}`. Conteúdo que não deve ser traduzido (questões, nomes de simulados) leva `translate="no"`. As rotas de geração, upload e remix recebem `language` (padrão `pt-BR`).
 - Contraste mínimo WCAG AA; respeitar `prefers-reduced-motion`; alvos de toque ≥ 44px no mobile; texto de rótulo ≥ 12px.
 - Usar os tokens de `:root` (cor, `--space-*`, `--text-*`, `--radius-*`, `--dur-*`) em vez de valores soltos.
 - Subir o `?v=` de `styles.css` e `app.js` nos HTMLs a cada mudança visual (cache de 1 dia).
-- Antes de concluir: `python -m unittest discover tests` e, se possível, `python tests/visual/capture_baseline.py --label after` (requer Playwright instalado).
+- Antes de concluir: `python -m unittest discover tests` e, se possível, `python tests/visual/capture_baseline.py --label after` (e `--lang en` para o inglês; requer Playwright instalado). O script também acusa rolagem lateral e alvos de toque menores que 44px.
