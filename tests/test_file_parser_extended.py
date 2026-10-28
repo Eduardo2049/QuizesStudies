@@ -179,7 +179,7 @@ Quarta alternativa: 7
         ]
 
         service = UploadService(repository=MagicMock())
-        with patch("api.services.upload_service.GEMINI_API_KEY", "dummy_key"):
+        with patch("api.services.upload_service.OPENROUTER_API_KEY", "dummy_key"):
             result = service.process_upload(
                 filename="prova_livre.txt",
                 content=b"Texto corrido sem numeracao nem alternativas padrao",
@@ -236,7 +236,7 @@ Quarta alternativa: 7
         ]
 
         service = UploadService(repository=MagicMock())
-        with patch("api.services.upload_service.GEMINI_API_KEY", "dummy_key"):
+        with patch("api.services.upload_service.OPENROUTER_API_KEY", "dummy_key"):
             result = service.process_upload(
                 filename="estudo_logica.txt",
                 content=b"Apostila de logica sem questoes formatadas",

@@ -164,12 +164,12 @@ class TestRateLimitingSecurityHardening(unittest.TestCase):
 
 
 class TestAIKeyConfiguration(unittest.TestCase):
-    """Valida suporte a Gemini sem exigir OpenRouter."""
+    """A IA funciona só com OPENROUTER_API_KEY e chama apenas modelos gratuitos."""
 
+    @patch("api.services.ai_service._check_daily_ai_budget")
     @patch("api.services.ai_service._get_http_session")
-    def test_generate_quiz_by_topic_with_gemini_only(self, mock_get_session):
-        """Geração por tema deve funcionar se apenas GEMINI_API_KEY estiver configurada."""
-        from api.services.ai_service import generate_quiz_by_topic
+    def test_generate_quiz_by_topic_with_openrouter_free_model(self, mock_get_session, _budget):
+        from api.services import ai_service
 
         mock_session = MagicMock()
         mock_resp = MagicMock()
@@ -178,7 +178,7 @@ class TestAIKeyConfiguration(unittest.TestCase):
         mock_resp.json.return_value = {
             "choices": [{
                 "message": {
-                    "content": '{"title": "Tema Gemini", "questions": [{"id": 1, "question": "Q1?", "options": ["A", "B"], "answer": 0, "explanation": "Exp"}]}'
+                    "content": '{"title": "Tema OpenRouter", "questions": [{"id": 1, "question": "Q1?", "options": ["A", "B"], "answer": 0, "explanation": "Exp"}]}'
                 }
             }],
             "usage": {"total_tokens": 120}
@@ -186,12 +186,12 @@ class TestAIKeyConfiguration(unittest.TestCase):
         mock_get_session.return_value = mock_session
         mock_session.post.return_value = mock_resp
 
-        with patch("api.services.ai_service.OPENROUTER_API_KEY", ""), \
-             patch("api.services.ai_service.GEMINI_API_KEY", "dummy_gemini_key"), \
-             patch("api.services.ai_service.AI_PROVIDER", "google"):
-            res = generate_quiz_by_topic(topic="História do Brasil", num_questions=1)
-            self.assertEqual(res["title"], "Tema Gemini")
-            self.assertEqual(len(res["questions"]), 1)
+        with patch.object(ai_service, "OPENROUTER_API_KEY", "dummy_openrouter_key"),              patch.object(ai_service, "OPENROUTER_DISCOVER_FREE_MODELS", False),              patch.object(ai_service, "OPENROUTER_FREE_MODELS", ["vendor/modelo-teste:free"]),              patch.dict(ai_service._model_cooldown, clear=True):
+            res = ai_service.generate_quiz_by_topic(topic="Tema exclusivo OpenRouter", num_questions=1)
+        self.assertEqual(res["title"], "Tema OpenRouter")
+        self.assertEqual(len(res["questions"]), 1)
+        sent_model = mock_session.post.call_args.kwargs["json"]["model"]
+        self.assertTrue(sent_model.endswith(":free"))
 
 
 if __name__ == "__main__":
