@@ -84,6 +84,16 @@ GUEST_AI_LIMIT = _env_int("GUEST_AI_LIMIT", 3, 0, 50)
 GUEST_AI_IP_LIMIT = _env_int("GUEST_AI_IP_LIMIT", 10, 1, 500)
 GUEST_AI_WINDOW_SECONDS = _env_int("GUEST_AI_WINDOW_HOURS", 24, 1, 24) * 60 * 60
 
+# Teto global de chamadas à IA por 24 h, somando todos os usuários (trava de emergência
+# contra a conta do provedor estourar). 0 desliga. O plano gratuito do Gemini tem limite
+# diário próprio; ajuste para ficar abaixo dele.
+AI_DAILY_CALL_LIMIT = _env_int("AI_DAILY_CALL_LIMIT", 1000, 0, 1_000_000)
+
+# Entrar com Google (OAuth). Vazio = botão escondido e rotas desligadas.
+# URI de redirecionamento a cadastrar no Google Cloud: <APP_URL>/api/auth/google/callback
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+
 # Cloudflare Tunnel
 CLOUDFLARE_TUNNEL_TOKEN = os.getenv("CLOUDFLARE_TUNNEL_TOKEN", "")
 

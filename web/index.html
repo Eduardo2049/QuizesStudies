@@ -16,7 +16,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/web/icons/favicon-16x16.png?v=2">
   <link rel="apple-touch-icon" sizes="180x180" href="/web/icons/apple-touch-icon.png?v=2">
   <link rel="shortcut icon" href="/web/icons/favicon.ico?v=2">
-  <link rel="stylesheet" href="/web/styles.css?v=22">
+  <link rel="stylesheet" href="/web/styles.css?v=24">
   <!-- Script de prevenção de FOUC de tema (execução imediata, bloqueante) -->
   <script src="/web/modules/theme-boot.js"></script>
   <!-- Vercel Web Analytics + Speed Insights (stubs de fila, bloqueantes, antes dos loaders) -->
@@ -55,6 +55,7 @@
               <span class="user-role-badge" id="userRoleBadge">Admin</span>
               <span class="user-name" id="userName">admin</span>
               <span id="guestAiChip" class="guest-ai-chip" role="status" hidden></span>
+              <button id="accountBtn" class="btn-auth-logout" type="button" title="Seus dados e exclusão da conta" hidden>Conta</button>
               <button id="logoutBtn" class="btn-auth-logout" type="button" title="Sair da conta">Sair</button>
               <span id="guestActions" class="guest-actions" hidden>
                 <a href="/login" class="guest-action-link" data-auth-link="/login">Entrar</a>
@@ -164,6 +165,16 @@
     </div>
   </main>
 
+  <footer class="site-footer">
+    <a href="/termos">Termos de uso</a>
+    <span aria-hidden="true">·</span>
+    <a href="/privacidade">Privacidade</a>
+    <span class="site-footer-account" data-show-for="user" hidden>
+      <span aria-hidden="true">·</span>
+      <button type="button" class="footer-link" id="footerAccountBtn">Minha conta</button>
+    </span>
+  </footer>
+
   <!-- ── Modal de Upload / Gerar Quiz ──────────────────────────────────── -->
   <div id="uploadModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="modalTitle">
     <div class="modal">
@@ -239,6 +250,13 @@
         <div class="form-group modal-form-group">
           <label for="topicInput">Tema ou assunto do simulado <span class="required">*</span></label>
           <input type="text" id="topicInput" placeholder="Ex: Raciocínio Lógico Proposicional, Python Básico, História do Brasil..." autocomplete="off">
+          <div class="topic-examples" role="group" aria-label="Temas de exemplo">
+            <span class="topic-examples-label">Experimente:</span>
+            <button type="button" class="topic-chip" data-topic="Juros simples e compostos">Juros compostos</button>
+            <button type="button" class="topic-chip" data-topic="Uso da crase na língua portuguesa">Crase</button>
+            <button type="button" class="topic-chip" data-topic="Lógica proposicional e tabela-verdade">Tabela-verdade</button>
+            <button type="button" class="topic-chip" data-topic="Direito constitucional: direitos e garantias fundamentais">Direitos fundamentais</button>
+          </div>
         </div>
 
         <div class="form-row modal-form-row">
@@ -281,6 +299,7 @@
       <!-- Feedback de status comum -->
       <div id="uploadStatus" class="upload-status" hidden>
         <div class="upload-spinner"></div>
+        <div class="upload-skeleton" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
         <span id="uploadStatusText">Processando…</span>
       </div>
 
@@ -513,6 +532,32 @@
     </div>
   </div>
 
+  <!-- ── Modal Minha conta: cópia dos dados e exclusão (LGPD) ─────────────── -->
+  <div id="accountModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="accountModalTitle">
+    <div class="modal modal--access modal--access-compact">
+      <button class="modal-close" id="closeAccountModal" aria-label="Fechar">&times;</button>
+      <h2 id="accountModalTitle" class="access-title">Minha conta</h2>
+      <p class="access-text">Conectado como <strong id="accountUsername">você</strong>.</p>
+
+      <section class="account-section" aria-labelledby="accountDataTitle">
+        <h3 id="accountDataTitle" class="access-option-title">Seus dados</h3>
+        <p class="account-hint">Baixe uma cópia em JSON de tudo o que guardamos sobre você: conta, simulados e histórico.</p>
+        <a href="/api/account/export" class="secondary access-cta" id="accountExportLink" download="quiz-study-meus-dados.json">Baixar meus dados</a>
+      </section>
+
+      <section class="account-section account-section--danger" aria-labelledby="accountDeleteTitle">
+        <h3 id="accountDeleteTitle" class="access-option-title">Excluir conta</h3>
+        <p class="account-hint">Apaga a conta, os simulados privados e o histórico. Não é possível desfazer.</p>
+        <form id="deleteAccountForm" class="account-delete-form" novalidate>
+          <label for="deleteAccountPassword">Confirme sua senha</label>
+          <input type="password" id="deleteAccountPassword" autocomplete="current-password" required>
+          <p id="deleteAccountFeedback" class="form-feedback feedback-error" role="alert" hidden></p>
+          <button type="submit" class="access-cta btn-danger" id="deleteAccountBtn">Excluir minha conta</button>
+        </form>
+      </section>
+    </div>
+  </div>
+
   <!-- ── Modal Genérico de Notificação / Alerta (substitui alert() nativo) ── -->
   <div id="noticeModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="noticeModalTitle">
     <div class="modal modal--notice">
@@ -566,6 +611,6 @@
   </div>
 
   <script type="module" src="/web/modules/backdrop.js?v=7"></script>
-  <script type="module" src="/web/app.js?v=14"></script>
+  <script type="module" src="/web/app.js?v=16"></script>
 </body>
 </html>

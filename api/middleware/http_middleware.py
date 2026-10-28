@@ -108,6 +108,34 @@ class HTTPMiddleware:
         return value if GuestService.is_valid_guest_id(value) else None
 
     @staticmethod
+    def is_cross_site_request(handler) -> bool:
+        """True quando um POST vem de outro site (defesa extra além do SameSite=Lax).
+
+        Navegadores enviam `Origin` em POSTs e `Sec-Fetch-Site`; clientes sem navegador
+        (curl, testes) não enviam nenhum dos dois e continuam funcionando. Origens de
+        ALLOWED_ORIGINS (CORS configurado) são aceitas.
+        """
+        from urllib.parse import urlparse
+        from api.utils.config import TRUST_PROXY
+
+        fetch_site = (handler.headers.get("Sec-Fetch-Site") or "").lower()
+        if fetch_site == "cross-site":
+            origin = handler.headers.get("Origin", "")
+            return origin not in ALLOWED_ORIGINS
+
+        origin = handler.headers.get("Origin")
+        if not origin or origin == "null":
+            return bool(origin)  # "null" (iframe sandbox, file://) é tratado como outro site
+        if origin in ALLOWED_ORIGINS:
+            return False
+
+        host = handler.headers.get("Host", "")
+        if TRUST_PROXY:
+            host = handler.headers.get("X-Forwarded-Host", host) or host
+        origin_host = urlparse(origin).netloc
+        return bool(host) and origin_host.lower() != host.split(",")[0].strip().lower()
+
+    @staticmethod
     def get_client_ip(handler) -> str:
         """
         Obtém o IP real do cliente.

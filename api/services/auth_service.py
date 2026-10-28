@@ -155,6 +155,28 @@ class AuthService:
             "role": user["role"],
         }
 
+    def export_account(self, user_id: int) -> dict:
+        """LGPD art. 18 (acesso e portabilidade): cópia dos dados da conta."""
+        data = self.repo.export_user_data(user_id)
+        if not data:
+            raise QuizAPIException("Conta não encontrada", 404)
+        return data
+
+    def delete_account(self, user: dict, password: str) -> None:
+        """LGPD art. 18 (eliminação): apaga a conta depois de confirmar a senha."""
+        if not user:
+            raise QuizAPIException("Autenticação necessária", 401)
+        if user.get("role") == "admin":
+            raise QuizAPIException(
+                "A conta de administrador não pode ser excluída por aqui. Use os scripts de manutenção.", 403
+            )
+        if not password:
+            raise QuizAPIException("Confirme sua senha para excluir a conta.", 400)
+        record = self.repo.find_by_username(user["username"])
+        if not record or not verify_password(password, record["salt"], record["password_hash"]):
+            raise QuizAPIException("Senha incorreta. A conta não foi excluída.", 403, "WRONG_PASSWORD")
+        self.repo.delete_user_and_data(user["id"])
+
     def validate_token(self, token: str) -> dict | None:
         """Valida se o token de sessão é válido e retorna o usuário consultando pelo hash."""
         if not token:

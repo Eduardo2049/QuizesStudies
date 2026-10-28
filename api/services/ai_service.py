@@ -22,8 +22,23 @@ from api.utils.config import (
     GEMINI_MODEL,
     GEMINI_BASE_URL,
     AI_PROVIDER,
+    AI_DAILY_CALL_LIMIT,
     DEBUG,
 )
+import sys
+
+# Mensagem única para o aluno quando a falha é de configuração ou de conta do provedor
+# (chave ausente/inválida, créditos): o detalhe vai só para o log do servidor.
+AI_UNAVAILABLE_MESSAGE = "A geração com IA está indisponível no momento. Tente novamente mais tarde."
+AI_DAILY_LIMIT_MESSAGE = "A IA atingiu o limite de uso de hoje na plataforma. Tente novamente amanhã."
+
+
+def _log_ops(msg: str) -> None:
+    """Log operacional (sempre ligado, vai para stderr): problemas que o dono precisa ver."""
+    try:
+        print(f"[ia] {msg}", file=sys.stderr)
+    except Exception:
+        pass
 
 _session = None
 
@@ -243,10 +258,12 @@ def _format_user_friendly_error(status_code: int, raw_text: str) -> str:
 
     if status_code == 404 or "no endpoints found" in lower_msg or "model not found" in lower_msg:
         return "O modelo de IA selecionado está indisponível no provedor no momento. Tente novamente em instantes."
-    if status_code == 401 or "unauthorized" in lower_msg or "invalid api key" in lower_msg:
-        return "A chave da API de inteligência artificial é inválida ou expirou. Verifique as configurações."
+    if status_code in (401, 403) or "unauthorized" in lower_msg or "invalid api key" in lower_msg:
+        _log_ops(f"provedor recusou a chave (HTTP {status_code}): verifique GEMINI_API_KEY/OPENROUTER_API_KEY")
+        return AI_UNAVAILABLE_MESSAGE
     if status_code == 402 or "credit" in lower_msg or "quota" in lower_msg or "balance" in lower_msg:
-        return "Créditos insuficientes ou limite de tokens atingido na conta de IA. Por favor, recarregue os créditos."
+        _log_ops(f"provedor sem créditos ou cota (HTTP {status_code}): recarregue a conta de IA")
+        return AI_UNAVAILABLE_MESSAGE
     if status_code == 429 or "rate limit" in lower_msg:
         return "Muitas requisições enviadas à inteligência artificial. Por favor, aguarde alguns segundos e tente novamente."
     if status_code >= 500:
@@ -295,6 +312,22 @@ def _log_ai(msg: str) -> None:
         print(safe_msg)
 
 
+def _check_daily_ai_budget() -> None:
+    """Teto global de chamadas à IA por 24 h (AI_DAILY_CALL_LIMIT; 0 desliga).
+
+    Trava de emergência contra uma conta de IA estourada: vale para todos os
+    usuários juntos e é contado no PostgreSQL, então serve entre instâncias.
+    """
+    if AI_DAILY_CALL_LIMIT <= 0:
+        return
+    allowed, _retry = rate_limit_repo.check_and_record(
+        "ai_global:calls", AI_DAILY_CALL_LIMIT, 24 * 60 * 60, cost=1
+    )
+    if not allowed:
+        _log_ops(f"teto diário global de {AI_DAILY_CALL_LIMIT} chamadas de IA atingido")
+        raise AIServiceError(AI_DAILY_LIMIT_MESSAGE)
+
+
 def _call_openrouter(
     messages: list[dict],
     temperature: float,
@@ -325,16 +358,13 @@ def _call_openrouter(
     provider_name = "Google AI Studio" if is_gemini_direct else "OpenRouter"
 
     if not api_key:
-        if is_gemini_direct:
-            raise AIServiceError(
-                "Chave do Google AI Studio não encontrada. "
-                "Adicione GEMINI_API_KEY no arquivo .env."
-            )
-        else:
-            raise AIServiceError(
-                "Chave da OpenRouter não encontrada. "
-                "Adicione OPENROUTER_API_KEY no arquivo .env ou configure GEMINI_API_KEY."
-            )
+        _log_ops(
+            "nenhuma chave configurada para " + provider_name
+            + " (defina GEMINI_API_KEY ou OPENROUTER_API_KEY)"
+        )
+        raise AIServiceError(AI_UNAVAILABLE_MESSAGE)
+
+    _check_daily_ai_budget()
 
     session = _get_http_session()
     base_url = GEMINI_BASE_URL if is_gemini_direct else OPENROUTER_BASE_URL
@@ -393,7 +423,8 @@ def _call_openrouter(
             _log_ai(f"[IA AVISO] Falha de conexao com '{model}': {e}")
             if idx < len(candidates) - 1:
                 continue
-            raise AIServiceError("Falha na conexao com o servico de inteligencia artificial. Verifique sua rede e tente novamente.")
+            _log_ops(f"falha de conexão com o provedor: {e}")
+            raise AIServiceError("Não foi possível falar com o serviço de IA agora. Tente novamente em instantes.")
 
     if last_raw:
         raise AIServiceError(_format_user_friendly_error(last_status, last_raw))
@@ -451,9 +482,8 @@ def generate_answer_key(questions: list[dict], client_ip: str | None = None) -> 
         if not isinstance(parsed, list):
             raise ValueError("Esperado array JSON")
     except (json.JSONDecodeError, ValueError) as e:
-        raise AIServiceError(
-            f"O modelo não retornou JSON válido. Resposta: {content[:300]}"
-        )
+        _log_ops(f"gabarito: resposta da IA fora do formato JSON ({e})")
+        raise AIServiceError("A IA respondeu em um formato inesperado. Tente novamente.")
 
     # Normalizar e validar cada item
     result = []
@@ -527,10 +557,8 @@ def generate_quiz_by_topic(
         AIQuotaExceededError: Se o IP exceder a cota de tokens por hora
     """
     if not (GEMINI_API_KEY or OPENROUTER_API_KEY):
-        raise AIServiceError(
-            "Nenhuma chave de IA configurada. "
-            "Adicione GEMINI_API_KEY ou OPENROUTER_API_KEY no arquivo .env."
-        )
+        _log_ops("nenhuma chave de IA configurada (defina GEMINI_API_KEY ou OPENROUTER_API_KEY)")
+        raise AIServiceError(AI_UNAVAILABLE_MESSAGE)
 
     clean_topic = topic.strip() if topic else ""
     if not clean_topic:
@@ -628,7 +656,8 @@ def generate_quiz_by_topic(
         else:
             raise ValueError("Formato JSON retornado não reconhecido")
     except (json.JSONDecodeError, ValueError) as e:
-        raise AIServiceError(f"O modelo não retornou JSON válido para o quiz: {e}")
+        _log_ops(f"quiz por tema: resposta da IA fora do formato JSON ({e})")
+        raise AIServiceError("A IA respondeu em um formato inesperado. Tente novamente.")
 
     if not isinstance(raw_questions, list) or not raw_questions:
         raise AIServiceError("A IA não gerou nenhuma questão para o tema solicitado.")
@@ -758,7 +787,8 @@ def remix_questions_by_ai(questions: list[dict], client_ip: str | None = None) -
         if not isinstance(raw_list, list):
             raw_list = next((v for v in parsed.values() if isinstance(v, list)), [])
     except Exception as e:
-        raise AIServiceError(f"A IA não retornou JSON válido para as variações: {e}")
+        _log_ops(f"variações: resposta da IA fora do formato JSON ({e})")
+        raise AIServiceError("A IA respondeu em um formato inesperado. Tente novamente.")
 
     remixed = []
     for idx, item in enumerate(raw_list, start=1):
@@ -890,7 +920,8 @@ def parse_and_structure_questions_with_ai(
         if not isinstance(raw_list, list):
             raise ValueError("Esperado array de questões no JSON retornado.")
     except Exception as e:
-        raise AIServiceError(f"A IA não retornou JSON válido ao estruturar o arquivo: {e}")
+        _log_ops(f"estruturar arquivo: resposta da IA fora do formato JSON ({e})")
+        raise AIServiceError("A IA respondeu em um formato inesperado. Tente novamente.")
 
     structured_questions = []
     for idx, item in enumerate(raw_list, start=1):

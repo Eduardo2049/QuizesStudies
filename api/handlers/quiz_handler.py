@@ -5,17 +5,21 @@ import io
 import json
 import os
 import re
+import secrets
 import time
 from collections import defaultdict, deque
 from threading import Lock
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
-from api.utils.config import WEB_DIR, DEBUG, COOKIE_SECURE, AUTO_MIGRATE, PORT
+from api.utils.config import ROOT, WEB_DIR, DEBUG, COOKIE_SECURE, AUTO_MIGRATE, PORT
 from api.controllers.quiz_controller import QuizController, UploadController
 from api.controllers.auth_controller import AuthController
 from api.exceptions.quiz_exceptions import QuizAPIException, AuthOrGuestRequired
 from api.services.guest_service import guest_service, GUEST_COOKIE_MAX_AGE
+from api.services.ai_service import AIQuotaExceededError
+from api.services.import_service import QuizImportService
+from api.services import google_auth_service as google_auth
 from api.middleware.http_middleware import HTTPMiddleware, ResponseFormatter
 from api.utils.validators import AnswerValidator
 from api.repositories.rate_limit_repository import rate_limit_repo, RateLimitRepository
@@ -339,6 +343,80 @@ class QuizHandler(BaseHTTPRequestHandler):
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
+            # 0.12 API: Provedores de login disponíveis (o botão do Google só aparece se configurado)
+            if request.path == "/api/auth/providers":
+                status, data = ResponseFormatter.success({"google": google_auth.google_enabled()})
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
+            # 0.13 Entrar com Google: início (redireciona para o consentimento)
+            if request.path == "/api/auth/google/start":
+                if not google_auth.google_enabled():
+                    self._redirect("/login?erro=google_indisponivel")
+                    return
+                allowed, retry_after = _rl_auth.check_handler(self, "GET:/api/auth/google/start")
+                if not allowed:
+                    self._redirect("/login?erro=muitas_tentativas")
+                    return
+                state, cookie_value = google_auth.build_state_cookie_value(query.get("next", ["/"])[0])
+                state_cookie = HTTPMiddleware._cookie(
+                    google_auth.STATE_COOKIE, cookie_value, COOKIE_SECURE, google_auth.STATE_MAX_AGE
+                )
+                self._redirect(google_auth.authorization_url(state, self._google_redirect_uri()), [state_cookie])
+                return
+
+            # 0.14 Entrar com Google: retorno
+            if request.path == "/api/auth/google/callback":
+                from http.cookies import SimpleCookie
+                jar = SimpleCookie()
+                try:
+                    jar.load(self.headers.get("Cookie", ""))
+                except Exception:
+                    pass
+                morsel = jar.get(google_auth.STATE_COOKIE)
+                expected_state, next_path = google_auth.parse_state_cookie(morsel.value if morsel else None)
+                clear_state = HTTPMiddleware._cookie(google_auth.STATE_COOKIE, None, COOKIE_SECURE, 0)
+                received_state = query.get("state", [""])[0]
+                if not expected_state or not secrets.compare_digest(expected_state, received_state):
+                    self._redirect("/login?erro=google_sessao", [clear_state])
+                    return
+                try:
+                    result = google_auth.GoogleAuthService(self.auth_controller.service).login_with_code(
+                        query.get("code", [""])[0], self._google_redirect_uri()
+                    )
+                except QuizAPIException as e:
+                    code = "google_email" if e.error_code == "GOOGLE_EMAIL_UNVERIFIED" else "google_falhou"
+                    self._redirect(f"/login?erro={code}", [clear_state])
+                    return
+                self._redirect(next_path, [
+                    clear_state,
+                    HTTPMiddleware.session_cookie(result["token"], COOKIE_SECURE, 7 * 24 * 60 * 60),
+                    HTTPMiddleware.guest_cookie(None, COOKIE_SECURE, 0),
+                ])
+                return
+
+            # 0.15 API: Cópia dos dados da conta (LGPD: acesso e portabilidade)
+            if request.path == "/api/account/export":
+                allowed, retry_after = _rl_auth.check_handler(self, "GET:/api/account/export")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
+                user = self._require_authenticated_user()
+                export = self.auth_controller.service.export_account(user["id"])
+                export = json.loads(json.dumps(export, default=str))
+                status, data = ResponseFormatter.success(export, "Cópia dos seus dados")
+                body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Disposition", 'attachment; filename="quiz-study-meus-dados.json"')
+                self.send_header("Content-Length", str(len(body)))
+                HTTPMiddleware.add_cors_headers(self)
+                HTTPMiddleware.add_security_headers(self)
+                HTTPMiddleware.add_cache_headers(self, cache=False)
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
             # 0.2 API: Situação do modo convidado e cota gratuita de IA
             if request.path == "/api/guest/status":
                 allowed, retry_after = _rl_read.check_handler(self, "GET:/api/guest/status")
@@ -483,6 +561,15 @@ class QuizHandler(BaseHTTPRequestHandler):
                     HTTPMiddleware.send_json_response(self, status, data)
                 return
 
+            # 3.2.2 Páginas institucionais (termos e privacidade)
+            static_pages = {
+                "/termos": "termos.html", "/termos.html": "termos.html",
+                "/privacidade": "privacidade.html", "/privacidade.html": "privacidade.html",
+            }
+            if request.path in static_pages:
+                self._send_html_file(WEB_DIR / static_pages[request.path], 200)
+                return
+
             # 3.3 Servir Favicon na raiz (/favicon.ico, /favicon.svg, /favicon.png, /apple-touch-icon.png)
             if request.path in ("/favicon.ico", "/favicon.svg", "/favicon.png", "/apple-touch-icon.png"):
                 fav_name = request.path.lstrip("/").split("?", 1)[0]
@@ -541,10 +628,15 @@ class QuizHandler(BaseHTTPRequestHandler):
                     HTTPMiddleware.send_json_response(self, status, data)
                     return
 
-            # 5. Rota não encontrada
+            # 5. Rota não encontrada: página 404 para quem navega, JSON para a API
+            if not request.path.startswith("/api/"):
+                self._send_html_file(ROOT / "404.html", 404)  # na raiz: a Vercel serve 404.html do diretório de saída
+                return
             status, data = ResponseFormatter.not_found(f"Rota {request.path} não encontrada")
             HTTPMiddleware.send_json_response(self, status, data)
 
+        except AIQuotaExceededError as e:
+            _rate_limited_response(self, max(1, int(getattr(e, "retry_after", 60))))
         except QuizAPIException as e:
             status, data = ResponseFormatter.error(e.message, e.error_code, e.status_code)
             HTTPMiddleware.send_json_response(self, status, data, clear_cookie=(e.status_code == 401))
@@ -562,6 +654,14 @@ class QuizHandler(BaseHTTPRequestHandler):
 
         if request.path.startswith("/api/"):
             _ensure_migrations()
+
+        # POST vindo de outro site (CSRF): recusado antes de qualquer efeito
+        if HTTPMiddleware.is_cross_site_request(self):
+            status, data = ResponseFormatter.error(
+                "Requisição de outra origem recusada.", "CROSS_SITE_REQUEST", 403
+            )
+            HTTPMiddleware.send_json_response(self, status, data)
+            return
 
         try:
             # ── 0. Rotas de Autenticação ───────────────────────────────────────
@@ -604,7 +704,13 @@ class QuizHandler(BaseHTTPRequestHandler):
                     _rl_login_fail_user_ip.reset(fail_user_ip_key)
 
                 token = response["data"].get("token")
-                status, data = ResponseFormatter.success(response["data"], response["message"])
+                # O navegador usa só o cookie HttpOnly: o token não vai no JSON para que um
+                # script injetado na página não consiga lê-lo. Clientes de API (testes de
+                # carga, integrações) pedem o token explicitamente com "return_token": true.
+                response_data = dict(response["data"])
+                if payload.get("return_token") is not True:
+                    response_data.pop("token", None)
+                status, data = ResponseFormatter.success(response_data, response["message"])
                 cookies = [
                     HTTPMiddleware.session_cookie(token, COOKIE_SECURE, 7 * 24 * 60 * 60),
                     # Ao entrar na conta, a sessão de convidado deixa de valer
@@ -632,6 +738,42 @@ class QuizHandler(BaseHTTPRequestHandler):
                 token = HTTPMiddleware.get_auth_token(self)
                 response = self.auth_controller.logout(token)
                 status, data = ResponseFormatter.success(response["data"], response["message"])
+                cookies = [
+                    HTTPMiddleware.session_cookie(None, COOKIE_SECURE, 0),
+                    HTTPMiddleware.guest_cookie(None, COOKIE_SECURE, 0),
+                ]
+                HTTPMiddleware.send_json_response(self, status, data, set_cookie=cookies)
+                return
+
+            # ── 0.04 Levar os simulados do convidado para a conta ───────────────
+            if request.path == "/api/quizzes/import":
+                allowed, retry_after = _rl_upload.check_handler(self, "POST:/api/quizzes/import")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
+                user = self._require_authenticated_user()
+                payload = self._read_json_body(max_bytes=2 * 1024 * 1024)
+                if payload is None:
+                    return
+                result = QuizImportService(self.quiz_controller.repository).import_for_user(
+                    user["id"], payload.get("quizzes")
+                )
+                status, data = ResponseFormatter.created(result, f"{result['imported']} simulado(s) salvo(s) na sua conta")
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
+            # ── 0.05 Excluir conta (LGPD: eliminação dos dados) ─────────────────
+            if request.path == "/api/account/delete":
+                allowed, retry_after = _rl_auth.check_handler(self, "POST:/api/account/delete")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
+                user = self._require_authenticated_user()
+                payload = self._read_json_body()
+                if payload is None:
+                    return
+                self.auth_controller.service.delete_account(user, str(payload.get("password", "")))
+                status, data = ResponseFormatter.success({"deleted": True}, "Conta e dados excluídos")
                 cookies = [
                     HTTPMiddleware.session_cookie(None, COOKIE_SECURE, 0),
                     HTTPMiddleware.guest_cookie(None, COOKIE_SECURE, 0),
@@ -830,6 +972,8 @@ class QuizHandler(BaseHTTPRequestHandler):
             status, data = ResponseFormatter.not_found(f"Rota {request.path} não encontrada")
             HTTPMiddleware.send_json_response(self, status, data)
 
+        except AIQuotaExceededError as e:
+            _rate_limited_response(self, max(1, int(getattr(e, "retry_after", 60))))
         except QuizAPIException as e:
             status, data = ResponseFormatter.error(e.message, e.error_code, e.status_code)
             HTTPMiddleware.send_json_response(self, status, data, clear_cookie=(e.status_code == 401))
@@ -938,6 +1082,39 @@ class QuizHandler(BaseHTTPRequestHandler):
             response["data"].get("message")
         )
         HTTPMiddleware.send_json_response(self, status, data)
+
+    def _redirect(self, location: str, cookies: list[str] | None = None) -> None:
+        self.send_response(302)
+        self.send_header("Location", location)
+        for cookie in cookies or []:
+            self.send_header("Set-Cookie", cookie)
+        HTTPMiddleware.add_security_headers(self)
+        HTTPMiddleware.add_cache_headers(self, cache=False)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def _google_redirect_uri(self) -> str:
+        """URI de retorno do Google: APP_URL quando definido (recomendado em produção)."""
+        host = self.headers.get("Host", f"localhost:{PORT}")
+        proto = "https" if (self.headers.get("X-Forwarded-Proto") == "https" or COOKIE_SECURE) else "http"
+        base = os.getenv("APP_URL", f"{proto}://{host}").rstrip("/")
+        return f"{base}/api/auth/google/callback"
+
+    def _send_html_file(self, path, status_code: int = 200):
+        """Envia uma página HTML de web/ com os cabeçalhos de segurança."""
+        if not path.is_file():
+            status, data = ResponseFormatter.not_found("Página não encontrada")
+            HTTPMiddleware.send_json_response(self, status, data)
+            return
+        content = path.read_bytes()
+        self.send_response(status_code)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(content)))
+        HTTPMiddleware.add_cors_headers(self)
+        HTTPMiddleware.add_security_headers(self)
+        HTTPMiddleware.add_cache_headers(self, cache=False)
+        self.end_headers()
+        self.wfile.write(content)
 
     def _get_current_user_or_none(self):
         """Retorna o usuário autenticado ou None se não houver token válido (convidado)."""

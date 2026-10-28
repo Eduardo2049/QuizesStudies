@@ -54,12 +54,19 @@ A skill fala em classes do Tailwind; aqui o Tailwind é proibido (`AGENTS.md`). 
 | Regra | Situação atual | Recomendação |
 |---|---|---|
 | B4 "nunca usar gradiente no fundo" | O fundo animado em WebGL (`web/modules/backdrop.js`) e `--bg-gradient` são parte da identidade documentada em `AGENTS.md`. | Manter por enquanto (decisão anterior do projeto vence). Se adotar a skill à risca, trocar por fundo chapado (`--paper`) e deixar a animação só na futura landing page. |
-| B4 cores de fundo no escuro | `--paper` #171717 e `--card-solid` #1c1c20. | Migrar para #181818 e #1F1F1F (diferença imperceptível, alinha com a skill). |
-| B1 fonte mono em rótulos | Eyebrow, rótulos de formulário e abas usam DM Mono em caixa alta. | Trocar para Manrope 12px/600 com `letter-spacing` leve; manter mono só em números. |
-| B1 tamanhos fora da escala | Há valores soltos (13px, 15px, 19px, 22px, `clamp()`). | Auditoria em lotes por tela, descendo para o degrau abaixo. |
 | B11 seção de tagline obrigatória | Vale para landing pages; a home é uma ferramenta. | Criar uma landing page própria (ex.: `/sobre`) com hero, benefícios, como funciona, FAQ e a seção de tagline. |
 
 ---
+
+## 3.1 Já aplicado em todo o CSS
+
+- Tamanhos de fonte em px ajustados para o degrau da escala logo abaixo (77 valores; `clamp()` e tamanhos abaixo de 12px de ícones ficaram).
+- Todas as transições com a curva `--ease-out` e duração mínima de 200ms.
+- Rótulos, abas e selos em Manrope e caixa normal; DM Mono só em números (cronômetro, contadores, paleta de questões, notas).
+- Fundos do tema escuro na paleta da skill (#181818 e #1F1F1F).
+- Um botão cheio por tela: "Explorar simulados", "Criar simulado" e "Finalizar simulado" (barra) em contorno.
+- Esqueleto no formato das questões no lugar do spinner de geração.
+- Páginas de termos, privacidade e 404 próprias; rodapé com links legais.
 
 ## 4. Checklist de PR (resumo da skill para este projeto)
 

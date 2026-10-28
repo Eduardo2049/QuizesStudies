@@ -11,6 +11,7 @@ Fluxo:
 7. Retorna dados do quiz criado
 """
 import re
+import sys
 from typing import Callable
 from api.utils.file_parser import (
     extract_text,
@@ -128,7 +129,8 @@ class UploadService:
         except ImportError as e:
             raise QuizAPIException(str(e), 500)
         except Exception as e:
-            raise QuizAPIException(f"Erro ao ler o arquivo: {e}", 400)
+            print(f"[upload] falha ao extrair texto: {e!r}", file=sys.stderr)
+            raise QuizAPIException("Não foi possível ler o arquivo. Confira se ele não está corrompido ou protegido por senha.", 400)
 
         if not text.strip():
             raise QuizAPIException("O arquivo está vazio ou não contém texto extraível", 400)
@@ -159,16 +161,19 @@ class UploadService:
                         f"Não foi possível estruturar as questões do arquivo automaticamente com IA: {e}",
                         422
                     )
+                except QuizAPIException:
+                    raise
                 except Exception as e:
+                    print(f"[upload] falha inesperada ao estruturar com IA: {e!r}", file=sys.stderr)
                     raise QuizAPIException(
-                        f"Erro na análise do documento por IA: {e}",
+                        "Não foi possível analisar o documento com IA. Tente novamente.",
                         422
                     )
 
             if not is_valid:
                 raise QuizAPIException(
                     f"Arquivo com formato não reconhecido: {error_msg}. "
-                    "Verifique se o arquivo possui questões e alternativas ou configure a IA (GEMINI_API_KEY / OPENROUTER_API_KEY) para interpretação automática.",
+                    "Confira se o arquivo tem questões numeradas e alternativas (a, b, c, d).",
                     400
                 )
 
@@ -204,7 +209,7 @@ class UploadService:
         missing = [q["id"] for q in questions if q.get("answer") is None]
         if missing:
             raise QuizAPIException(
-                f"Questões sem gabarito: {missing}. Configure GEMINI_API_KEY ou OPENROUTER_API_KEY para gerar automaticamente.",
+                f"Questões sem gabarito: {missing}. Inclua o gabarito no arquivo ou tente novamente mais tarde.",
                 422
             )
 
