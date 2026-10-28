@@ -1,6 +1,6 @@
 """
-Serviço de IA via OpenRouter.
-Gera gabarito automaticamente para quizzes sem resposta definida.
+Serviço de IA via OpenRouter, usando só modelos gratuitos (":free").
+Gera simulados, gabaritos e variações de questões.
 """
 import copy
 import hashlib
@@ -16,21 +16,22 @@ from urllib3.util.retry import Retry
 from api.repositories.rate_limit_repository import rate_limit_repo, RateLimitRepository
 from api.utils.config import (
     OPENROUTER_API_KEY,
-    OPENROUTER_MODEL,
     OPENROUTER_BASE_URL,
-    GEMINI_API_KEY,
-    GEMINI_MODEL,
-    GEMINI_BASE_URL,
-    AI_PROVIDER,
+    OPENROUTER_FREE_MODELS,
+    OPENROUTER_DISCOVER_FREE_MODELS,
+    OPENROUTER_MAX_ATTEMPTS,
     AI_DAILY_CALL_LIMIT,
     DEBUG,
 )
+# Google AI Studio desativado por enquanto (ver api/utils/config.py):
+# from api.utils.config import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_BASE_URL
 import sys
 
 # Mensagem única para o aluno quando a falha é de configuração ou de conta do provedor
 # (chave ausente/inválida, créditos): o detalhe vai só para o log do servidor.
 AI_UNAVAILABLE_MESSAGE = "A geração com IA está indisponível no momento. Tente novamente mais tarde."
 AI_DAILY_LIMIT_MESSAGE = "A IA atingiu o limite de uso de hoje na plataforma. Tente novamente amanhã."
+AI_BUSY_MESSAGE = "Os modelos gratuitos de IA estão ocupados agora. Tente novamente em alguns instantes."
 
 
 def _log_ops(msg: str) -> None:
@@ -256,10 +257,16 @@ def _format_user_friendly_error(status_code: int, raw_text: str) -> str:
 
     lower_msg = (msg or raw_text).lower()
 
+    if "data policy" in lower_msg:
+        _log_ops(
+            "o OpenRouter recusou os modelos gratuitos pela política de dados da conta: "
+            "libere os endpoints gratuitos em https://openrouter.ai/settings/privacy"
+        )
+        return AI_UNAVAILABLE_MESSAGE
     if status_code == 404 or "no endpoints found" in lower_msg or "model not found" in lower_msg:
         return "O modelo de IA selecionado está indisponível no provedor no momento. Tente novamente em instantes."
     if status_code in (401, 403) or "unauthorized" in lower_msg or "invalid api key" in lower_msg:
-        _log_ops(f"provedor recusou a chave (HTTP {status_code}): verifique GEMINI_API_KEY/OPENROUTER_API_KEY")
+        _log_ops(f"provedor recusou a chave (HTTP {status_code}): verifique OPENROUTER_API_KEY")
         return AI_UNAVAILABLE_MESSAGE
     if status_code == 402 or "credit" in lower_msg or "quota" in lower_msg or "balance" in lower_msg:
         _log_ops(f"provedor sem créditos ou cota (HTTP {status_code}): recarregue a conta de IA")
@@ -270,36 +277,6 @@ def _format_user_friendly_error(status_code: int, raw_text: str) -> str:
         return "O provedor de inteligência artificial está temporariamente instável. Tente novamente em instantes."
 
     return "Não foi possível comunicar com o serviço de inteligência artificial. Tente novamente mais tarde."
-
-
-def _get_model_candidates(configured_model: str) -> list[str]:
-    """
-    Retorna uma lista ordenada de modelos para tentar.
-    Se o modelo configurado falhar (404/sem endpoint), tenta alternativas conhecidas.
-    """
-    candidates = []
-    if configured_model and configured_model.strip():
-        candidates.append(configured_model.strip())
-
-    is_gemini = "gemini" in (configured_model or "").lower()
-    if is_gemini:
-        fallbacks = [
-            "google/gemini-2.5-flash",
-            "google/gemini-2.5-flash-lite",
-            "openai/gpt-4o-mini",
-        ]
-    else:
-        fallbacks = [
-            "openai/gpt-4o-mini",
-            "google/gemini-2.5-flash",
-            "google/gemini-2.5-flash-lite",
-        ]
-
-    for fb in fallbacks:
-        if fb not in candidates:
-            candidates.append(fb)
-
-    return candidates
 
 
 def _log_ai(msg: str) -> None:
@@ -328,6 +305,108 @@ def _check_daily_ai_budget() -> None:
         raise AIServiceError(AI_DAILY_LIMIT_MESSAGE)
 
 
+# ─── Modelos gratuitos do OpenRouter ──────────────────────────────────────────
+# Só ids terminados em ":free" são usados: assim nenhum pedido gera cobrança.
+_FREE_SUFFIX = ":free"
+_FREE_MODELS_TTL = 6 * 60 * 60        # catálogo consultado no máximo a cada 6 h
+_FREE_MODELS_RETRY = 5 * 60           # se a consulta falhar, tenta de novo em 5 min
+_MIN_CONTEXT_TOKENS = 32_000          # documentos chegam a ~40 mil caracteres + resposta
+# Modelos gratuitos que não servem para gerar questões (reranqueadores, moderação, código...)
+_UNSUITABLE_MODEL_HINTS = ("rerank", "safety", "guard", "embed", "moderation", "coder", "-code")
+# Pausa de um modelo depois de falhar, para os próximos pedidos irem direto a outro
+_COOLDOWN_RATE_LIMIT = 60
+_COOLDOWN_UNAVAILABLE = 15 * 60
+
+_free_models_lock = Lock()
+_free_models_cache: dict = {"fetched_at": 0.0, "models": {}}
+_model_cooldown: dict[str, float] = {}
+
+
+def _discover_free_models() -> dict[str, set]:
+    """Modelos ":free" que o OpenRouter oferece agora -> parâmetros suportados.
+
+    Usa a lista pública de modelos (não gasta cota). Em caso de falha devolve o
+    último resultado conhecido, ou {} para cair só na lista configurada.
+    """
+    if not OPENROUTER_DISCOVER_FREE_MODELS:
+        return {}
+    now = time.time()
+    with _free_models_lock:
+        if now - _free_models_cache["fetched_at"] < _FREE_MODELS_TTL:
+            return _free_models_cache["models"]
+
+    try:
+        resp = _get_http_session().get(f"{OPENROUTER_BASE_URL.rstrip('/')}/models", timeout=8)
+        resp.raise_for_status()
+        catalog = resp.json().get("data") or []
+    except Exception as e:  # noqa: BLE001 - qualquer falha cai na lista configurada
+        _log_ops(f"não foi possível consultar os modelos gratuitos do OpenRouter ({e})")
+        with _free_models_lock:
+            _free_models_cache["fetched_at"] = now - _FREE_MODELS_TTL + _FREE_MODELS_RETRY
+            return _free_models_cache["models"]
+
+    found: dict[str, set] = {}
+    for model in catalog:
+        model_id = str(model.get("id") or "")
+        if not model_id.endswith(_FREE_SUFFIX):
+            continue
+        if any(hint in model_id.lower() for hint in _UNSUITABLE_MODEL_HINTS):
+            continue
+        if int(model.get("context_length") or 0) < _MIN_CONTEXT_TOKENS:
+            continue
+        outputs = (model.get("architecture") or {}).get("output_modalities") or ["text"]
+        if "text" not in outputs:
+            continue
+        found[model_id] = set(model.get("supported_parameters") or [])
+
+    with _free_models_lock:
+        _free_models_cache["fetched_at"] = now
+        if found:
+            _free_models_cache["models"] = found
+        return _free_models_cache["models"]
+
+
+def _free_model_candidates() -> list[tuple[str, set | None]]:
+    """Ordem de tentativa: preferidos que ainda existem, depois os outros gratuitos.
+
+    Modelos em pausa (falharam há pouco) vão para o fim. Cada item traz os
+    parâmetros suportados, ou None quando a descoberta não está disponível.
+    """
+    discovered = _discover_free_models()
+    preferred = [m for m in OPENROUTER_FREE_MODELS if m.endswith(_FREE_SUFFIX)]
+    if discovered:
+        ordered = [m for m in preferred if m in discovered]
+        ordered += [m for m in discovered if m not in ordered]
+    else:
+        ordered = preferred
+
+    now = time.time()
+    ready = [m for m in ordered if _model_cooldown.get(m, 0) <= now]
+    paused = [m for m in ordered if m not in ready]
+    return [(m, discovered.get(m) if discovered else None) for m in (ready + paused)[:OPENROUTER_MAX_ATTEMPTS]]
+
+
+def _pause_model(model: str, seconds: int) -> None:
+    _model_cooldown[model] = time.time() + seconds
+
+
+def parse_json_response(content: str):
+    """Lê o JSON da resposta da IA, tolerando o que modelos gratuitos costumam acrescentar:
+    blocos <think>, cercas ```json e texto antes ou depois do objeto."""
+    text = re.sub(r"<think>.*?</think>", "", content or "", flags=re.S).strip()
+    fenced = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.S)
+    if fenced:
+        text = fenced.group(1).strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        starts = [i for i in (text.find("{"), text.find("[")) if i != -1]
+        end = max(text.rfind("}"), text.rfind("]"))
+        if not starts or end <= min(starts):
+            raise
+        return json.loads(text[min(starts):end + 1])
+
+
 def _call_openrouter(
     messages: list[dict],
     temperature: float,
@@ -335,100 +414,95 @@ def _call_openrouter(
     timeout: int = 75,
 ) -> tuple[str, str, dict]:
     """
-    Chama a API de Inteligência Artificial:
-    - Se AI_PROVIDER for 'google'/'gemini' ou se GEMINI_API_KEY estiver configurada,
-      conecta diretamente ao Google AI Studio (100% gratuito).
-    - Caso contrário ou se AI_PROVIDER for 'openrouter', conecta via OpenRouter.
+    Chama o OpenRouter usando só modelos gratuitos, tentando o próximo quando um
+    falha (limite por minuto, fora do ar, resposta vazia ou sem JSON válido).
+    `timeout` é o tempo total do pedido, somando todas as tentativas.
     Retorna (content, used_model, usage).
     """
-    force_google = AI_PROVIDER in ("google", "gemini")
-    force_openrouter = AI_PROVIDER == "openrouter"
+    if not OPENROUTER_API_KEY:
+        _log_ops("nenhuma chave de IA configurada (defina OPENROUTER_API_KEY)")
+        raise AIServiceError(AI_UNAVAILABLE_MESSAGE)
 
-    if force_openrouter:
-        is_gemini_direct = False
-        api_key = OPENROUTER_API_KEY
-    elif force_google:
-        is_gemini_direct = True
-        api_key = GEMINI_API_KEY
-    else:
-        # Padrão: prioriza Google AI Studio direto se chave estiver presente
-        is_gemini_direct = bool(GEMINI_API_KEY)
-        api_key = GEMINI_API_KEY if is_gemini_direct else OPENROUTER_API_KEY
+    # Google AI Studio (desativado por enquanto). Para reativar, descomente as variáveis em
+    # config.py e use a mesma API compatível com OpenAI:
+    #   url = f"{GEMINI_BASE_URL.rstrip('/')}/chat/completions"
+    #   headers = {"Authorization": f"Bearer {GEMINI_API_KEY}", "Content-Type": "application/json"}
+    #   payload = {"model": GEMINI_MODEL, "messages": messages, "temperature": temperature,
+    #              "max_tokens": max_tokens, "response_format": {"type": "json_object"}}
 
-    provider_name = "Google AI Studio" if is_gemini_direct else "OpenRouter"
-
-    if not api_key:
-        _log_ops(
-            "nenhuma chave configurada para " + provider_name
-            + " (defina GEMINI_API_KEY ou OPENROUTER_API_KEY)"
-        )
+    candidates = _free_model_candidates()
+    if not candidates:
+        _log_ops("nenhum modelo gratuito configurado ou disponível (veja OPENROUTER_FREE_MODELS)")
         raise AIServiceError(AI_UNAVAILABLE_MESSAGE)
 
     _check_daily_ai_budget()
 
     session = _get_http_session()
-    base_url = GEMINI_BASE_URL if is_gemini_direct else OPENROUTER_BASE_URL
-    url = f"{base_url.rstrip('/')}/chat/completions"
-
+    url = f"{OPENROUTER_BASE_URL.rstrip('/')}/chat/completions"
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://ifuture-study.app",
+        "X-Title": "IFuture Study",
     }
-    if not is_gemini_direct:
-        headers["HTTP-Referer"] = "https://ifuture-study.app"
-        headers["X-Title"] = "IFuture Study"
 
-    if is_gemini_direct:
-        model = (GEMINI_MODEL or "gemini-flash-lite-latest").removeprefix("google/")
-        if model in ("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest", ""):
-            model = "gemini-flash-lite-latest"
-        candidates = [model]
-        if "gemini-3.5-flash-lite" not in candidates:
-            candidates.append("gemini-3.5-flash-lite")
-    else:
-        candidates = [OPENROUTER_MODEL or "google/gemini-2.5-flash"]
-
-    last_status = 500
+    deadline = time.monotonic() + timeout
+    last_status = 0
     last_raw = ""
 
-    for idx, model in enumerate(candidates):
+    for model, params in candidates:
+        remaining = deadline - time.monotonic()
+        if remaining < 5:
+            break
         payload = {
             "model": model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
-            "response_format": {"type": "json_object"},
         }
+        # Só pede JSON estruturado a quem declara suporte; sem a lista, confia no prompt
+        if params and ("response_format" in params or "structured_outputs" in params):
+            payload["response_format"] = {"type": "json_object"}
+
         try:
-            _log_ai(f"[IA] Conectando ao {provider_name} (Modelo: '{model}')...")
-            resp = session.post(url, json=payload, headers=headers, timeout=timeout)
-            raw = resp.text
-            last_status = resp.status_code
-            last_raw = raw
+            _log_ai(f"[IA] OpenRouter: tentando '{model}'...")
+            resp = session.post(url, json=payload, headers=headers, timeout=remaining)
+        except requests.exceptions.RequestException as e:
+            _log_ai(f"[IA AVISO] Falha de conexão com '{model}': {e}")
+            _pause_model(model, _COOLDOWN_RATE_LIMIT)
+            continue
 
-            if resp.ok:
+        raw = resp.text
+        last_status, last_raw = resp.status_code, raw
+
+        if resp.ok:
+            try:
                 data = resp.json()
-                content = data["choices"][0]["message"]["content"]
-                usage = data.get("usage") or {}
-                _log_ai(f"[IA] Sucesso com {provider_name} (Modelo: '{model}') | Tokens: {usage}")
-                return content, model, usage
-
-            if idx < len(candidates) - 1:
-                _log_ai(f"[IA AVISO] Modelo '{model}' retornou {resp.status_code}. Tentando '{candidates[idx+1]}'...")
+                content = data["choices"][0]["message"].get("content") or ""
+                parse_json_response(content)
+            except (ValueError, KeyError, IndexError, TypeError) as e:
+                # Modelo respondeu, mas vazio, cortado ou fora do formato: tenta o próximo
+                _log_ai(f"[IA AVISO] '{model}' respondeu fora do formato JSON ({e})")
                 continue
+            usage = data.get("usage") or {}
+            _log_ai(f"[IA] Sucesso com '{model}' | Tokens: {usage}")
+            return content, model, usage
 
+        lower_raw = raw.lower()
+        if resp.status_code == 429 and ("per-day" in lower_raw or "per day" in lower_raw):
+            # Limite diário da conta: os outros modelos gratuitos também recusariam
+            _log_ops("limite diário de modelos gratuitos do OpenRouter atingido")
+            raise AIServiceError(AI_DAILY_LIMIT_MESSAGE)
+        if resp.status_code in (401, 402, 403) or "data policy" in lower_raw:
+            # Problema da conta (chave, créditos, privacidade): trocar de modelo não resolve
             raise AIServiceError(_format_user_friendly_error(resp.status_code, raw))
 
-        except requests.exceptions.RequestException as e:
-            _log_ai(f"[IA AVISO] Falha de conexao com '{model}': {e}")
-            if idx < len(candidates) - 1:
-                continue
-            _log_ops(f"falha de conexão com o provedor: {e}")
-            raise AIServiceError("Não foi possível falar com o serviço de IA agora. Tente novamente em instantes.")
+        _log_ai(f"[IA AVISO] '{model}' retornou {resp.status_code}; tentando o próximo")
+        _pause_model(model, _COOLDOWN_RATE_LIMIT if resp.status_code == 429 else _COOLDOWN_UNAVAILABLE)
 
-    if last_raw:
-        raise AIServiceError(_format_user_friendly_error(last_status, last_raw))
-    raise AIServiceError("Não foi possível conectar ao provedor de inteligência artificial.")
+    if last_status in (429, 0) or last_status >= 500 or not last_raw:
+        raise AIServiceError(AI_BUSY_MESSAGE)
+    raise AIServiceError(_format_user_friendly_error(last_status, last_raw))
 
 
 def _unpack_call_result(res) -> tuple[str, str, dict]:
@@ -462,7 +536,7 @@ def generate_answer_key(questions: list[dict], client_ip: str | None = None) -> 
         messages=[{"role": "user", "content": prompt}],
         temperature=0.1,
         max_tokens=max_tokens,
-        timeout=35,  # Gemini Flash Lite responde em <10s; 35s = margem segura
+        timeout=60,  # tempo total, somando as tentativas em modelos gratuitos
     )
     content, used_model, usage = _unpack_call_result(call_res)
 
@@ -472,7 +546,7 @@ def generate_answer_key(questions: list[dict], client_ip: str | None = None) -> 
     # Parsear a resposta JSON do LLM
     try:
         # O LLM pode retornar o array direto ou dentro de um objeto
-        parsed = json.loads(content)
+        parsed = parse_json_response(content)
         if isinstance(parsed, dict):
             # Tentar extrair array de dentro do objeto
             parsed = next(
@@ -581,8 +655,8 @@ def generate_quiz_by_topic(
         AIServiceError: Se falhar a comunicação ou o modelo não gerar questões válidas
         AIQuotaExceededError: Se o IP exceder a cota de tokens por hora
     """
-    if not (GEMINI_API_KEY or OPENROUTER_API_KEY):
-        _log_ops("nenhuma chave de IA configurada (defina GEMINI_API_KEY ou OPENROUTER_API_KEY)")
+    if not OPENROUTER_API_KEY:
+        _log_ops("nenhuma chave de IA configurada (defina OPENROUTER_API_KEY)")
         raise AIServiceError(AI_UNAVAILABLE_MESSAGE)
 
     clean_topic = topic.strip() if topic else ""
@@ -659,7 +733,7 @@ def generate_quiz_by_topic(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.5,
         max_tokens=max_tokens,
-        timeout=75,  # Geração completa: timeout de 75s para suportar volumes maiores
+        timeout=75,  # tempo total, somando as tentativas em modelos gratuitos
     )
     content, used_model, usage = _unpack_call_result(call_res)
 
@@ -667,7 +741,7 @@ def generate_quiz_by_topic(
         print(f"🤖 IA Quiz Gerado [{used_model}]:\n{content[:300]}")
 
     try:
-        parsed = json.loads(content)
+        parsed = parse_json_response(content)
         if isinstance(parsed, list):
             raw_questions = parsed
             title = f"Quiz: {clean_topic.title()}"
@@ -743,7 +817,7 @@ def generate_quiz_by_topic(
     if not valid_questions:
         raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
 
-    provider_name = "Google AI Studio" if AI_PROVIDER in ("google", "gemini") or GEMINI_API_KEY else "OpenRouter"
+    provider_name = "OpenRouter"
     result = {
         "title": str(title).strip(),
         "topic": clean_topic,
@@ -808,12 +882,12 @@ def remix_questions_by_ai(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.6,
         max_tokens=max_tokens,
-        timeout=35,  # Remix de erros: mesmo prazo do gabarito
+        timeout=60,  # tempo total, somando as tentativas em modelos gratuitos
     )
     content, used_model, usage = _unpack_call_result(call_res)
 
     try:
-        parsed = json.loads(content)
+        parsed = parse_json_response(content)
         raw_list = parsed.get("questions") if isinstance(parsed, dict) else parsed
         if not isinstance(raw_list, list):
             raw_list = next((v for v in parsed.values() if isinstance(v, list)), [])
@@ -946,7 +1020,7 @@ def parse_and_structure_questions_with_ai(
         _log_ai(f"🤖 IA [{used_model}] estruturou documento:\n{content[:400]}")
 
     try:
-        parsed = json.loads(content)
+        parsed = parse_json_response(content)
         raw_list = parsed.get("questions") if isinstance(parsed, dict) else parsed
         if not isinstance(raw_list, list):
             raw_list = next((v for v in parsed.values() if isinstance(v, list)), [])

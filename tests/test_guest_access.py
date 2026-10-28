@@ -325,7 +325,7 @@ class TestGuestAccessHTTP(unittest.TestCase):
 
     def test_visitor_upload_that_needs_ai_asks_for_access(self):
         body, headers = self._multipart("resumo.txt", "Texto corrido de estudo sem questões numeradas.")
-        with patch("api.services.upload_service.GEMINI_API_KEY", "fake-key"):
+        with patch("api.services.upload_service.OPENROUTER_API_KEY", "fake-key"):
             status, _, content = self._request("/api/upload", method="POST", raw_body=body, headers=headers)
         self.assertEqual(status, 401)
         self.assertEqual(self._json(content)["error"], "AUTH_REQUIRED")
@@ -338,7 +338,7 @@ class TestGuestAccessHTTP(unittest.TestCase):
             {"id": 1, "section": "Geral", "question": "Pergunta?", "options": ["a", "b", "c", "d"], "answer": 2,
              "context": ""},
         ]
-        with patch("api.services.upload_service.GEMINI_API_KEY", "fake-key"), \
+        with patch("api.services.upload_service.OPENROUTER_API_KEY", "fake-key"), \
              patch("api.services.upload_service.parse_and_structure_questions_with_ai", return_value=generated):
             status, _, content = self._request("/api/upload", method="POST", raw_body=body, headers=headers)
         self.assertEqual(status, 201)

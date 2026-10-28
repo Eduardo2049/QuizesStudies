@@ -83,7 +83,7 @@ class TestHttpCacheAndEtag(unittest.TestCase):
             ],
             "usage": {"total_tokens": 150},
             "model": "gemini-test",
-            "provider": "Google AI Studio",
+            "provider": "OpenRouter",
         }
 
         # Popula o cache para o tema 'Revolução Francesa'
@@ -94,7 +94,7 @@ class TestHttpCacheAndEtag(unittest.TestCase):
 
         with patch("api.services.ai_service._call_openrouter") as mock_call, \
              patch("api.services.ai_service.check_ai_token_quota"), \
-             patch("api.services.ai_service.GEMINI_API_KEY", "fake_key"):
+             patch("api.services.ai_service.OPENROUTER_API_KEY", "fake_key"):
 
             # Primeira chamada: simula retorno da API
             mock_call.return_value = (
