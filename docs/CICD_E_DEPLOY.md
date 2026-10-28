@@ -69,8 +69,8 @@ Acesse **Settings > Environment Variables** no painel da Vercel e cadastre as va
 | `DATABASE_URL` | String de conexão do PostgreSQL de produção | String do PostgreSQL de homolog/dev |
 | `ADMIN_USERNAME` | Nome seguro do administrador | `admin` |
 | `ADMIN_PASSWORD` | Senha forte e exclusiva | Senha de homologação |
-| `AI_PROVIDER` | `google` | `google` |
-| `GEMINI_API_KEY` | Chave de API Google AI Studio de produção | Chave de homolog/dev |
+| `OPENROUTER_API_KEY` | Chave do OpenRouter de produção (só modelos `:free`) | Chave de homolog/dev |
+| `AI_DAILY_CALL_LIMIT` | Abaixo do limite diário gratuito do OpenRouter (ex.: `40` sem créditos) | `40` |
 | `COOKIE_SECURE` | `true` | `true` |
 | `DEBUG` | `false` | `false` |
 

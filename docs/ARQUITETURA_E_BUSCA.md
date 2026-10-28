@@ -24,8 +24,7 @@ graph TD
     UploadService --> AIService
     UploadService --> QuizRepo
 
-    AIService -->|API| GoogleGemini[Google AI Studio / Gemini]
-    AIService -->|API| OpenRouter[OpenRouter API]
+    AIService -->|API, só modelos :free| OpenRouter[OpenRouter API]
 
     UserRepo --> DB[(PostgreSQL / SQLite)]
     QuizRepo --> DB

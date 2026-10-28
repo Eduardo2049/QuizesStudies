@@ -26,14 +26,11 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/quiz_study
-      # IA — Google Gemini (provedor recomendado)
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-flash-lite-latest}
-      AI_PROVIDER: ${AI_PROVIDER:-google}
-      AI_TOKEN_QUOTA_PER_HOUR: ${AI_TOKEN_QUOTA_PER_HOUR:-50000}
-      # IA — OpenRouter (fallback multi-provedor)
+      # IA — OpenRouter, só modelos gratuitos (Google AI Studio desativado por enquanto)
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-google/gemini-2.5-flash}
+      OPENROUTER_FREE_MODELS: ${OPENROUTER_FREE_MODELS:-}
+      AI_TOKEN_QUOTA_PER_HOUR: ${AI_TOKEN_QUOTA_PER_HOUR:-50000}
+      AI_DAILY_CALL_LIMIT: ${AI_DAILY_CALL_LIMIT:-40}
       # Servidor e Segurança
       PORT: 8000
       DEBUG: ${DEBUG:-false}

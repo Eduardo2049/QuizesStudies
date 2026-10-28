@@ -21,7 +21,7 @@ O **Quiz Study** resolve isso unindo a extração instantânea de conteúdo à *
 | Critério / Ferramenta | Quiz Study | Quizlet | QConcursos / Gran Cursos | Anki |
 |---|:---:|:---:|:---:|:---:|
 | **Geração Instantânea por Material Próprio** | **Sim (PDF, DOCX, TXT)** | Não (Manual ou listas públicas) | Não (Apenas banco próprio de bancas) | Não (Manual card a card) |
-| **Geração de Simulado por Tema via IA** | **Sim (Google Gemini / OpenRouter)** | Limitado (em planos pagos) | Não | Não nativo |
+| **Geração de Simulado por Tema via IA** | **Sim (OpenRouter, modelos gratuitos)** | Limitado (em planos pagos) | Não | Não nativo |
 | **Caderno de Erros com Mutação IA** | **Sim (Gera variações inéditas)** | Não (Apenas repete o card) | Não (Filtra questões estáticas) | Não (Repete o mesmo card) |
 | **Explicação Didática Passo a Passo** | **Sim (Imediata via IA)** | Raras (Geralmente apenas definição) | Sim (Fórum / Comentários de profs) | Apenas se o usuário tiver escrito |
 | **Experiência Limpa e Sem Fricção** | **Sim (Modo foco + cronômetro)** | Não (Gameficado/Anúncios) | Não (Poluído de propagandas e fórum) | Interface crua e curva alta |
@@ -57,10 +57,11 @@ Edite o `.env`:
 | `ALLOWED_ORIGINS` | Não | Lista separada por vírgulas de origens CORS permitidas |
 | `COOKIE_SECURE` | Não | Padrão `true`; use `false` apenas no desenvolvimento HTTP |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Para Tunnel | Token do Cloudflare Zero Trust para expor via túnel HTTPS |
-| `GEMINI_API_KEY` | Opção 1 IA (Recomendado) | Chave gratuita direta do [Google AI Studio](https://aistudio.google.com) (1.500 req/dia) |
-| `GEMINI_MODEL` | Não | Modelo Google Gemini (padrão: `gemini-flash-lite-latest`) |
-| `OPENROUTER_API_KEY` | Opção 2 IA | Chave do [OpenRouter](https://openrouter.ai) para geração multi-provedor |
-| `OPENROUTER_MODEL` | Não | Modelo OpenRouter (padrão: `google/gemini-2.5-flash`) |
+| `OPENROUTER_API_KEY` | Para IA | Chave do [OpenRouter](https://openrouter.ai). Só modelos gratuitos (`:free`) são usados; libere-os em *Settings → Privacy* |
+| `OPENROUTER_FREE_MODELS` | Não | Modelos gratuitos preferidos, em ordem, separados por vírgula |
+| `OPENROUTER_DISCOVER_FREE_MODELS` | Não | Padrão `true`: descobre os modelos gratuitos disponíveis e usa como reserva |
+| `OPENROUTER_MAX_ATTEMPTS` | Não | Modelos tentados por pedido antes de desistir (padrão: `4`) |
+| `AI_DAILY_CALL_LIMIT` | Não | Teto diário de chamadas de IA; deixe abaixo do limite gratuito do OpenRouter (50/dia sem créditos) |
 | `AI_TOKEN_QUOTA_PER_HOUR` | Não | Cota de tokens estimados por hora por IP (padrão: `50000`) |
 | `AI_DAILY_CALL_LIMIT` | Não | Teto global de chamadas à IA a cada 24 h, somando todos os usuários (padrão: `1000`; `0` desliga). Trava de emergência contra a conta do provedor estourar |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Não | Liga o botão "Entrar com Google". Redirect URI: `<APP_URL>/api/auth/google/callback` (defina `APP_URL` em produção) |
@@ -136,7 +137,7 @@ semgrep scan --config auto .
    - Implementação de `RateLimiter` genérico em [`api/handlers/quiz_handler.py`](file:///c:/Users/eduardo.asousa/Projetos/Pessoal/QuizesStudies/api/handlers/quiz_handler.py) protegendo rotas críticas (`/api/auth/*`, `/api/upload`, `/api/quiz/generate`).
    - Resolução confiável do IP de origem seguindo a cadeia segura: `CF-Connecting-IP` → primeiro IP confiável de `X-Forwarded-For` → endereço de socket (`client_address`).
 4. **Cota de Proteção de Tokens de IA por IP (`AI_TOKEN_QUOTA_PER_HOUR`)**:
-   - Limite configurável de tokens consumidos por hora por IP (padrão: **50.000 tokens/hora**, ajustável no `.env`), impedindo o esgotamento malicioso de cotas do Gemini / OpenRouter.
+   - Limite configurável de tokens consumidos por hora por IP (padrão: **50.000 tokens/hora**, ajustável no `.env`), impedindo o esgotamento malicioso da cota do OpenRouter.
 5. **Cabeçalhos de Segurança HTTP e HSTS**:
    - Aplicação de `Strict-Transport-Security` (HSTS com `max-age=63072000; includeSubDomains; preload`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy` e `Referrer-Policy`.
 6. **Validação Rigorosa de Payloads**:
@@ -173,7 +174,7 @@ Envie um arquivo nos formatos suportados:
 - **`.pdf`** — documento PDF (extração automática de texto via `pdfplumber`)
 - **`.docx`** — documento Word (via `python-docx`)
 
-Se o arquivo **não contiver gabarito**, as respostas e justificativas são geradas automaticamente via IA (`OPENROUTER_API_KEY` ou Gemini). Cada questão pode ter de 2 a N alternativas.
+Se o arquivo **não contiver gabarito**, as respostas e justificativas são geradas automaticamente via IA (`OPENROUTER_API_KEY`, modelos gratuitos). Cada questão pode ter de 2 a N alternativas.
 
 #### Formato de questões aceito em arquivos
 

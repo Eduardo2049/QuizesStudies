@@ -53,8 +53,8 @@ jobs:
           DATABASE_URL: "postgresql://ci_user:ci_password@localhost:5432/quiz_study_test"
           ADMIN_USERNAME: "admin"
           ADMIN_PASSWORD: "ci-test-password-123"
-          AI_PROVIDER: "google"
-          GEMINI_API_KEY: "fake-key-for-tests"
+          OPENROUTER_API_KEY: "fake-key-for-tests"
+          OPENROUTER_DISCOVER_FREE_MODELS: "false"
           QUIZ_DB_INTEGRATION: "1"
         run: |
           python -m unittest discover tests -v
