@@ -44,6 +44,7 @@ class _FreeModelsTestCase(unittest.TestCase):
             patch.object(ai_service, "OPENROUTER_DISCOVER_FREE_MODELS", True),
             patch.dict(ai_service._free_models_cache, {"fetched_at": 0.0, "models": {}}),
             patch.dict(ai_service._model_cooldown, clear=True),
+            patch.object(ai_service, "_reasoning_required", set()),
         ]
         for p in patches:
             p.start()
@@ -175,7 +176,7 @@ class TestResponseFormat(_FreeModelsTestCase):
 
 class TestReasoning(_FreeModelsTestCase):
 
-    def test_reasoning_models_get_low_effort_and_extra_tokens(self):
+    def test_reasoning_is_turned_off_for_models_that_reason(self):
         self.session.get.return_value = _catalog(
             _model("pensa/modelo:free", params=("reasoning",)), _model("direto/modelo:free"),
         )
@@ -183,10 +184,23 @@ class TestReasoning(_FreeModelsTestCase):
         with patch.object(ai_service, "OPENROUTER_FREE_MODELS", ["pensa/modelo:free", "direto/modelo:free"]):
             self.call()
         thinking, direct = (c.kwargs["json"] for c in self.session.post.call_args_list)
-        self.assertEqual(thinking["reasoning"], {"effort": "low", "exclude": True})
-        self.assertGreater(thinking["max_tokens"], 100)
+        self.assertEqual(thinking["reasoning"], {"effort": "none", "exclude": True})
+        self.assertEqual(thinking["max_tokens"], 100)
         self.assertNotIn("reasoning", direct)
-        self.assertEqual(direct["max_tokens"], 100)
+
+    def test_model_that_requires_reasoning_is_retried_with_low_effort(self):
+        self.session.get.return_value = _catalog(_model("obrigado/raciocinar:free", params=("reasoning",)))
+        self.session.post.side_effect = [
+            _response(400, raw='{"error": {"message": "Reasoning is mandatory for this endpoint and cannot be disabled"}}'),
+            _response(200, VALID_JSON),
+        ]
+        with patch.object(ai_service, "OPENROUTER_FREE_MODELS", ["obrigado/raciocinar:free"]):
+            _content, model, _usage = self.call()
+        first, second = (c.kwargs["json"] for c in self.session.post.call_args_list)
+        self.assertEqual(model, "obrigado/raciocinar:free")
+        self.assertEqual(first["reasoning"]["effort"], "none")
+        self.assertEqual(second["reasoning"], {"effort": "low", "exclude": True})
+        self.assertGreater(second["max_tokens"], 100)
 
     def test_zdr_account_restriction_is_not_retried(self):
         self.session.post.side_effect = [

@@ -317,12 +317,13 @@ _UNSUITABLE_MODEL_HINTS = ("rerank", "safety", "guard", "embed", "moderation", "
 # Pausa de um modelo depois de falhar, para os próximos pedidos irem direto a outro
 _COOLDOWN_RATE_LIMIT = 60
 _COOLDOWN_UNAVAILABLE = 15 * 60
-# Folga no max_tokens de modelos que raciocinam (o esforço "low" usa ~20% do limite)
+# Folga no max_tokens de modelos que não deixam desligar o raciocínio (esforço "low" ≈ 20%)
 _REASONING_TOKEN_HEADROOM = 1.5
 
 _free_models_lock = Lock()
 _free_models_cache: dict = {"fetched_at": 0.0, "models": {}}
 _model_cooldown: dict[str, float] = {}
+_reasoning_required: set[str] = set()  # modelos que recusaram reasoning effort "none"
 
 
 def _discover_free_models() -> dict[str, set]:
@@ -453,7 +454,9 @@ def _call_openrouter(
     last_status = 0
     last_raw = ""
 
-    for model, params in candidates:
+    queue = list(candidates)
+    while queue:
+        model, params = queue.pop(0)
         remaining = deadline - time.monotonic()
         if remaining < 5:
             break
@@ -467,11 +470,14 @@ def _call_openrouter(
         if params and ("response_format" in params or "structured_outputs" in params):
             payload["response_format"] = {"type": "json_object"}
         # Os modelos gratuitos atuais raciocinam antes de responder, e o raciocínio gasta o
-        # mesmo max_tokens da resposta: sem limite, o JSON sai cortado ou vazio. Esforço baixo,
-        # raciocínio fora da resposta e uma folga no limite evitam isso.
+        # mesmo max_tokens da resposta: com ele ligado, o JSON sai vazio ou cortado. Desliga o
+        # raciocínio; quem não permite desligar recebe esforço baixo e folga no limite.
         if params is None or "reasoning" in params:
-            payload["reasoning"] = {"effort": "low", "exclude": True}
-            payload["max_tokens"] = int(max_tokens * _REASONING_TOKEN_HEADROOM)
+            if model in _reasoning_required:
+                payload["reasoning"] = {"effort": "low", "exclude": True}
+                payload["max_tokens"] = int(max_tokens * _REASONING_TOKEN_HEADROOM)
+            else:
+                payload["reasoning"] = {"effort": "none", "exclude": True}
 
         try:
             _log_ai(f"[IA] OpenRouter: tentando '{model}'...")
@@ -498,6 +504,11 @@ def _call_openrouter(
             return content, model, usage
 
         lower_raw = raw.lower()
+        if resp.status_code == 400 and "reasoning" in lower_raw and model not in _reasoning_required:
+            # Modelo não aceita desligar o raciocínio: repete o mesmo modelo com esforço baixo
+            _reasoning_required.add(model)
+            queue.insert(0, (model, params))
+            continue
         if resp.status_code == 429 and ("per-day" in lower_raw or "per day" in lower_raw):
             # Limite diário da conta: os outros modelos gratuitos também recusariam
             _log_ops("limite diário de modelos gratuitos do OpenRouter atingido")
