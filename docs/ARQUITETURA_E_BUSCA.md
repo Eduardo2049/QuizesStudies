@@ -1,6 +1,6 @@
-# Quiz Study — Documento de Arquitetura, Busca Rápida e Governança
+# Acely — Documento de Arquitetura, Busca Rápida e Governança
 
-Este documento consolida a arquitetura completa do **Quiz Study**, funcionando como guia fixo para desenvolvedores humanos e agentes de IA localizarem instantaneamente qualquer parte do sistema sem necessidade de reanalisar o repositório inteiro a cada alteração.
+Este documento consolida a arquitetura completa do **Acely**, funcionando como guia fixo para desenvolvedores humanos e agentes de IA localizarem instantaneamente qualquer parte do sistema sem necessidade de reanalisar o repositório inteiro a cada alteração.
 
 ---
 

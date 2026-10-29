@@ -3,7 +3,7 @@ import { initTheme, toggleTheme } from './modules/theme.js?v=9';
 import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js?v=5';
 import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=7';
 import { initTimerDrag } from './modules/timer-drag.js?v=1';
-import { getLanguage } from './modules/i18n.js?v=1';
+import { getLanguage } from './modules/i18n.js?v=2';
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 const quiz = document.querySelector('#quiz');
@@ -426,7 +426,7 @@ function closeResultModal() {
   }
 }
 
-// ─── Modal Explicativo: Por que o Quiz Study? ──────────────────────────────────
+// ─── Modal Explicativo: Por que o Acely? ──────────────────────────────────
 const aboutModal = document.querySelector('#aboutModal');
 const btnOpenAboutModal = document.querySelector('#btnOpenAboutModal');
 const closeAboutModalBtn = document.querySelector('#closeAboutModal');

@@ -1,5 +1,5 @@
 [project]
-name = "quiz-study"
+name = "acely"
 version = "1.0.0"
 description = "Plataforma de simulados de alto rendimento com IA"
 requires-python = ">=3.10"

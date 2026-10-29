@@ -37,7 +37,7 @@ def main():
         else:
             created = repo.create_user(
                 username=username,
-                email="admin@ifuture.study",
+                email="admin@acely.com.br",
                 password_hash=pwd_hash,
                 salt=salt,
                 role="admin",
