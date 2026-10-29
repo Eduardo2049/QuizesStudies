@@ -161,7 +161,7 @@ A Vercel não executa scripts avulsos. A alternativa é o **SQL Editor** do cons
 BEGIN;
 DELETE FROM quiz_attempts; DELETE FROM questions; DELETE FROM quizzes; DELETE FROM rate_limits;
 -- escopo "all" (troque 'admin' se ADMIN_USERNAME for outro):
-DELETE FROM password_resets; DELETE FROM sessions; DELETE FROM users WHERE LOWER(username) <> 'admin';
+DELETE FROM password_resets; DELETE FROM email_verifications; DELETE FROM sessions; DELETE FROM users WHERE LOWER(username) <> 'admin';
 COMMIT;
 ```
 
@@ -170,7 +170,21 @@ COMMIT;
 ## ✉️ 7. Recuperação de Senha por E-mail
 
 O fluxo "Esqueci minha senha" envia o link por SMTP (biblioteca padrão do Python, sem dependências novas).
-**Sem `SMTP_HOST` configurado, nenhum e-mail sai**: o link só aparece nos logs do servidor e, com `DEBUG=true`, na própria tela (útil em desenvolvimento). Em produção o token nunca volta na resposta da API, porque isso permitiria a qualquer pessoa redefinir a senha de qualquer conta.
+**Sem `SMTP_HOST` configurado, nenhum e-mail sai.** Com `DEBUG=true` o link aparece no log e na própria tela (útil em desenvolvimento); em produção o log só avisa "SMTP não configurado", sem o link, porque quem lê os logs poderia trocar a senha de qualquer conta.
+
+Regras de segurança do fluxo:
+- A resposta da API é idêntica exista a conta ou não (não há `email_sent` na resposta), para ninguém descobrir quais e-mails têm conta.
+- O link usa o `APP_URL`. Sem ele, o servidor só confia no `Host` da requisição na Vercel, em `localhost` ou com `DEBUG=true`; em outro servidor (Docker, túnel) **nenhum link sai** até `APP_URL` ser definido, porque um `Host` forjado poria o link da vítima no site de quem forjou. O login com Google segue a mesma regra.
+- O link vale 30 minutos, uma única vez (queimado de forma atômica antes de trocar a senha), e a troca derruba todas as sessões da conta.
+- A resposta de "Esqueci minha senha" leva no mínimo 3 s (`FORGOT_PASSWORD_MIN_SECONDS` em `quiz_handler.py`), para o tempo do envio do e-mail não revelar que a conta existe.
+- O administrador não recebe link de recuperação nem entra com Google: a senha dele é sempre a do `ADMIN_PASSWORD`.
+
+### Confirmação de e-mail
+O cadastro envia um link `/api/auth/verify-email?token=...` (24 h, uso único) pelo mesmo SMTP. A conta funciona antes da confirmação; o que muda é a segurança:
+- **Entrar com Google** numa conta com o mesmo e-mail ainda não confirmada troca a senha por uma aleatória e derruba as sessões abertas. Isso tira o acesso de quem tenha criado a conta com o e-mail de outra pessoa. Quem é o dono de verdade entra pelo Google ou define uma senha nova em "Esqueci minha senha".
+- Redefinir a senha pelo link do e-mail também confirma o e-mail.
+- Em **Minha conta** aparece a situação do e-mail e o botão "Reenviar link de confirmação".
+- Contas criadas antes desta versão começam como não confirmadas.
 
 ### Gmail (gratuito, ~500 e-mails/dia)
 1. Ative a verificação em duas etapas na conta Google.

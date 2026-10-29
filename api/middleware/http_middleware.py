@@ -5,6 +5,12 @@ from http.cookies import SimpleCookie
 from functools import wraps
 from api.utils.config import DEBUG, ALLOWED_ORIGINS, COOKIE_SECURE
 
+# Cookie de sessão: com HTTPS leva o prefixo __Host- (ver session_cookie)
+SESSION_COOKIE_SECURE = "__Host-acely_session"
+SESSION_COOKIE_PLAIN = "acely_session"
+# Nome da primeira marca do projeto: só lido (sessões antigas) e apagado, nunca gravado
+LEGACY_SESSION_COOKIE = "ifuture_session"
+
 
 def timing_decorator(func):
     """Mede e loga o tempo de execução de um método (apenas em modo DEBUG)."""
@@ -50,7 +56,8 @@ class HTTPMiddleware:
         handler.send_header("X-Frame-Options", "DENY")
         handler.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
         handler.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-        handler.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' https://va.vercel-scripts.com; style-src 'self'; img-src 'self' data:; connect-src 'self' https://vitals.vercel-insights.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+        handler.send_header("Cross-Origin-Opener-Policy", "same-origin")
+        handler.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' https://va.vercel-scripts.com; style-src 'self'; img-src 'self' data:; connect-src 'self' https://vitals.vercel-insights.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
         handler.send_header("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
 
     @staticmethod
@@ -73,11 +80,17 @@ class HTTPMiddleware:
         if bearer_token:
             return bearer_token
         cookies = SimpleCookie()
-        cookies.load(handler.headers.get("Cookie", ""))
-        # Nome herdado da primeira marca do projeto. Mantido de propósito: trocar o nome do
-        # cookie desconectaria todo mundo que já está logado.
-        session_cookie = cookies.get("ifuture_session")
-        return session_cookie.value if session_cookie else None
+        try:
+            cookies.load(handler.headers.get("Cookie", ""))
+        except Exception:
+            return None
+        # O nome antigo continua valendo até as sessões criadas com ele vencerem (7 dias):
+        # assim a troca de nome não desconecta ninguém.
+        for name in (SESSION_COOKIE_SECURE, SESSION_COOKIE_PLAIN, LEGACY_SESSION_COOKIE):
+            morsel = cookies.get(name)
+            if morsel and morsel.value:
+                return morsel.value
+        return None
 
     @staticmethod
     def _cookie(name: str, value: str | None, secure: bool, max_age: int) -> str:
@@ -88,7 +101,19 @@ class HTTPMiddleware:
 
     @staticmethod
     def session_cookie(token: str | None, secure: bool, max_age: int) -> str:
-        return HTTPMiddleware._cookie("ifuture_session", token, secure, max_age)
+        # "__Host-" faz o navegador recusar o cookie sem Secure, com Domain ou fora de Path=/,
+        # então um subdomínio não consegue gravar uma sessão por cima. O prefixo exige HTTPS:
+        # em desenvolvimento sem HTTPS (COOKIE_SECURE=false) o nome vai sem ele.
+        name = SESSION_COOKIE_SECURE if secure else SESSION_COOKIE_PLAIN
+        return HTTPMiddleware._cookie(name, token, secure, max_age)
+
+    @staticmethod
+    def session_cookies(token: str | None, secure: bool, max_age: int) -> list[str]:
+        """Grava (ou apaga) a sessão e sempre apaga o cookie com o nome antigo."""
+        return [
+            HTTPMiddleware.session_cookie(token, secure, max_age),
+            HTTPMiddleware._cookie(LEGACY_SESSION_COOKIE, None, secure, 0),
+        ]
 
     @staticmethod
     def guest_cookie(guest_id: str | None, secure: bool, max_age: int) -> str:
@@ -190,10 +215,8 @@ class HTTPMiddleware:
             for cookie in ([set_cookie] if isinstance(set_cookie, str) else set_cookie):
                 handler.send_header("Set-Cookie", cookie)
         elif clear_cookie:
-            handler.send_header(
-                "Set-Cookie",
-                HTTPMiddleware.session_cookie(None, COOKIE_SECURE, 0)
-            )
+            for cookie in HTTPMiddleware.session_cookies(None, COOKIE_SECURE, 0):
+                handler.send_header("Set-Cookie", cookie)
 
         HTTPMiddleware.add_cors_headers(handler)
         HTTPMiddleware.add_security_headers(handler)

@@ -4,6 +4,7 @@ Usa PBKDF2-HMAC-SHA256 com salt seguro (nativo do Python).
 """
 import hashlib
 import hmac
+import re
 import secrets
 from api.repositories.user_repository import UserRepository
 from api.services.email_service import EmailService
@@ -17,6 +18,17 @@ from api.utils.config import ADMIN_USERNAME, ADMIN_PASSWORD, DEBUG
 # menos em cada cold start da Vercel).
 _DUMMY_SALT = "0000000000000000000000000000000000000000000000000000000000000000"
 _DUMMY_HASH = "f" * 64
+
+ADMIN_EMAIL = "admin@acely.com.br"
+_LEGACY_ADMIN_EMAIL = "admin@quiz.study"
+_USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{3,30}$")
+_EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+MAX_PASSWORD_CHARS = 256
+EMAIL_VERIFICATION_HOURS = 24
+
+_RESET_REQUEST_MESSAGE = (
+    "Se os dados informados estiverem cadastrados, você receberá as instruções para redefinir sua senha."
+)
 
 
 def hash_password(password: str, salt: str = None) -> tuple[str, str]:
@@ -64,6 +76,10 @@ class AuthService:
                     "Configure uma senha forte no ambiente/Vercel antes de iniciar."
                 )
             admin = self.repo.find_by_username(ADMIN_USERNAME)
+            # O primeiro admin foi criado com um e-mail de um domínio que não é do projeto:
+            # quem controlasse esse domínio poderia receber e-mails destinados ao admin.
+            if admin and (admin.get("email") or "").lower() == _LEGACY_ADMIN_EMAIL:
+                self.repo.update_email(admin["id"], ADMIN_EMAIL)
             # Já sincronizado: evita novo PBKDF2 + UPDATE a cada cold start.
             if (
                 admin
@@ -76,7 +92,7 @@ class AuthService:
             if not admin:
                 admin = self.repo.create_user(
                     username=ADMIN_USERNAME,
-                    email="admin@quiz.study",
+                    email=ADMIN_EMAIL,
                     password_hash=pwd_hash,
                     salt=salt,
                     role="admin",
@@ -129,17 +145,22 @@ class AuthService:
             }
         }
 
-    def register(self, username: str, email: str, password: str) -> dict:
-        """Registra um novo estudante com proteções de segurança."""
+    def register(self, username: str, email: str, password: str, app_url: str = "") -> dict:
+        """Registra um novo estudante e envia o link de confirmação do e-mail."""
         username = username.strip()
         email = email.strip().lower()
 
-        if len(username) < 3:
-            raise QuizAPIException("Nome de usuário deve ter pelo menos 3 caracteres", 400)
-        if "@" not in email:
+        # Só letras, números e . _ - : nada de espaços, controles ou sósias de outros nomes
+        if not _USERNAME_PATTERN.match(username):
+            raise QuizAPIException(
+                "O nome de usuário deve ter de 3 a 30 caracteres: letras, números, ponto, hífen ou sublinhado.", 400
+            )
+        if len(email) > 254 or not _EMAIL_PATTERN.match(email):
             raise QuizAPIException("E-mail inválido", 400)
         if len(password) < 8:
             raise QuizAPIException("Senha deve ter pelo menos 8 caracteres", 400)
+        if len(password) > MAX_PASSWORD_CHARS:
+            raise QuizAPIException(f"A senha deve ter no máximo {MAX_PASSWORD_CHARS} caracteres.", 400)
 
         # Mensagem uniforme contra enumeração de contas
         if self.repo.find_by_username(username) or self.repo.find_by_email(email):
@@ -148,12 +169,48 @@ class AuthService:
         pwd_hash, salt = hash_password(password)
         user = self.repo.create_user(username, email, pwd_hash, salt, role="student")
 
+        # O cadastro vale mesmo se o e-mail não sair agora: o link pode ser reenviado em Minha conta
+        try:
+            self.send_email_verification(user, app_url)
+        except Exception as e:
+            print(f"[auth] Falha ao enviar a confirmação de e-mail: {type(e).__name__}")
+
         return {
             "id": user["id"],
             "username": user["username"],
             "email": user["email"],
             "role": user["role"],
+            "email_verified": bool(user.get("email_verified")),
         }
+
+    # ─── Confirmação de e-mail ───────────────────────────────────────────────
+
+    def send_email_verification(self, user: dict, app_url: str = "") -> bool:
+        """Gera um link de confirmação (24 h, uso único) e envia para o e-mail da conta."""
+        base_url = (app_url or "").rstrip("/")
+        if not base_url:
+            print("[auth] APP_URL não configurado: e-mail de confirmação não enviado")
+            return False
+        token = secrets.token_urlsafe(32)
+        self.repo.create_email_verification(_hash_token(token), user["id"], expires_hours=EMAIL_VERIFICATION_HOURS)
+        verify_url = f"{base_url}/api/auth/verify-email?token={token}"
+        success, mode = self.email_service.send_email_verification(user["email"], user["username"], verify_url)
+        return success and mode != "simulated"
+
+    def resend_email_verification(self, user: dict, app_url: str = "") -> dict:
+        """Reenvia o link para a própria conta logada."""
+        if user.get("email_verified"):
+            return {"already_verified": True, "message": "Seu e-mail já está confirmado."}
+        if not self.send_email_verification(user, app_url):
+            raise QuizAPIException("Não foi possível enviar o link agora. Tente novamente mais tarde.", 503)
+        return {"already_verified": False, "message": "Enviamos um novo link de confirmação para o seu e-mail."}
+
+    def verify_email(self, token: str) -> bool:
+        """Confirma o e-mail pelo link recebido. Devolve False para link inválido, usado ou vencido."""
+        token = (token or "").strip()
+        if not token or len(token) > 128:
+            return False
+        return self.repo.consume_email_verification(_hash_token(token)) is not None
 
     def export_account(self, user_id: int) -> dict:
         """LGPD art. 18 (acesso e portabilidade): cópia dos dados da conta."""
@@ -210,15 +267,29 @@ class AuthService:
         if not user and "@" in identifier:
             user = self.repo.find_by_username(identifier)
 
+        not_sent = {
+            "message": _RESET_REQUEST_MESSAGE,
+            "email_sent": False,
+            "dev_reset_url": None,
+            "dev_token": None,
+        }
         if not user:
             # Hash falso para mitigar timing attacks
             verify_password("dummy_password", _DUMMY_SALT, _DUMMY_HASH)
-            return {
-                "message": "Se os dados informados estiverem cadastrados, você receberá as instruções para redefinir sua senha.",
-                "email_sent": False,
-                "dev_reset_url": None,
-                "dev_token": None,
-            }
+            return not_sent
+
+        # A senha do admin vem de ADMIN_PASSWORD (sincronizada a cada inicialização): um link
+        # por e-mail só abriria uma porta extra para a conta mais poderosa.
+        if user.get("role") == "admin":
+            print("[auth] recuperação por e-mail desativada para o administrador (use ADMIN_PASSWORD)")
+            return not_sent
+
+        # Sem endereço público confiável (APP_URL), nenhum link sai: montá-lo a partir do
+        # Host da requisição deixaria um atacante apontar o link da vítima para outro site.
+        base_url = (app_url or "").rstrip("/")
+        if not base_url:
+            print("[auth] APP_URL não configurado: e-mail de recuperação não enviado")
+            return not_sent
 
         # Usuário válido: gerar token com alta entropia (32 bytes = 43+ chars)
         token = secrets.token_urlsafe(32)
@@ -226,7 +297,6 @@ class AuthService:
 
         self.repo.create_password_reset(token_hash, user["id"], expires_minutes=30)
 
-        base_url = (app_url or "http://localhost:8000").rstrip("/")
         reset_url = f"{base_url}/reset-password?token={token}"
 
         success, mode = self.email_service.send_password_reset_email(
@@ -241,7 +311,7 @@ class AuthService:
         is_simulated = (mode == "simulated")
         expose_token = is_simulated and DEBUG
         return {
-            "message": "Se os dados informados estiverem cadastrados, você receberá as instruções para redefinir sua senha.",
+            "message": _RESET_REQUEST_MESSAGE,
             "email_sent": success and not is_simulated,
             "dev_reset_url": reset_url if expose_token else None,
             "dev_token": token if expose_token else None,
@@ -253,10 +323,11 @@ class AuthService:
         if not token:
             raise QuizAPIException("Token de recuperação não fornecido", 400)
 
+        # Sem PBKDF2 falso aqui: o token tem 256 bits e é buscado pelo hash, então o tempo
+        # da consulta não revela nada, e o hash falso só daria CPU de graça a quem abusa.
         token_hash = _hash_token(token)
         reset = self.repo.find_password_reset(token_hash)
         if not reset:
-            verify_password("dummy_password", _DUMMY_SALT, _DUMMY_HASH)
             raise QuizAPIException("Link de recuperação inválido ou expirado", 400)
 
         email = reset.get("email", "")
@@ -281,19 +352,26 @@ class AuthService:
 
         if not new_password or len(new_password) < 8:
             raise QuizAPIException("A nova senha deve ter pelo menos 8 caracteres", 400)
+        if len(new_password) > MAX_PASSWORD_CHARS:
+            raise QuizAPIException(f"A senha deve ter no máximo {MAX_PASSWORD_CHARS} caracteres.", 400)
 
         token_hash = _hash_token(token)
         reset = self.repo.find_password_reset(token_hash)
         if not reset:
-            verify_password("dummy_password", _DUMMY_SALT, _DUMMY_HASH)
+            raise QuizAPIException("Link de recuperação inválido ou expirado", 400)
+
+        # Queima o token antes de trocar a senha: o UPDATE ... WHERE used = FALSE é atômico,
+        # então dois pedidos simultâneos com o mesmo link não trocam a senha duas vezes.
+        if not self.repo.mark_password_reset_used(token_hash):
             raise QuizAPIException("Link de recuperação inválido ou expirado", 400)
 
         user_id = reset["user_id"]
         pwd_hash, salt = hash_password(new_password)
 
         self.repo.update_password_and_role(user_id, pwd_hash, salt)
-        self.repo.mark_password_reset_used(token_hash)
         self.repo.delete_user_sessions(user_id)
+        # O link chegou pelo e-mail da conta: isso também confirma o e-mail
+        self.repo.mark_email_verified(user_id)
 
         return {
             "message": "Senha redefinida com sucesso! Você já pode entrar com sua nova senha.",

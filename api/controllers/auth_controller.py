@@ -31,16 +31,16 @@ class AuthController:
 
     @timing_decorator
     @error_handler_decorator
-    def register(self, payload: dict) -> dict:
+    def register(self, payload: dict, app_url: str = "") -> dict:
         """POST /api/auth/register - Registra novo estudante"""
         if not isinstance(payload, dict):
             raise QuizAPIException("Payload inválido", 400)
 
-        username = payload.get("username", "").strip()
-        email = payload.get("email", "").strip()
-        password = payload.get("password", "")
+        username = str(payload.get("username") or "").strip()
+        email = str(payload.get("email") or "").strip()
+        password = str(payload.get("password") or "")
 
-        user = self.service.register(username, email, password)
+        user = self.service.register(username, email, password, app_url=app_url)
         return {
             "status": "success",
             "message": "Usuário registrado com sucesso",
@@ -66,8 +66,20 @@ class AuthController:
                     "username": user["username"],
                     "email": user["email"],
                     "role": user["role"],
+                    "email_verified": bool(user.get("email_verified")),
                 }
             }
+        }
+
+    @timing_decorator
+    @error_handler_decorator
+    def resend_email_verification(self, user: dict, app_url: str = "") -> dict:
+        """POST /api/auth/resend-verification - Reenvia o link de confirmação do e-mail"""
+        result = self.service.resend_email_verification(user, app_url=app_url)
+        return {
+            "status": "success",
+            "message": result["message"],
+            "data": result,
         }
 
     @timing_decorator
@@ -95,10 +107,16 @@ class AuthController:
             raise QuizAPIException("Informe seu e-mail ou nome de usuário", 400)
 
         result = self.service.request_password_reset(identifier, app_url=app_url)
+        # Resposta idêntica exista a conta ou não (anti-enumeração): `email_sent` fica só
+        # no servidor. O link de teste só sai em DEBUG, quando o serviço o devolve.
+        data = {"message": result["message"]}
+        if result.get("dev_token"):
+            data["dev_reset_url"] = result.get("dev_reset_url")
+            data["dev_token"] = result["dev_token"]
         return {
             "status": "success",
             "message": result["message"],
-            "data": result,
+            "data": data,
         }
 
     @timing_decorator

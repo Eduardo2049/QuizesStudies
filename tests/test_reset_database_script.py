@@ -25,7 +25,7 @@ class TestResetDatabaseScript(unittest.TestCase):
     def test_all_scope_adds_accounts_and_preserves_admin(self):
         steps = reset_database.build_steps("all", "chefe")
         labels = [label for label, _, _ in steps]
-        self.assertEqual(labels[-3:], ["password_resets", "sessions", "users (exceto admin)"])
+        self.assertEqual(labels[-4:], ["password_resets", "email_verifications", "sessions", "users (exceto admin)"])
         _, sql, params = steps[-1]
         self.assertIn("<> LOWER(%s)", sql)
         self.assertEqual(params, ("chefe",))
