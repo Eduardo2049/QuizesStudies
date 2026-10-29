@@ -26,6 +26,7 @@ Este documento é a referência primária e fixa de arquitetura, permissões, li
 | **Banco de dados, tabelas, consultas SQL, migrations** | `api/database/migrations.py`<br>`api/repositories/quiz_repository.py`<br>`api/repositories/user_repository.py` | Toda a pasta `web/` |
 | **Configuração de ambiente, portas, chaves de API** | `api/utils/config.py`<br>`.env.example` | Código de regras de negócio |
 | **Pipelines CI/CD, deploy e Gitflow** | `.github/workflows/`<br>`vercel.json`<br>`docs/CICD_E_DEPLOY.md` | Código de backend `api/` |
+| **Plano em andamento (marca Acely, IA mais rápida e multiprovedor)** | `docs/PLANO_ACELY.md` (ler antes de começar uma fase) | Código fora da fase em execução |
 | **Testes unitários e de integração** | `tests/` (execute o teste específico ou a suíte) | `web/` |
 
 ---
