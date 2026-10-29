@@ -1,4 +1,4 @@
-# DESIGN_SKILLS.md — Skill de design adotada e como ela se aplica ao Quiz Study
+# DESIGN_SKILLS.md — Skill de design adotada e como ela se aplica ao Acely
 
 A interface segue a skill **`landing-page-design`** do repositório
 [elayadesign/ai-design-skills](https://github.com/elayadesign/ai-design-skills) (licença MIT).
@@ -29,7 +29,7 @@ e revise a seção 3 deste arquivo.
 A skill fala em classes do Tailwind; aqui o Tailwind é proibido (`AGENTS.md`). Usamos apenas a
 **escala de valores** dele, em variáveis CSS.
 
-| Regra da skill | Como fica no Quiz Study |
+| Regra da skill | Como fica no Acely |
 |---|---|
 | **B1 Fonte única** (Geist, Manrope…) | Manrope (`--font-sans`), self-hosted em `web/fonts/`. DM Mono (`--font-mono`) só para dado numérico: cronômetro, contadores, chip de cota de IA. |
 | **B1 Sem itálico, peso máx. bold** | `font-style: normal` em toda a interface (inclusive `em` de destaque, que só muda a cor). Pesos 400, 500, 600 e 700; 800/900 proibidos. |
@@ -67,7 +67,7 @@ A skill fala em classes do Tailwind; aqui o Tailwind é proibido (`AGENTS.md`). 
 - Um botão cheio por tela: "Explorar simulados", "Criar simulado" e "Finalizar simulado" (barra) em contorno.
 - Esqueleto no formato das questões no lugar do spinner de geração.
 - Páginas de termos, privacidade e 404 próprias; rodapé com links legais.
-- Regras do Hallmark sem mudar o tema: textos sem exclamação, modal "Por que o Quiz Study?" enxuto, `overflow-x: clip` em `html`/`body`, foco visível em `summary` e `[role=button]`, alvos de 44px no celular (ícones do topo, rodapé, abas e links de login).
+- Regras do Hallmark sem mudar o tema: textos sem exclamação, modal "Por que o Acely?" enxuto, `overflow-x: clip` em `html`/`body`, foco visível em `summary` e `[role=button]`, alvos de 44px no celular (ícones do topo, rodapé, abas e links de login).
 - Modal de resultado rola inteiro (placar, estatísticas e questões); rodapé fixo no desktop.
 - Interface em português e inglês (botão PT/EN no topo).
 

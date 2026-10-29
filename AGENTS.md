@@ -1,4 +1,4 @@
-# Diretrizes do Projeto & Guia Rápido de Pesquisa (Quiz Study)
+# Diretrizes do Projeto & Guia Rápido de Pesquisa (Acely)
 
 Este documento é a referência primária e fixa de arquitetura, permissões, liberdades e proibições deste repositório.
 **REGRA DE OURO:** NÃO analise nem varra todo o projeto a cada interação. Consulte diretamente a tabela de busca rápida abaixo e abra apenas os arquivos responsáveis pela demanda.

@@ -1,6 +1,6 @@
-# Guia de CI/CD, Gitflow e Deploy — Quiz Study
+# Guia de CI/CD, Gitflow e Deploy — Acely
 
-Este documento descreve o fluxo de trabalho de desenvolvimento, integração contínua (CI), homologação e deploy em produção do **Quiz Study** via GitHub Actions e Vercel.
+Este documento descreve o fluxo de trabalho de desenvolvimento, integração contínua (CI), homologação e deploy em produção do **Acely** via GitHub Actions e Vercel.
 
 ---
 
@@ -184,8 +184,8 @@ O fluxo "Esqueci minha senha" envia o link por SMTP (biblioteca padrão do Pytho
 | `SMTP_USE_TLS` | `true` |
 | `SMTP_USER` | o e-mail da conta |
 | `SMTP_PASSWORD` | a senha de app (16 caracteres, sem espaços) |
-| `SMTP_FROM` | `Quiz Study <o-mesmo-e-mail>` |
-| `APP_URL` | a URL pública, ex.: `https://seu-app.vercel.app` (vai no link do e-mail) |
+| `SMTP_FROM` | `Acely <o-mesmo-e-mail>` |
+| `APP_URL` | a URL pública, em produção `https://acely.com.br` (vai no link do e-mail e no retorno do login com Google) |
 
 4. Faça um novo deploy (variáveis só valem para deploys novos).
 

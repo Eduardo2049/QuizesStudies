@@ -408,7 +408,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                 body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Content-Disposition", 'attachment; filename="quiz-study-meus-dados.json"')
+                self.send_header("Content-Disposition", 'attachment; filename="acely-meus-dados.json"')
                 self.send_header("Content-Length", str(len(body)))
                 HTTPMiddleware.add_cors_headers(self)
                 HTTPMiddleware.add_security_headers(self)

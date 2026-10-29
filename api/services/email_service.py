@@ -35,7 +35,7 @@ class EmailService:
         self.port = port
         self.user = user
         self.password = password
-        self.from_email = from_email or "noreply@quiz.study"
+        self.from_email = from_email or "noreply@acely.com.br"
         self.use_tls = use_tls
         self.use_ssl = use_ssl
 
@@ -63,16 +63,16 @@ class EmailService:
             print(msg_log)
             return True, "simulated"
 
-        subject = "Recuperação de Senha — Quiz Study"
+        subject = "Recuperação de Senha — Acely"
 
         text_content = (
             f"Olá, {username}!\n\n"
-            f"Recebemos uma solicitação para redefinir a senha da sua conta no Quiz Study.\n"
+            f"Recebemos uma solicitação para redefinir a senha da sua conta no Acely.\n"
             f"Para definir sua nova senha, acesse o link abaixo:\n\n"
             f"{reset_url}\n\n"
             f"Este link é válido por 30 minutos.\n"
             f"Se você não solicitou a recuperação, pode ignorar este e-mail com segurança.\n\n"
-            f"— Equipe Quiz Study"
+            f"— Equipe Acely"
         )
 
         html_content = f"""<!DOCTYPE html>
@@ -125,12 +125,12 @@ class EmailService:
 <body>
   <div class="container">
     <div class="header">
-      <h1>Quiz Study</h1>
+      <h1>Acely</h1>
       <p>Acesso à Plataforma de Simulados</p>
     </div>
     <div class="content">
       <p>Olá, <strong>{username}</strong>,</p>
-      <p>Recebemos uma solicitação para redefinir a senha da sua conta no <strong>Quiz Study</strong>. Clique no botão abaixo para prosseguir:</p>
+      <p>Recebemos uma solicitação para redefinir a senha da sua conta no <strong>Acely</strong>. Clique no botão abaixo para prosseguir:</p>
       <div class="btn-wrapper">
         <a href="{reset_url}" class="btn" target="_blank" rel="noopener">Redefinir Minha Senha</a>
       </div>
@@ -143,7 +143,7 @@ class EmailService:
       </p>
     </div>
     <div class="footer">
-      Quiz Study · Treinamento e simulados com IA
+      Acely · Treinamento e simulados com IA
     </div>
   </div>
 </body>

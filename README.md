@@ -1,4 +1,6 @@
-# Quizes Study
+# Acely
+
+Site: [acely.com.br](https://acely.com.br) · Repositório: `Eduardo2049/QuizesStudies` (o nome do repositório é anterior à marca).
 
 Plataforma de simulados de alto rendimento e treino de raciocínio lógico. Transforme qualquer material em **PDF**, **DOCX** ou **TXT** (ou gere tópicos do zero) em simulados interativos com gabarito pedagógico e **Caderno de Erros inteligente com mutações por IA**.
 
@@ -7,18 +9,18 @@ Plataforma de simulados de alto rendimento e treino de raciocínio lógico. Tran
 
 ---
 
-## Por que o Quiz Study existe? (Diferenciais de Mercado)
+## Por que o Acely existe? (Diferenciais de Mercado)
 
 Estudantes para concursos, certificações e vestibulares enfrentam três grandes problemas no mercado atual:
 1. **Criação Lenta de Questões:** Plataformas como o Anki exigem digitação e formatação manual card por card.
 2. **Bancos Estáticos e Rígidos:** Grandes sites (como QConcursos e Gran) dependem exclusivamente de provas antigas de bancas, sem permitir que o aluno pratique sobre suas próprias anotações, resumos ou livros de faculdade.
 3. **Decoreba de Gabarito:** Ao refazer uma questão errada, o cérebro tende a lembrar da letra correta (*"na 3 era a C"*), gerando uma falsa ilusão de aprendizado.
 
-O **Quiz Study** resolve isso unindo a extração instantânea de conteúdo à **Mutação de Questões por IA**: a IA identifica onde você errou e pode gerar variações inéditas mantendo o mesmo conceito teórico e nível de dificuldade, forçando a aplicação real do raciocínio.
+O **Acely** resolve isso unindo a extração instantânea de conteúdo à **Mutação de Questões por IA**: a IA identifica onde você errou e pode gerar variações inéditas mantendo o mesmo conceito teórico e nível de dificuldade, forçando a aplicação real do raciocínio.
 
 ### 📊 Benchmarking Competitivo
 
-| Critério / Ferramenta | Quiz Study | Quizlet | QConcursos / Gran Cursos | Anki |
+| Critério / Ferramenta | Acely | Quizlet | QConcursos / Gran Cursos | Anki |
 |---|:---:|:---:|:---:|:---:|
 | **Geração Instantânea por Material Próprio** | **Sim (PDF, DOCX, TXT)** | Não (Manual ou listas públicas) | Não (Apenas banco próprio de bancas) | Não (Manual card a card) |
 | **Geração de Simulado por Tema via IA** | **Sim (OpenRouter, modelos gratuitos)** | Limitado (em planos pagos) | Não | Não nativo |
@@ -274,7 +276,7 @@ python tests/load_test_real_api.py --calls 30 --workers 10 --burst --guest
 ## Arquitetura
 
 ```
-Quizes_Study/
+QuizesStudies/
 ├── api/
 │   ├── database/
 │   │   ├── connection.py      # Context managers para PostgreSQL

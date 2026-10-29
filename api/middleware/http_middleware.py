@@ -74,6 +74,8 @@ class HTTPMiddleware:
             return bearer_token
         cookies = SimpleCookie()
         cookies.load(handler.headers.get("Cookie", ""))
+        # Nome herdado da primeira marca do projeto. Mantido de propósito: trocar o nome do
+        # cookie desconectaria todo mundo que já está logado.
         session_cookie = cookies.get("ifuture_session")
         return session_cookie.value if session_cookie else None
 
