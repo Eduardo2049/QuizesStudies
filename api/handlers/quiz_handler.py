@@ -29,6 +29,11 @@ ALLOWED_EXTENSIONS = {"txt", "pdf", "docx"}
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024        # 20 MB (autenticado)
 MAX_GUEST_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB (convidado)
 MAX_JSON_BYTES = 256 * 1024
+# Texto livre que vai para o prompt da IA: limita o custo e o espaço para instruções injetadas
+MAX_TOPIC_CHARS = 300
+MAX_CONTEXT_CHARS = 2000
+# Tempo mínimo da resposta de "Esqueci minha senha" (cobre o envio do e-mail por SMTP)
+FORGOT_PASSWORD_MIN_SECONDS = 3.0
 
 # Content-Type dos arquivos estáticos servidos de web/ (e da raiz, como robots.txt)
 STATIC_CONTENT_TYPES = {
@@ -355,10 +360,25 @@ class QuizHandler(BaseHTTPRequestHandler):
 
             # 0.1 API: Validar token de recuperação de senha
             if request.path == "/api/auth/verify-reset-token":
+                allowed, retry_after = _rl_reset_password.check_handler(self, "GET:/api/auth/verify-reset-token")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
                 token = query.get("token", [None])[0]
                 response = self.auth_controller.verify_reset_token(token)
                 status, data = ResponseFormatter.success(response["data"])
                 HTTPMiddleware.send_json_response(self, status, data)
+                return
+
+            # 0.11 Confirmação de e-mail: o link do e-mail abre aqui e volta para a home com o resultado
+            if request.path == "/api/auth/verify-email":
+                allowed, retry_after = _rl_reset_password.check_handler(self, "GET:/api/auth/verify-email")
+                if not allowed:
+                    self._redirect("/?email=muitas_tentativas")
+                    return
+                token = query.get("token", [""])[0]
+                ok = self.auth_controller.service.verify_email(token)
+                self._redirect("/?email=confirmado" if ok else "/?email=link_invalido")
                 return
 
             # 0.12 API: Provedores de login disponíveis (o botão do Google só aparece se configurado)
@@ -376,11 +396,16 @@ class QuizHandler(BaseHTTPRequestHandler):
                 if not allowed:
                     self._redirect("/login?erro=muitas_tentativas")
                     return
+                redirect_uri = self._google_redirect_uri()
+                if not redirect_uri:
+                    print("[auth] APP_URL não configurado: login com Google indisponível")
+                    self._redirect("/login?erro=google_indisponivel")
+                    return
                 state, cookie_value = google_auth.build_state_cookie_value(query.get("next", ["/"])[0])
                 state_cookie = HTTPMiddleware._cookie(
                     google_auth.STATE_COOKIE, cookie_value, COOKIE_SECURE, google_auth.STATE_MAX_AGE
                 )
-                self._redirect(google_auth.authorization_url(state, self._google_redirect_uri()), [state_cookie])
+                self._redirect(google_auth.authorization_url(state, redirect_uri), [state_cookie])
                 return
 
             # 0.14 Entrar com Google: retorno
@@ -403,12 +428,15 @@ class QuizHandler(BaseHTTPRequestHandler):
                         query.get("code", [""])[0], self._google_redirect_uri()
                     )
                 except QuizAPIException as e:
-                    code = "google_email" if e.error_code == "GOOGLE_EMAIL_UNVERIFIED" else "google_falhou"
+                    code = {
+                        "GOOGLE_EMAIL_UNVERIFIED": "google_email",
+                        "GOOGLE_ADMIN_BLOCKED": "google_admin",
+                    }.get(e.error_code, "google_falhou")
                     self._redirect(f"/login?erro={code}", [clear_state])
                     return
                 self._redirect(next_path, [
                     clear_state,
-                    HTTPMiddleware.session_cookie(result["token"], COOKIE_SECURE, 7 * 24 * 60 * 60),
+                    *HTTPMiddleware.session_cookies(result["token"], COOKIE_SECURE, 7 * 24 * 60 * 60),
                     HTTPMiddleware.guest_cookie(None, COOKIE_SECURE, 0),
                 ])
                 return
@@ -514,7 +542,8 @@ class QuizHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Type", "text/html; charset=utf-8")
                     self.send_header("Content-Length", str(len(content)))
                     if clear_session:
-                        self.send_header("Set-Cookie", HTTPMiddleware.session_cookie(None, COOKIE_SECURE, 0))
+                        for cookie in HTTPMiddleware.session_cookies(None, COOKIE_SECURE, 0):
+                            self.send_header("Set-Cookie", cookie)
                     HTTPMiddleware.add_cors_headers(self)
                     HTTPMiddleware.add_security_headers(self)
                     HTTPMiddleware.add_cache_headers(self, cache=False)
@@ -725,7 +754,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                     response_data.pop("token", None)
                 status, data = ResponseFormatter.success(response_data, response["message"])
                 cookies = [
-                    HTTPMiddleware.session_cookie(token, COOKIE_SECURE, 7 * 24 * 60 * 60),
+                    *HTTPMiddleware.session_cookies(token, COOKIE_SECURE, 7 * 24 * 60 * 60),
                     # Ao entrar na conta, a sessão de convidado deixa de valer
                     HTTPMiddleware.guest_cookie(None, COOKIE_SECURE, 0),
                 ]
@@ -742,8 +771,21 @@ class QuizHandler(BaseHTTPRequestHandler):
                 if payload is None:
                     return
 
-                response = self.auth_controller.register(payload)
+                response = self.auth_controller.register(payload, app_url=self._public_base_url() or "")
                 status, data = ResponseFormatter.created(response["data"], response["message"])
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
+            if request.path == "/api/auth/resend-verification":
+                allowed, retry_after = _rl_forgot_password.check_handler(self, "POST:/api/auth/resend-verification")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
+                user = self._require_authenticated_user()
+                response = self.auth_controller.resend_email_verification(
+                    user, app_url=self._public_base_url() or ""
+                )
+                status, data = ResponseFormatter.success(response["data"], response["message"])
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
@@ -752,7 +794,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                 response = self.auth_controller.logout(token)
                 status, data = ResponseFormatter.success(response["data"], response["message"])
                 cookies = [
-                    HTTPMiddleware.session_cookie(None, COOKIE_SECURE, 0),
+                    *HTTPMiddleware.session_cookies(None, COOKIE_SECURE, 0),
                     HTTPMiddleware.guest_cookie(None, COOKIE_SECURE, 0),
                 ]
                 HTTPMiddleware.send_json_response(self, status, data, set_cookie=cookies)
@@ -788,7 +830,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                 self.auth_controller.service.delete_account(user, str(payload.get("password", "")))
                 status, data = ResponseFormatter.success({"deleted": True}, "Conta e dados excluídos")
                 cookies = [
-                    HTTPMiddleware.session_cookie(None, COOKIE_SECURE, 0),
+                    *HTTPMiddleware.session_cookies(None, COOKIE_SECURE, 0),
                     HTTPMiddleware.guest_cookie(None, COOKIE_SECURE, 0),
                 ]
                 HTTPMiddleware.send_json_response(self, status, data, set_cookie=cookies)
@@ -837,11 +879,13 @@ class QuizHandler(BaseHTTPRequestHandler):
                 if payload is None:
                     return
 
-                host = self.headers.get("Host", f"localhost:{PORT}")
-                proto = "https" if (self.headers.get("X-Forwarded-Proto") == "https" or COOKIE_SECURE) else "http"
-                app_url = os.getenv("APP_URL", f"{proto}://{host}").rstrip("/")
-
-                response = self.auth_controller.forgot_password(payload, app_url=app_url)
+                started = time.monotonic()
+                response = self.auth_controller.forgot_password(payload, app_url=self._public_base_url() or "")
+                # Conta existente gasta o envio do e-mail; inexistente, não. Um tempo mínimo de
+                # resposta esconde essa diferença de quem tenta descobrir quais e-mails têm conta.
+                remaining = FORGOT_PASSWORD_MIN_SECONDS - (time.monotonic() - started)
+                if remaining > 0:
+                    time.sleep(remaining)
                 status, data = ResponseFormatter.success(response["data"], response["message"])
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
@@ -885,7 +929,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                 if payload is None:
                     return
 
-                topic = str(payload.get("topic", "")).strip()
+                topic = str(payload.get("topic", "")).strip()[:MAX_TOPIC_CHARS]
                 if not topic:
                     status, data = ResponseFormatter.bad_request("O campo 'topic' (tema) é obrigatório")
                     HTTPMiddleware.send_json_response(self, status, data)
@@ -893,7 +937,7 @@ class QuizHandler(BaseHTTPRequestHandler):
 
                 num_questions = payload.get("num_questions", 5)
                 difficulty = payload.get("difficulty", "Médio")
-                context = payload.get("context", "")
+                context = str(payload.get("context") or "")[:MAX_CONTEXT_CHARS]
                 language = payload.get("language", "")
                 requested_public = payload.get("is_public", False) is True
                 is_public = requested_public and user and user.get("role") == "admin"
@@ -1071,7 +1115,7 @@ class QuizHandler(BaseHTTPRequestHandler):
         requested_public = fields.get("is_public", "false").lower() == "true"
         is_public = requested_public and user and user.get("role") == "admin"
         num_questions = fields.get("num_questions", "auto")
-        context = fields.get("context", "")
+        context = fields.get("context", "")[:MAX_CONTEXT_CHARS]
         language = fields.get("language", "")
         client_ip = HTTPMiddleware.get_client_ip(self)
         guest_id = HTTPMiddleware.get_guest_id(self) if guest else None
@@ -1112,12 +1156,28 @@ class QuizHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
-    def _google_redirect_uri(self) -> str:
-        """URI de retorno do Google: APP_URL quando definido (recomendado em produção)."""
-        host = self.headers.get("Host", f"localhost:{PORT}")
+    def _public_base_url(self) -> str | None:
+        """Endereço público usado no link do e-mail e no retorno do Google.
+
+        APP_URL vale sempre. Sem ele, o Host da requisição só é aceito onde não dá para
+        forjá-lo (na Vercel, que só entrega domínios do projeto), em localhost ou com
+        DEBUG. Fora disso devolve None: um Host forjado poria o link de redefinição de
+        senha da vítima no site de quem forjou.
+        """
+        app_url = os.getenv("APP_URL", "").strip().rstrip("/")
+        if app_url:
+            return app_url
+        host = (self.headers.get("Host") or f"localhost:{PORT}").strip()
+        hostname = (urlparse(f"//{host}").hostname or "").lower()
+        if not (os.getenv("VERCEL") == "1" or DEBUG or hostname in ("localhost", "127.0.0.1", "::1")):
+            return None
         proto = "https" if (self.headers.get("X-Forwarded-Proto") == "https" or COOKIE_SECURE) else "http"
-        base = os.getenv("APP_URL", f"{proto}://{host}").rstrip("/")
-        return f"{base}/api/auth/google/callback"
+        return f"{proto}://{host}"
+
+    def _google_redirect_uri(self) -> str | None:
+        """URI de retorno do Google (None sem endereço público confiável)."""
+        base = self._public_base_url()
+        return f"{base}/api/auth/google/callback" if base else None
 
     def _send_html_file(self, path, status_code: int = 200):
         """Envia uma página HTML de web/ com os cabeçalhos de segurança."""

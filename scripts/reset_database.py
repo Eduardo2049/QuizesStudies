@@ -42,6 +42,7 @@ def build_steps(scope: str, admin_username: str) -> list[tuple[str, str, tuple]]
     if scope == "all":
         steps += [
             ("password_resets", "DELETE FROM password_resets", ()),
+            ("email_verifications", "DELETE FROM email_verifications", ()),
             ("sessions", "DELETE FROM sessions", ()),
             ("users (exceto admin)", "DELETE FROM users WHERE LOWER(username) <> LOWER(%s)", (admin_username,)),
         ]

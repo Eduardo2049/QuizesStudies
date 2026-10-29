@@ -129,7 +129,7 @@ class TestHandlerHardening(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertNotIn("token", body["data"])
             self.assertNotIn("token", body)
-            self.assertIn("ifuture_session=segredo", headers.get("Set-Cookie", ""))
+            self.assertIn("acely_session=segredo", headers.get("Set-Cookie", ""))
 
             status, _, body = self._post("/api/auth/login", {"username": "a", "password": "b", "return_token": True})
             self.assertEqual(body["data"]["token"], "segredo")

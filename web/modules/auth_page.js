@@ -55,6 +55,7 @@ const LOGIN_ERRORS = {
   google_sessao: 'O login com Google expirou ou foi interrompido. Tente de novo.',
   google_email: 'Use uma conta Google com e-mail verificado.',
   google_falhou: 'O Google não confirmou o login. Tente de novo ou use usuário e senha.',
+  google_admin: 'A conta de administrador entra só com usuário e senha.',
   muitas_tentativas: 'Muitas tentativas seguidas. Aguarde alguns minutos.',
 };
 
@@ -277,6 +278,16 @@ pageRegisterForm?.addEventListener('submit', async (e) => {
     return;
   }
 
+  // Mesma regra do servidor (auth_service): 3 a 30 caracteres, letras, números, . _ -
+  if (!/^[A-Za-z0-9_.-]{3,30}$/.test(username)) {
+    if (registerFeedback) {
+      registerFeedback.textContent = 'O nome de usuário deve ter de 3 a 30 caracteres: letras, números, ponto, hífen ou sublinhado.';
+      registerFeedback.className = 'form-feedback feedback-error';
+      registerFeedback.hidden = false;
+    }
+    return;
+  }
+
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     if (registerFeedback) {
       registerFeedback.textContent = 'Informe um e-mail válido, como nome@exemplo.com.';
@@ -323,7 +334,7 @@ pageRegisterForm?.addEventListener('submit', async (e) => {
     }
 
     if (registerFeedback) {
-      registerFeedback.textContent = 'Conta criada. Conectando…';
+      registerFeedback.textContent = 'Conta criada. Enviamos um link para confirmar seu e-mail. Conectando…';
       registerFeedback.className = 'form-feedback feedback-success';
       registerFeedback.hidden = false;
     }
