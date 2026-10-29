@@ -94,8 +94,8 @@ export function setMode(mode, pushState = true) {
   }
 
   if (mode === 'register') {
-    if (pageTitle) pageTitle.textContent = 'Cadastrar — Quiz Study';
-    if (headerEyebrow) headerEyebrow.textContent = 'Quiz Study · crie sua conta';
+    if (pageTitle) pageTitle.textContent = 'Cadastrar — Acely';
+    if (headerEyebrow) headerEyebrow.textContent = 'Acely · crie sua conta';
     if (headerTitle) headerTitle.innerHTML = 'Crie sua<br><em>conta grátis</em>';
     if (headerSubtitle) headerSubtitle.textContent = 'Seus simulados e seu histórico ficam salvos e acessíveis em qualquer dispositivo. Sem cartão de crédito.';
     tabRegister?.classList.add('active');
@@ -110,9 +110,9 @@ export function setMode(mode, pushState = true) {
     }
     document.getElementById('regUsername')?.focus();
   } else {
-    if (pageTitle) pageTitle.textContent = 'Entrar — Quiz Study';
-    if (headerEyebrow) headerEyebrow.textContent = 'Quiz Study · acesso à plataforma';
-    if (headerTitle) headerTitle.innerHTML = 'Boas-vindas ao<br><em>Quiz Study</em>';
+    if (pageTitle) pageTitle.textContent = 'Entrar — Acely';
+    if (headerEyebrow) headerEyebrow.textContent = 'Acely · acesso à plataforma';
+    if (headerTitle) headerTitle.innerHTML = 'Boas-vindas ao<br><em>Acely</em>';
     if (headerSubtitle) headerSubtitle.textContent = 'Entre para salvar seus simulados e acompanhar seu desempenho.';
     tabLogin?.classList.add('active');
     tabLogin?.setAttribute('aria-current', 'page');

@@ -1,6 +1,6 @@
-# Guia de CI/CD, Gitflow e Deploy — Quiz Study
+# Guia de CI/CD, Gitflow e Deploy — Acely
 
-Este documento descreve o fluxo de trabalho de desenvolvimento, integração contínua (CI), homologação e deploy em produção do **Quiz Study** via GitHub Actions e Vercel.
+Este documento descreve o fluxo de trabalho de desenvolvimento, integração contínua (CI), homologação e deploy em produção do **Acely** via GitHub Actions e Vercel.
 
 ---
 
@@ -184,12 +184,26 @@ O fluxo "Esqueci minha senha" envia o link por SMTP (biblioteca padrão do Pytho
 | `SMTP_USE_TLS` | `true` |
 | `SMTP_USER` | o e-mail da conta |
 | `SMTP_PASSWORD` | a senha de app (16 caracteres, sem espaços) |
-| `SMTP_FROM` | `Quiz Study <o-mesmo-e-mail>` |
-| `APP_URL` | a URL pública, ex.: `https://seu-app.vercel.app` (vai no link do e-mail) |
+| `SMTP_FROM` | `Acely <o-mesmo-e-mail>` (sem nome, o e-mail já sai como "Acely") |
+| `APP_URL` | a URL pública, em produção `https://acely.com.br` (vai no link do e-mail e no retorno do login com Google) |
 
 4. Faça um novo deploy (variáveis só valem para deploys novos).
 
 Qualquer outro provedor SMTP (Brevo, Resend, SendGrid, Mailgun) funciona com as mesmas variáveis.
+
+O cabeçalho do e-mail mostra a logo em PNG (`/web/icons/favicon-192.png`) buscada no mesmo domínio do link enviado, ou seja, no `APP_URL`.
+
+---
+
+## 🌐 7.1 Domínio acely.com.br
+
+O que já está no código:
+- `vercel.json` redireciona `www.acely.com.br` para `https://acely.com.br` (301). Configure o mesmo sentido em **Settings > Domains** (nunca o contrário, ou vira um laço de redirecionamento).
+- `/robots.txt`, `/sitemap.xml` e `/site.webmanifest` são servidos na raiz (rewrites no `vercel.json`, rota equivalente no `quiz_handler.py`; os arquivos ficam em `web/`).
+- As páginas públicas têm `canonical` e `og:url` no domínio; `reset-password` e a 404 têm `noindex`. Os deploys de Preview da Vercel já recebem `X-Robots-Tag: noindex` automaticamente.
+- Nova página pública: adicionar ao `web/sitemap.xml` (o teste `tests/test_dominio_acely.py` confere que cada endereço do sitemap tem rewrite).
+
+Fora do código (dono do projeto): DNS no Registro.br, `APP_URL` em Production, URIs do OAuth do Google e envio do sitemap (`https://acely.com.br/sitemap.xml`) no Google Search Console. A lista completa está em `docs/PLANO_ACELY.md`, seção 1.2.
 
 ---
 
