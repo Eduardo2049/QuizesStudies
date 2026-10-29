@@ -3,7 +3,7 @@ import { initTheme, toggleTheme } from './modules/theme.js?v=9';
 import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js?v=5';
 import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=7';
 import { initTimerDrag } from './modules/timer-drag.js?v=1';
-import { getLanguage } from './modules/i18n.js?v=2';
+import { getLanguage } from './modules/i18n.js?v=3';
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 const quiz = document.querySelector('#quiz');
@@ -680,7 +680,7 @@ function renderQuestions() {
       <div class="options">
         ${item.options.map((option, i) => `
           <label class="option" id="option-${index}-${i}">
-            <input type="radio" name="q-${item.id}" value="${i}">
+            <input type="radio" name="q-${escapeHtml(item.id)}" value="${i}">
             <span>${String.fromCharCode(65 + i)}) ${escapeHtml(option)}</span>
             ${getShortcutBadgeHtml(i)}
           </label>
@@ -1374,7 +1374,7 @@ function renderCatalogList() {
       <div class="catalog-card" data-source="${escapeHtml(item.name)}">
         <div class="catalog-card-header">
           <h3 class="catalog-card-title">${escapeHtml(item.label)}</h3>
-          <span class="catalog-card-badge ${item.ai_generated ? 'ai' : ''}">${badgeLabel}</span>
+          <span class="catalog-card-badge ${item.ai_generated ? 'ai' : ''}">${escapeHtml(badgeLabel)}</span>
         </div>
         <div class="catalog-card-meta">
           <span>${icon('note', 14)} ${count} questões</span>
@@ -1990,10 +1990,57 @@ const deleteAccountFeedback = document.querySelector('#deleteAccountFeedback');
 const deleteAccountBtn = document.querySelector('#deleteAccountBtn');
 let releaseAccountFocus = null;
 
+const accountEmailStatus = document.querySelector('#accountEmailStatus');
+const accountEmailFeedback = document.querySelector('#accountEmailFeedback');
+const accountResendBtn = document.querySelector('#accountResendVerification');
+
+function renderAccountEmail() {
+  const addressEl = document.querySelector('#accountEmailAddress');
+  if (addressEl) addressEl.textContent = currentUser?.email || '';
+  const verified = Boolean(currentUser?.email_verified);
+  if (accountEmailStatus) {
+    accountEmailStatus.textContent = verified
+      ? 'Seu e-mail está confirmado.'
+      : 'Seu e-mail ainda não foi confirmado. Confirme pelo link que enviamos para proteger sua conta e receber a recuperação de senha.';
+  }
+  if (accountResendBtn) accountResendBtn.hidden = verified;
+  if (accountEmailFeedback) accountEmailFeedback.hidden = true;
+}
+
+accountResendBtn?.addEventListener('click', async () => {
+  accountResendBtn.disabled = true;
+  const showFeedback = (msg, ok) => {
+    if (!accountEmailFeedback) return;
+    accountEmailFeedback.textContent = msg;
+    accountEmailFeedback.className = `form-feedback ${ok ? 'feedback-success' : 'feedback-error'}`;
+    accountEmailFeedback.hidden = false;
+  };
+  try {
+    const res = await fetch('/api/auth/resend-verification', { method: 'POST', credentials: 'same-origin' });
+    const raw = await readJson(res);
+    if (res.status === 429) {
+      showFeedback('Muitas tentativas seguidas. Aguarde alguns minutos.', false);
+    } else if (!res.ok) {
+      showFeedback(raw.message || 'Não foi possível enviar o link agora. Tente novamente mais tarde.', false);
+    } else {
+      if (raw.data?.already_verified && currentUser) {
+        currentUser.email_verified = true;
+        renderAccountEmail();
+      }
+      showFeedback(raw.message || 'Enviamos um novo link de confirmação para o seu e-mail.', true);
+    }
+  } catch (_) {
+    showFeedback('Falha na conexão. Tente novamente.', false);
+  } finally {
+    accountResendBtn.disabled = false;
+  }
+});
+
 function openAccountModal() {
   if (!accountModal || sessionKind() !== 'user') return;
   const nameEl = document.querySelector('#accountUsername');
   if (nameEl) nameEl.textContent = currentUser.username;
+  renderAccountEmail();
   if (deleteAccountPassword) deleteAccountPassword.value = '';
   if (deleteAccountFeedback) deleteAccountFeedback.hidden = true;
   accountModal.hidden = false;
@@ -2364,6 +2411,22 @@ async function init() {
       openAccessModal('create', openModal);
     } else {
       openModal();
+    }
+  }
+
+  // Volta do link de confirmação de e-mail (/api/auth/verify-email redireciona com ?email=)
+  const emailResult = params.get('email');
+  if (emailResult) {
+    params.delete('email');
+    const query = params.toString();
+    history.replaceState(history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+    if (emailResult === 'confirmado') {
+      if (currentUser && sessionKind() === 'user') currentUser.email_verified = true;
+      showNotice('Seu e-mail foi confirmado.', 'E-mail confirmado', 'info');
+    } else if (emailResult === 'link_invalido') {
+      showNotice('Este link de confirmação é inválido, já foi usado ou venceu. Entre na sua conta e peça um novo em Minha conta.', 'Confirmação de e-mail', 'info');
+    } else if (emailResult === 'muitas_tentativas') {
+      showNotice('Muitas tentativas seguidas. Aguarde alguns minutos.', 'Confirmação de e-mail', 'info');
     }
   }
 

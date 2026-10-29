@@ -32,14 +32,30 @@ class UserRepository:
             row = cur.fetchone()
             return row["count"] if row else 0
 
-    def create_user(self, username: str, email: str, password_hash: str, salt: str, role: str = "student") -> dict:
+    def create_user(
+        self,
+        username: str,
+        email: str,
+        password_hash: str,
+        salt: str,
+        role: str = "student",
+        email_verified: bool = False,
+    ) -> dict:
         with get_cursor() as cur:
             cur.execute("""
-                INSERT INTO users (username, email, password_hash, salt, role)
-                VALUES (%s, %s, %s, %s, %s)
-                RETURNING id, username, email, role, created_at
-            """, (username, email, password_hash, salt, role))
+                INSERT INTO users (username, email, password_hash, salt, role, email_verified)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, username, email, role, email_verified, created_at
+            """, (username, email, password_hash, salt, role, email_verified))
             return dict(cur.fetchone())
+
+    def update_email(self, user_id: int, email: str) -> None:
+        with get_cursor() as cur:
+            cur.execute("UPDATE users SET email = %s WHERE id = %s", (email, user_id))
+
+    def mark_email_verified(self, user_id: int) -> None:
+        with get_cursor() as cur:
+            cur.execute("UPDATE users SET email_verified = TRUE WHERE id = %s", (user_id,))
 
     def update_password_and_role(self, user_id: int, password_hash: str, salt: str, role: str = None) -> None:
         """Atualiza a senha e opcionalmente o papel (role) do usuário."""
@@ -61,7 +77,9 @@ class UserRepository:
     def export_user_data(self, user_id: int) -> dict:
         """Tudo o que o banco guarda sobre a pessoa, sem hashes de senha nem tokens."""
         with get_cursor() as cur:
-            cur.execute("SELECT id, username, email, role, created_at FROM users WHERE id = %s", (user_id,))
+            cur.execute(
+                "SELECT id, username, email, email_verified, role, created_at FROM users WHERE id = %s", (user_id,)
+            )
             user = cur.fetchone()
             if not user:
                 return {}
@@ -114,7 +132,7 @@ class UserRepository:
         """Busca o usuário associado a um token válido e não expirado."""
         with get_cursor() as cur:
             cur.execute("""
-                SELECT u.id, u.username, u.email, u.role, s.expires_at
+                SELECT u.id, u.username, u.email, u.role, u.email_verified, s.expires_at
                 FROM sessions s
                 JOIN users u ON s.user_id = u.id
                 WHERE s.token = %s AND s.expires_at > NOW()
@@ -181,6 +199,33 @@ class UserRepository:
                 RETURNING id
             """, (token_hash,))
             return cur.fetchone() is not None
+
+    # ─── Confirmação de e-mail ───────────────────────────────────────────────
+
+    def create_email_verification(self, token_hash: str, user_id: int, expires_hours: int = 24) -> None:
+        """Registra um link de confirmação e invalida os anteriores ainda não usados."""
+        expires_at = datetime.now() + timedelta(hours=expires_hours)
+        with get_cursor() as cur:
+            cur.execute("UPDATE email_verifications SET used = TRUE WHERE user_id = %s AND used = FALSE", (user_id,))
+            cur.execute("""
+                INSERT INTO email_verifications (token_hash, user_id, expires_at, used)
+                VALUES (%s, %s, %s, FALSE)
+            """, (token_hash, user_id, expires_at))
+
+    def consume_email_verification(self, token_hash: str) -> int | None:
+        """Queima o link (uma vez só, de forma atômica) e marca o e-mail como confirmado."""
+        with get_cursor() as cur:
+            cur.execute("""
+                UPDATE email_verifications
+                SET used = TRUE
+                WHERE token_hash = %s AND used = FALSE AND expires_at > NOW()
+                RETURNING user_id
+            """, (token_hash,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            cur.execute("UPDATE users SET email_verified = TRUE WHERE id = %s", (row["user_id"],))
+            return row["user_id"]
 
     def cleanup_expired_resets(self) -> int:
         """Remove solicitações expiradas ou já utilizadas com mais de 7 dias."""

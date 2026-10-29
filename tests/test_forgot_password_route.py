@@ -37,6 +37,7 @@ class TestForgotPasswordRoute(unittest.TestCase):
         patches = [
             patch.object(quiz_handler, "_ensure_migrations", lambda: None),
             patch.object(quiz_handler, "_rl_forgot_password", RateLimiter(limit=100, window_seconds=60)),
+            patch.object(quiz_handler, "FORGOT_PASSWORD_MIN_SECONDS", 0),
             patch.object(AuthService, "request_password_reset", fake_reset),
         ]
         for p in patches:

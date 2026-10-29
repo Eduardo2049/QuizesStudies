@@ -189,8 +189,11 @@ class TestSessionAndCacheClearing(unittest.TestCase):
         set_cookie_calls = [
             call for call in handler.send_header.call_args_list if call[0][0] == "Set-Cookie"
         ]
-        self.assertEqual(len(set_cookie_calls), 1)
-        self.assertIn("Max-Age=0", set_cookie_calls[0][0][1])
+        # Sessão atual e o nome antigo (ifuture_session), ambos apagados
+        self.assertEqual(len(set_cookie_calls), 2)
+        for c in set_cookie_calls:
+            self.assertIn("Max-Age=0", c[0][1])
+        self.assertTrue(any(c[0][1].startswith("ifuture_session=") for c in set_cookie_calls))
 
 
 class TestMistakesRetentionAndRemix(unittest.TestCase):

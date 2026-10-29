@@ -40,6 +40,10 @@ def safe_next(raw: str | None) -> str:
     raw = (raw or "/").strip()
     if not raw.startswith("/") or raw.startswith("//") or raw.startswith("/\\"):
         return "/"
+    # O navegador descarta tab/quebra de linha e trata "\" como "/" ao ler o Location:
+    # "/\t/site.com" viraria "//site.com" (outro site). Qualquer caractere assim é recusado.
+    if "\\" in raw or any(ord(ch) < 0x21 or ord(ch) == 0x7F for ch in raw):
+        return "/"
     parsed = urlparse(raw)
     if parsed.scheme or parsed.netloc:
         return "/"
@@ -126,7 +130,19 @@ class GoogleAuthService:
         if not user:
             username = _username_from_email(email, lambda n: bool(repo.find_by_username(n)))
             pwd_hash, salt = hash_password(secrets.token_urlsafe(32))
-            user = repo.create_user(username, email, pwd_hash, salt, role="student")
+            user = repo.create_user(username, email, pwd_hash, salt, role="student", email_verified=True)
+        elif user.get("role") == "admin":
+            # O admin entra só com usuário e senha (ADMIN_PASSWORD): o login com Google não
+            # pode virar um caminho alternativo para a conta mais poderosa.
+            raise QuizAPIException("A conta de administrador entra só com usuário e senha.", 403, "GOOGLE_ADMIN_BLOCKED")
+        elif not user.get("email_verified"):
+            # Conta criada com este e-mail sem confirmação: quem a criou pode não ser o dono
+            # do e-mail (e conhece a senha). O Google acabou de provar quem é o dono: a senha
+            # vira aleatória e as outras sessões caem, e o e-mail passa a contar como confirmado.
+            pwd_hash, salt = hash_password(secrets.token_urlsafe(32))
+            repo.update_password_and_role(user["id"], pwd_hash, salt)
+            repo.delete_user_sessions(user["id"])
+            repo.mark_email_verified(user["id"])
 
         token = secrets.token_urlsafe(48)
         session = repo.create_session(_hash_token(token), user["id"], duration_days=7)

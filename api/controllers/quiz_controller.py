@@ -12,6 +12,37 @@ from api.exceptions.quiz_exceptions import (
 )
 
 
+MAX_REMIX_QUESTIONS = 10
+MAX_REMIX_TEXT_CHARS = 2000
+MAX_REMIX_OPTIONS = 6
+MAX_REMIX_OPTION_CHARS = 500
+
+
+def _sanitize_remix_questions(raw) -> list[dict]:
+    """As questões do remix vêm do navegador: só passa texto, com tamanho limitado."""
+    if not isinstance(raw, list):
+        return []
+    cleaned = []
+    for item in raw[:MAX_REMIX_QUESTIONS]:
+        if not isinstance(item, dict) or not isinstance(item.get("question"), str):
+            continue
+        question = item["question"].strip()[:MAX_REMIX_TEXT_CHARS]
+        options = item.get("options")
+        options = [
+            o.strip()[:MAX_REMIX_OPTION_CHARS]
+            for o in (options if isinstance(options, list) else [])[:MAX_REMIX_OPTIONS]
+            if isinstance(o, str) and o.strip()
+        ]
+        section = item.get("section")
+        if question:
+            cleaned.append({
+                "section": section.strip()[:120] if isinstance(section, str) and section.strip() else "Geral",
+                "question": question,
+                "options": options,
+            })
+    return cleaned
+
+
 class QuizController:
     """Controller para rotas de quiz"""
 
@@ -101,7 +132,8 @@ class QuizController:
     ) -> dict:
         """POST /api/quiz/remix-mistakes - Gera variações inéditas via IA para questões erradas"""
         from api.services.ai_service import remix_questions_by_ai, normalize_language, AIServiceError
-        if not isinstance(questions, list) or not questions:
+        questions = _sanitize_remix_questions(questions)
+        if not questions:
             raise QuizAPIException("Nenhuma questão enviada para variação.", 400)
         try:
             remixed = remix_questions_by_ai(
