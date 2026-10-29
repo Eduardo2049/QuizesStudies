@@ -270,7 +270,7 @@
 
         <div class="form-group modal-form-group">
           <label for="topicInput">Tema ou assunto do simulado <span class="required">*</span></label>
-          <input type="text" id="topicInput" placeholder="Ex: Raciocínio Lógico Proposicional, Python Básico, História do Brasil..." autocomplete="off">
+          <input type="text" id="topicInput" maxlength="300" placeholder="Ex: Raciocínio Lógico Proposicional, Python Básico, História do Brasil..." autocomplete="off">
           <div class="topic-examples" role="group" aria-label="Temas de exemplo">
             <span class="topic-examples-label">Experimente:</span>
             <button type="button" class="topic-chip" data-topic="Juros simples e compostos">Juros compostos</button>
@@ -313,7 +313,7 @@
 
         <div class="form-group modal-form-group">
           <label for="topicContext">Foco ou diretrizes adicionais (opcional)</label>
-          <input type="text" id="topicContext" placeholder="Ex: Focar em tabela-verdade, questões estilo concurso público, etc.">
+          <input type="text" id="topicContext" maxlength="2000" placeholder="Ex: Focar em tabela-verdade, questões estilo concurso público, etc.">
         </div>
       </div>
 
@@ -560,6 +560,14 @@
       <h2 id="accountModalTitle" class="access-title">Minha conta</h2>
       <p class="access-text">Conectado como <strong id="accountUsername">você</strong>.</p>
 
+      <section class="account-section" aria-labelledby="accountEmailTitle">
+        <h3 id="accountEmailTitle" class="access-option-title">E-mail</h3>
+        <p class="account-hint"><strong id="accountEmailAddress" translate="no"></strong></p>
+        <p class="account-hint" id="accountEmailStatus"></p>
+        <p id="accountEmailFeedback" class="form-feedback" role="status" hidden></p>
+        <button type="button" class="secondary access-cta" id="accountResendVerification" hidden>Reenviar link de confirmação</button>
+      </section>
+
       <section class="account-section" aria-labelledby="accountDataTitle">
         <h3 id="accountDataTitle" class="access-option-title">Seus dados</h3>
         <p class="account-hint">Baixe uma cópia em JSON de tudo o que guardamos sobre você: conta, simulados e histórico.</p>
@@ -632,6 +640,6 @@
   </div>
 
   <script type="module" src="/web/modules/backdrop.js?v=7"></script>
-  <script type="module" src="/web/app.js?v=18"></script>
+  <script type="module" src="/web/app.js?v=19"></script>
 </body>
 </html>

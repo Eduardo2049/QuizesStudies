@@ -7,6 +7,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, parseaddr
+from html import escape
 from urllib.parse import urlparse
 from api.utils.config import (
     SMTP_HOST,
@@ -50,6 +51,15 @@ class EmailService:
         name, address = parseaddr(self.from_email)
         return formataddr((name or "Acely", address or self.from_email))
 
+    def _log_unsent(self, kind: str, to_email: str, username: str, url: str) -> None:
+        # Sem emoji: consoles Windows (cp1252) lançam UnicodeEncodeError no print.
+        # O link só vai para o log em DEBUG: em produção, quem lê os logs poderia usá-lo
+        # (trocar a senha ou confirmar o e-mail de outra conta).
+        if DEBUG:
+            print(f"[auth:simulated] Link de {kind} para '{username}' <{to_email}>: {url}")
+        else:
+            print(f"[auth] SMTP não configurado: e-mail de {kind} para '{username}' não enviado (defina SMTP_HOST)")
+
     def send_password_reset_email(
         self,
         to_email: str,
@@ -62,20 +72,8 @@ class EmailService:
         Retorna (sucesso: bool, motivo: str).
         """
         if not self.is_configured():
-            # Sem emoji: consoles Windows (cp1252) lançam UnicodeEncodeError no print
-            msg_log = (
-                f"[auth:simulated] Link de recuperação para '{username}' <{to_email}>: "
-                f"{reset_url} (token: {token})"
-            )
-            print(msg_log)
+            self._log_unsent("recuperação", to_email, username, reset_url)
             return True, "simulated"
-
-        subject = "Recuperação de Senha — Acely"
-        # Logo em PNG (clientes de e-mail bloqueiam SVG) no mesmo domínio do link enviado
-        parsed = urlparse(reset_url)
-        site_url = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else "https://acely.com.br"
-        logo_url = f"{site_url}/web/icons/favicon-192.png"
-        site_label = parsed.netloc or "acely.com.br"
 
         text_content = (
             f"Olá, {username}!\n\n"
@@ -86,8 +84,79 @@ class EmailService:
             f"Se você não solicitou a recuperação, pode ignorar este e-mail com segurança.\n\n"
             f"— Equipe Acely"
         )
+        html_content = _render_email(
+            username=username,
+            url=reset_url,
+            intro="Recebemos uma solicitação para redefinir a senha da sua conta no <strong>Acely</strong>. "
+            "Clique no botão abaixo para prosseguir:",
+            button="Redefinir Minha Senha",
+            expiry="Este link expira em <strong>30 minutos</strong> e só pode ser utilizado uma vez.",
+            closing="Se você não fez essa solicitação, nenhuma ação é necessária — sua conta continua segura.",
+        )
+        return self._deliver("Recuperação de Senha — Acely", to_email, text_content, html_content, "redefinição")
 
-        html_content = f"""<!DOCTYPE html>
+    def send_email_verification(self, to_email: str, username: str, verify_url: str) -> tuple[bool, str]:
+        """Envia o link de confirmação do e-mail informado no cadastro."""
+        if not self.is_configured():
+            self._log_unsent("confirmação de e-mail", to_email, username, verify_url)
+            return True, "simulated"
+
+        text_content = (
+            f"Olá, {username}!\n\n"
+            f"Confirme o e-mail da sua conta no Acely pelo link abaixo:\n\n"
+            f"{verify_url}\n\n"
+            f"Este link é válido por 24 horas.\n"
+            f"Se você não criou uma conta no Acely, pode ignorar este e-mail.\n\n"
+            f"— Equipe Acely"
+        )
+        html_content = _render_email(
+            username=username,
+            url=verify_url,
+            intro="Confirme o e-mail da sua conta no <strong>Acely</strong>. A confirmação protege a conta "
+            "e garante que a recuperação de senha chegue até você.",
+            button="Confirmar meu e-mail",
+            expiry="Este link expira em <strong>24 horas</strong> e só pode ser utilizado uma vez.",
+            closing="Se você não criou uma conta no Acely, pode ignorar este e-mail.",
+        )
+        return self._deliver("Confirme seu e-mail — Acely", to_email, text_content, html_content, "confirmação")
+
+    def _deliver(self, subject: str, to_email: str, text_content: str, html_content: str, kind: str) -> tuple[bool, str]:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = self.sender_header()
+        msg["To"] = to_email
+
+        msg.attach(MIMEText(text_content, "plain", "utf-8"))
+        msg.attach(MIMEText(html_content, "html", "utf-8"))
+
+        try:
+            smtp_cls = smtplib.SMTP_SSL if self.use_ssl else smtplib.SMTP
+            with smtp_cls(self.host, self.port, timeout=10) as server:
+                if self.use_tls and not self.use_ssl:
+                    server.starttls()
+                if self.user and self.password:
+                    server.login(self.user, self.password)
+                server.sendmail(self.from_email, [to_email], msg.as_string())
+
+            if DEBUG:
+                print(f"[email] E-mail de {kind} enviado com sucesso para {to_email}")
+            return True, "sent"
+        except Exception as e:
+            print(f"[email] Erro ao enviar e-mail via SMTP ({self.host}:{self.port}): {e}")
+            return False, str(e)
+
+
+def _render_email(username: str, url: str, intro: str, button: str, expiry: str, closing: str) -> str:
+    """Modelo HTML dos e-mails. `intro`, `expiry` e `closing` são texto fixo do código;
+    o nome de usuário e o link vêm de fora e são escapados."""
+    # Logo em PNG (clientes de e-mail bloqueiam SVG) no mesmo domínio do link enviado
+    parsed = urlparse(url)
+    site_url = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else "https://acely.com.br"
+    logo_url = f"{site_url}/web/icons/favicon-192.png"
+    site_label = parsed.netloc or "acely.com.br"
+    safe_user = escape(username)
+    safe_url = escape(url, quote=True)
+    return f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
@@ -145,17 +214,17 @@ class EmailService:
       <p>Acesso à Plataforma de Simulados</p>
     </div>
     <div class="content">
-      <p>Olá, <strong>{username}</strong>,</p>
-      <p>Recebemos uma solicitação para redefinir a senha da sua conta no <strong>Acely</strong>. Clique no botão abaixo para prosseguir:</p>
+      <p>Olá, <strong>{safe_user}</strong>,</p>
+      <p>{intro}</p>
       <div class="btn-wrapper">
-        <a href="{reset_url}" class="btn" target="_blank" rel="noopener">Redefinir Minha Senha</a>
+        <a href="{safe_url}" class="btn" target="_blank" rel="noopener">{button}</a>
       </div>
       <p style="font-size: 13px; color: #5b635e;">
-        Este link expira em <strong>30 minutos</strong> e só pode ser utilizado uma vez. Se o botão não funcionar, copie e cole o endereço abaixo no seu navegador:
+        {expiry} Se o botão não funcionar, copie e cole o endereço abaixo no seu navegador:
       </p>
-      <div class="fallback-link">{reset_url}</div>
+      <div class="fallback-link">{safe_url}</div>
       <p style="font-size: 12px; color: #5b635e; margin-top: 24px;">
-        Se você não fez essa solicitação, nenhuma ação é necessária — sua conta continua segura.
+        {closing}
       </p>
     </div>
     <div class="footer">
@@ -166,27 +235,3 @@ class EmailService:
 </body>
 </html>
 """
-
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = self.sender_header()
-        msg["To"] = to_email
-
-        msg.attach(MIMEText(text_content, "plain", "utf-8"))
-        msg.attach(MIMEText(html_content, "html", "utf-8"))
-
-        try:
-            smtp_cls = smtplib.SMTP_SSL if self.use_ssl else smtplib.SMTP
-            with smtp_cls(self.host, self.port, timeout=10) as server:
-                if self.use_tls and not self.use_ssl:
-                    server.starttls()
-                if self.user and self.password:
-                    server.login(self.user, self.password)
-                server.sendmail(self.from_email, [to_email], msg.as_string())
-
-            if DEBUG:
-                print(f"[email] E-mail de redefinição enviado com sucesso para {to_email}")
-            return True, "sent"
-        except Exception as e:
-            print(f"[email] Erro ao enviar e-mail via SMTP ({self.host}:{self.port}): {e}")
-            return False, str(e)
