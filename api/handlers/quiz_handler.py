@@ -30,6 +30,24 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024        # 20 MB (autenticado)
 MAX_GUEST_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB (convidado)
 MAX_JSON_BYTES = 256 * 1024
 
+# Content-Type dos arquivos estáticos servidos de web/ (e da raiz, como robots.txt)
+STATIC_CONTENT_TYPES = {
+    ".css": "text/css; charset=utf-8",
+    ".js": "application/javascript; charset=utf-8",
+    ".html": "text/html; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".ico": "image/x-icon",
+    ".woff2": "font/woff2",
+    ".txt": "text/plain; charset=utf-8",
+    ".xml": "application/xml; charset=utf-8",
+    ".webmanifest": "application/manifest+json; charset=utf-8",
+}
+
+
+def _static_content_type(suffix: str) -> str:
+    return STATIC_CONTENT_TYPES.get(suffix.lower(), "application/octet-stream")
+
 
 class RateLimiter:
     """
@@ -570,18 +588,22 @@ class QuizHandler(BaseHTTPRequestHandler):
                 self._send_html_file(WEB_DIR / static_pages[request.path], 200)
                 return
 
-            # 3.3 Servir Favicon na raiz (/favicon.ico, /favicon.svg, /favicon.png, /apple-touch-icon.png)
-            if request.path in ("/favicon.ico", "/favicon.svg", "/favicon.png", "/apple-touch-icon.png"):
-                fav_name = request.path.lstrip("/").split("?", 1)[0]
-                fav_file = (WEB_DIR / "icons" / fav_name).resolve()
+            # 3.3 Servir na raiz o que navegadores e buscadores procuram lá
+            # (favicons, robots.txt, sitemap.xml e o manifesto). Espelha os rewrites do vercel.json.
+            root_files = {
+                "/favicon.ico": "icons/favicon.ico",
+                "/favicon.svg": "icons/favicon.svg",
+                "/favicon.png": "icons/favicon.png",
+                "/apple-touch-icon.png": "icons/apple-touch-icon.png",
+                "/robots.txt": "robots.txt",
+                "/sitemap.xml": "sitemap.xml",
+                "/site.webmanifest": "site.webmanifest",
+            }
+            if request.path in root_files:
+                fav_file = (WEB_DIR / root_files[request.path]).resolve()
                 if fav_file.is_file():
                     content = fav_file.read_bytes()
-                    mime = (
-                        "image/svg+xml" if fav_file.suffix == ".svg" else
-                        "image/png" if fav_file.suffix == ".png" else
-                        "image/x-icon" if fav_file.suffix == ".ico" else
-                        "application/octet-stream"
-                    )
+                    mime = _static_content_type(fav_file.suffix)
                     self.send_response(200)
                     self.send_header("Content-Type", mime)
                     self.send_header("Content-Length", str(len(content)))
@@ -599,16 +621,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                 web_root = WEB_DIR.resolve()
 
                 if web_root in static_file.parents and static_file.is_file():
-                    content_type = (
-                        "text/css; charset=utf-8" if static_file.suffix == ".css" else
-                        "application/javascript; charset=utf-8" if static_file.suffix == ".js" else
-                        "text/html; charset=utf-8" if static_file.suffix == ".html" else
-                        "image/svg+xml" if static_file.suffix == ".svg" else
-                        "image/png" if static_file.suffix == ".png" else
-                        "image/x-icon" if static_file.suffix == ".ico" else
-                        "font/woff2" if static_file.suffix == ".woff2" else
-                        "application/octet-stream"
-                    )
+                    content_type = _static_content_type(static_file.suffix)
                     try:
                         content = static_file.read_bytes()
                         self.send_response(200)

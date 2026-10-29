@@ -22,6 +22,17 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/web/icons/favicon-16x16.png?v=3">
   <link rel="apple-touch-icon" sizes="180x180" href="/web/icons/apple-touch-icon.png?v=3">
   <link rel="shortcut icon" href="/web/icons/favicon.ico?v=3">
+  <link rel="manifest" href="/site.webmanifest">
+  <!-- Dados estruturados: nome do site e logo nos resultados de busca (bloco de dados, não executa) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      { "@type": "WebSite", "name": "Acely", "url": "https://acely.com.br/", "inLanguage": "pt-BR" },
+      { "@type": "Organization", "name": "Acely", "url": "https://acely.com.br/", "logo": "https://acely.com.br/web/icons/favicon.png" }
+    ]
+  }
+  </script>
   <link rel="stylesheet" href="/web/styles.css?v=25">
   <!-- Script de prevenção de FOUC de tema (execução imediata, bloqueante) -->
   <script src="/web/modules/theme-boot.js"></script>

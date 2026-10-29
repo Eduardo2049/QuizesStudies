@@ -6,6 +6,8 @@ Quando o SMTP não está configurado, opera em modo simulado para desenvolviment
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formataddr, parseaddr
+from urllib.parse import urlparse
 from api.utils.config import (
     SMTP_HOST,
     SMTP_PORT,
@@ -43,6 +45,11 @@ class EmailService:
         """Indica se as credenciais de SMTP foram fornecidas no ambiente."""
         return bool(self.host and self.host.strip())
 
+    def sender_header(self) -> str:
+        """Remetente do cabeçalho From. Sem nome no SMTP_FROM (ex.: só o Gmail), aparece como "Acely"."""
+        name, address = parseaddr(self.from_email)
+        return formataddr((name or "Acely", address or self.from_email))
+
     def send_password_reset_email(
         self,
         to_email: str,
@@ -64,6 +71,11 @@ class EmailService:
             return True, "simulated"
 
         subject = "Recuperação de Senha — Acely"
+        # Logo em PNG (clientes de e-mail bloqueiam SVG) no mesmo domínio do link enviado
+        parsed = urlparse(reset_url)
+        site_url = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else "https://acely.com.br"
+        logo_url = f"{site_url}/web/icons/favicon-192.png"
+        site_label = parsed.netloc or "acely.com.br"
 
         text_content = (
             f"Olá, {username}!\n\n"
@@ -93,6 +105,9 @@ class EmailService:
     .header {{
       padding: 28px 32px; background-color: #0d3f3d;
       border-bottom: 1px solid #0d3f3d; text-align: center;
+    }}
+    .header img {{
+      display: block; margin: 0 auto 12px; border: 0;
     }}
     .header h1 {{
       margin: 0; font-size: 22px; color: #f4f0e8; letter-spacing: -0.3px;
@@ -125,6 +140,7 @@ class EmailService:
 <body>
   <div class="container">
     <div class="header">
+      <img src="{logo_url}" alt="" width="48" height="48">
       <h1>Acely</h1>
       <p>Acesso à Plataforma de Simulados</p>
     </div>
@@ -143,7 +159,8 @@ class EmailService:
       </p>
     </div>
     <div class="footer">
-      Acely · Treinamento e simulados com IA
+      Acely · Treinamento e simulados com IA ·
+      <a href="{site_url}" style="color: #176b67;" target="_blank" rel="noopener">{site_label}</a>
     </div>
   </div>
 </body>
@@ -152,7 +169,7 @@ class EmailService:
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = self.from_email
+        msg["From"] = self.sender_header()
         msg["To"] = to_email
 
         msg.attach(MIMEText(text_content, "plain", "utf-8"))

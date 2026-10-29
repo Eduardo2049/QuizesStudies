@@ -37,6 +37,19 @@ Para criar a próxima branch: `git checkout develop && git pull && git checkout 
   exportação de dados baixa `acely-meus-dados.json`.
 - `?v=` dos ícones, `i18n.js`, `en.js`, `app.js`, `auth_page.js` e `reset_password_page.js` subidos.
 
+### 1.1.1 Integração com o domínio (também na `feature/rebrand-acely`, 29/10/2026)
+
+- `vercel.json`: `www.acely.com.br` → `https://acely.com.br` (301) e rewrites de `/robots.txt`,
+  `/sitemap.xml` e `/site.webmanifest` (arquivos em `web/`); o servidor local serve os mesmos
+  caminhos (`quiz_handler.py`, tabela `STATIC_CONTENT_TYPES`).
+- `web/site.webmanifest` (nome Acely, ícones 192/512/SVG, cores do tema) ligado em todas as páginas.
+- `canonical`, `og:*` e `theme-color` em login, cadastro, termos e privacidade; `noindex` na
+  recuperação de senha (o token vai na URL) e na 404; dados estruturados (`WebSite` + `Organization`
+  com a logo) na home.
+- E-mail de recuperação: remetente aparece como "Acely" mesmo com `SMTP_FROM` só com o Gmail, logo
+  PNG no cabeçalho e link para o domínio no rodapé.
+- Testes em `tests/test_dominio_acely.py`.
+
 **Mantidos de propósito (não trocar sem migração):**
 - Cookie de sessão `ifuture_session`: trocar o nome desconecta todo mundo. Se quiser trocar, ler os
   dois nomes por 7 dias (o tempo de vida da sessão) e só gravar o novo.
@@ -50,6 +63,8 @@ Para criar a próxima branch: `git checkout develop && git pull && git checkout 
 
 1. **Vercel → Settings → Domains:** adicionar `acely.com.br` e `www.acely.com.br`, com o `www`
    redirecionando para o domínio sem `www` (evita o bloqueio de POST de outro site entre os dois).
+   O `vercel.json` já faz esse mesmo redirecionamento; **não** configure o sentido contrário
+   (sem `www` → `www`), ou os dois formam um laço.
 2. **Registro.br → DNS:** criar os registros que a Vercel pedir (A no domínio raiz e CNAME no `www`).
 3. **Vercel → Environment Variables (Production):** `APP_URL=https://acely.com.br`.
    Em Preview, manter a URL da Vercel do ambiente.
@@ -60,7 +75,8 @@ Para criar a próxima branch: `git checkout develop && git pull && git checkout 
 5. **E-mail:** para enviar como `noreply@acely.com.br` é preciso um provedor de e-mail no domínio
    (com SPF e DKIM no DNS); até lá, manter `SMTP_FROM` com o Gmail atual. Opcional: criar
    `contato@acely.com.br` e trocar o e-mail de contato em `web/termos.html` e `web/privacidade.html`.
-6. **Google Search Console:** verificar `acely.com.br` e enviar a home.
+6. **Google Search Console:** verificar `acely.com.br` (registro TXT no DNS) e enviar o sitemap
+   `https://acely.com.br/sitemap.xml`.
 7. Conferir o compartilhamento do link (WhatsApp, LinkedIn) para ver a `og-image.png`.
 
 ---

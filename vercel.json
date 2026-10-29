@@ -1,10 +1,21 @@
 {
   "version": 2,
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "www.acely.com.br" }],
+      "destination": "https://acely.com.br/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/favicon.ico",          "destination": "/web/icons/favicon.ico" },
     { "source": "/favicon.svg",          "destination": "/web/icons/favicon.svg" },
     { "source": "/favicon.png",          "destination": "/web/icons/favicon.png" },
     { "source": "/apple-touch-icon.png", "destination": "/web/icons/apple-touch-icon.png" },
+    { "source": "/robots.txt",           "destination": "/web/robots.txt" },
+    { "source": "/sitemap.xml",          "destination": "/web/sitemap.xml" },
+    { "source": "/site.webmanifest",     "destination": "/web/site.webmanifest" },
     { "source": "/login", "destination": "/web/login.html" },
     { "source": "/register", "destination": "/web/register.html" },
     { "source": "/reset-password", "destination": "/web/reset-password.html" },
@@ -54,7 +65,7 @@
       ]
     },
     {
-      "source": "/(favicon\\..*|apple-touch-icon\\.png)",
+      "source": "/(favicon\\..*|apple-touch-icon\\.png|robots\\.txt|sitemap\\.xml|site\\.webmanifest)",
       "headers": [
         {
           "key": "Cache-Control",
