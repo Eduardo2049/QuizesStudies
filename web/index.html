@@ -3,19 +3,36 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Quiz Study — Treino de Raciocínio</title>
+  <title>Acely — Treino de Raciocínio</title>
   <meta name="description" content="Transforme PDF, DOCX, TXT ou um tema em simulado com cronômetro e gabarito comentado por IA. Comece grátis, sem cadastro.">
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Quiz Study">
-  <meta property="og:title" content="Quiz Study — simulados com IA a partir do seu material">
+  <meta property="og:site_name" content="Acely">
+  <meta property="og:title" content="Acely — simulados com IA a partir do seu material">
   <meta property="og:description" content="Envie sua apostila ou digite um tema e treine com simulado cronometrado e gabarito comentado. Comece grátis, sem cadastro.">
-  <meta property="og:image" content="/web/icons/favicon-192.png">
-  <meta name="twitter:card" content="summary">
-  <link rel="icon" type="image/svg+xml" href="/web/icons/favicon.svg?v=2">
-  <link rel="icon" type="image/png" sizes="32x32" href="/web/icons/favicon-32x32.png?v=2">
-  <link rel="icon" type="image/png" sizes="16x16" href="/web/icons/favicon-16x16.png?v=2">
-  <link rel="apple-touch-icon" sizes="180x180" href="/web/icons/apple-touch-icon.png?v=2">
-  <link rel="shortcut icon" href="/web/icons/favicon.ico?v=2">
+  <meta property="og:url" content="https://acely.com.br/">
+  <meta property="og:image" content="https://acely.com.br/web/icons/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Logo da Acely: simulados com IA a partir do seu material">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d3f3d">
+  <link rel="canonical" href="https://acely.com.br/">
+  <link rel="icon" type="image/svg+xml" href="/web/icons/favicon.svg?v=3">
+  <link rel="icon" type="image/png" sizes="32x32" href="/web/icons/favicon-32x32.png?v=3">
+  <link rel="icon" type="image/png" sizes="16x16" href="/web/icons/favicon-16x16.png?v=3">
+  <link rel="apple-touch-icon" sizes="180x180" href="/web/icons/apple-touch-icon.png?v=3">
+  <link rel="shortcut icon" href="/web/icons/favicon.ico?v=3">
+  <link rel="manifest" href="/site.webmanifest">
+  <!-- Dados estruturados: nome do site e logo nos resultados de busca (bloco de dados, não executa) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      { "@type": "WebSite", "name": "Acely", "url": "https://acely.com.br/", "inLanguage": "pt-BR" },
+      { "@type": "Organization", "name": "Acely", "url": "https://acely.com.br/", "logo": "https://acely.com.br/web/icons/favicon.png" }
+    ]
+  }
+  </script>
   <link rel="stylesheet" href="/web/styles.css?v=25">
   <!-- Script de prevenção de FOUC de tema (execução imediata, bloqueante) -->
   <script src="/web/modules/theme-boot.js"></script>
@@ -31,8 +48,8 @@
     <header class="hero">
       <div class="hero-bar">
         <div class="hero-brand">
-          <img src="/web/icons/favicon.svg?v=2" alt="" class="hero-brand-icon" width="22" height="22" aria-hidden="true">
-          <p class="eyebrow">Quiz Study · prática guiada</p>
+          <img src="/web/icons/favicon.svg?v=3" alt="" class="hero-brand-icon" width="22" height="22" aria-hidden="true">
+          <p class="eyebrow">Acely · prática guiada</p>
         </div>
         <div class="hero-utils">
           <button id="themeToggle" class="btn-theme-toggle btn-ghost" type="button" title="Alternar tema (Sistema / Escuro / Claro)">
@@ -46,8 +63,8 @@
             <span class="theme-icon"></span>
             <span class="theme-label">Animação do fundo</span>
           </button>
-          <button id="btnOpenAboutModal" class="btn-about btn-ghost" type="button" title="Conheça o propósito e diferenciais do Quiz Study">
-            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg> <span class="btn-label">Por que o Quiz Study?</span>
+          <button id="btnOpenAboutModal" class="btn-about btn-ghost" type="button" title="Conheça o propósito e diferenciais do Acely">
+            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg> <span class="btn-label">Por que o Acely?</span>
           </button>
           <div id="authControls" class="auth-controls">
             <!-- Visitante (sem conta e sem sessão de convidado) -->
@@ -364,14 +381,14 @@
     </div>
   </div>
 
-  <!-- ── Modal Explicativo: Por que o Quiz Study? ────────────────────────── -->
+  <!-- ── Modal Explicativo: Por que o Acely? ────────────────────────── -->
   <div id="aboutModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="aboutModalTitle">
     <div class="modal modal--about">
       <button class="modal-close" id="closeAboutModal" aria-label="Fechar">&times;</button>
       
       <div class="about-header">
         <span class="about-badge">Propósito e diferenciais</span>
-        <h2 id="aboutModalTitle" class="about-title">Por que o Quiz Study existe?</h2>
+        <h2 id="aboutModalTitle" class="about-title">Por que o Acely existe?</h2>
         <p class="about-tagline">Da sua apostila a um simulado com gabarito comentado.</p>
       </div>
 
@@ -401,7 +418,7 @@
               <thead>
                 <tr>
                   <th>Recurso</th>
-                  <th class="highlight-col">Quiz Study</th>
+                  <th class="highlight-col">Acely</th>
                   <th>Quizlet</th>
                   <th>QConcursos / Gran</th>
                   <th>Anki</th>
@@ -546,7 +563,7 @@
       <section class="account-section" aria-labelledby="accountDataTitle">
         <h3 id="accountDataTitle" class="access-option-title">Seus dados</h3>
         <p class="account-hint">Baixe uma cópia em JSON de tudo o que guardamos sobre você: conta, simulados e histórico.</p>
-        <a href="/api/account/export" class="secondary access-cta" id="accountExportLink" download="quiz-study-meus-dados.json">Baixar meus dados</a>
+        <a href="/api/account/export" class="secondary access-cta" id="accountExportLink" download="acely-meus-dados.json">Baixar meus dados</a>
       </section>
 
       <section class="account-section account-section--danger" aria-labelledby="accountDeleteTitle">
@@ -615,6 +632,6 @@
   </div>
 
   <script type="module" src="/web/modules/backdrop.js?v=7"></script>
-  <script type="module" src="/web/app.js?v=17"></script>
+  <script type="module" src="/web/app.js?v=18"></script>
 </body>
 </html>

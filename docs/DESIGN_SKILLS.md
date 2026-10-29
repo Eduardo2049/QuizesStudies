@@ -1,4 +1,4 @@
-# DESIGN_SKILLS.md — Skill de design adotada e como ela se aplica ao Quiz Study
+# DESIGN_SKILLS.md — Skill de design adotada e como ela se aplica ao Acely
 
 A interface segue a skill **`landing-page-design`** do repositório
 [elayadesign/ai-design-skills](https://github.com/elayadesign/ai-design-skills) (licença MIT).
@@ -29,7 +29,7 @@ e revise a seção 3 deste arquivo.
 A skill fala em classes do Tailwind; aqui o Tailwind é proibido (`AGENTS.md`). Usamos apenas a
 **escala de valores** dele, em variáveis CSS.
 
-| Regra da skill | Como fica no Quiz Study |
+| Regra da skill | Como fica no Acely |
 |---|---|
 | **B1 Fonte única** (Geist, Manrope…) | Manrope (`--font-sans`), self-hosted em `web/fonts/`. DM Mono (`--font-mono`) só para dado numérico: cronômetro, contadores, chip de cota de IA. |
 | **B1 Sem itálico, peso máx. bold** | `font-style: normal` em toda a interface (inclusive `em` de destaque, que só muda a cor). Pesos 400, 500, 600 e 700; 800/900 proibidos. |
@@ -42,9 +42,9 @@ A skill fala em classes do Tailwind; aqui o Tailwind é proibido (`AGENTS.md`). 
 | **B5 Hero** | Título e subtítulo com no máximo 680px e quebras de linha onde a ideia quebra. |
 | **B6 Ícones** | SVG inline em `web/modules/icons.js` (a CSP não permite CDN). Ícones novos: copiar o SVG do Phosphor (MIT) para o módulo. |
 | **B7 Movimento** | Curva base `--ease-out` = `cubic-bezier(0.22, 1, 0.36, 1)`. Posição/layout 500ms; cor e opacidade 300ms (nunca abaixo de 200ms: `--dur-fast` = 200ms). Animar só `transform` e `opacity`. Em `prefers-reduced-motion`, trocar movimento por opacidade. |
-| **B8 Conteúdo** | Frases em caixa normal ("Criar simulado", não "Criar Simulado"). Mensagens de sistema calmas e específicas, sem ponto de exclamação: o que falhou e o que fazer. |
+| **B8 Conteúdo** | Frases em caixa normal ("Criar simulado", não "Criar Simulado"). Mensagens de sistema calmas e específicas, sem ponto de exclamação: o que falhou e o que fazer. Sem promessas que não dá para comprovar (ex.: "em 5 segundos"). A mesma regra vale para a tradução em inglês (`web/modules/i18n/en.js`). |
 | **B9 Estados** | Hover, active (`scale(0.98)`), foco visível, carregando (skeleton), vazio (orientação de próximo passo) e erro inline. Nunca `alert()`. |
-| **B10 Itens de entrega** | Link "pular para o conteúdo", `<title>`, meta description, `og:*`, alt text, HTML semântico, caminho de volta em toda página. Pendentes: termos e privacidade (LGPD), 404 própria. |
+| **B10 Itens de entrega** | Link "pular para o conteúdo", `<title>`, meta description, `og:*`, alt text, HTML semântico, caminho de volta em toda página. Termos, privacidade (LGPD) e 404 própria já entregues. |
 | **A4 Conversão** | Um CTA principal por tela, verbo + o que a pessoa recebe ("Criar conta grátis"), redução de risco visível ("Grátis · sem cartão"). |
 
 ---
@@ -67,6 +67,9 @@ A skill fala em classes do Tailwind; aqui o Tailwind é proibido (`AGENTS.md`). 
 - Um botão cheio por tela: "Explorar simulados", "Criar simulado" e "Finalizar simulado" (barra) em contorno.
 - Esqueleto no formato das questões no lugar do spinner de geração.
 - Páginas de termos, privacidade e 404 próprias; rodapé com links legais.
+- Regras do Hallmark sem mudar o tema: textos sem exclamação, modal "Por que o Acely?" enxuto, `overflow-x: clip` em `html`/`body`, foco visível em `summary` e `[role=button]`, alvos de 44px no celular (ícones do topo, rodapé, abas e links de login).
+- Modal de resultado rola inteiro (placar, estatísticas e questões); rodapé fixo no desktop.
+- Interface em português e inglês (botão PT/EN no topo).
 
 ## 4. Checklist de PR (resumo da skill para este projeto)
 
@@ -77,4 +80,6 @@ A skill fala em classes do Tailwind; aqui o Tailwind é proibido (`AGENTS.md`). 
 - [ ] Transições com `--ease-out`, ≥ 200ms, animando só `transform`/`opacity`, com fallback de `prefers-reduced-motion`
 - [ ] Estados completos: hover, active, foco visível, carregando, vazio e erro inline
 - [ ] Contraste AA nos dois temas e alvo de toque ≥ 44px no mobile
+- [ ] Textos novos com tradução em `web/modules/i18n/en.js`
+- [ ] `python -m unittest discover tests` passando (inclui `test_ui_contract.py`)
 - [ ] `?v=` de `styles.css`/`app.js` incrementado nos HTMLs

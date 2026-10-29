@@ -8,8 +8,8 @@
  */
 export default {
   // ── Geral / cabeçalho ──────────────────────────────────────────────────────
-  'Quiz Study — Treino de Raciocínio': 'Quiz Study — Reasoning practice',
-  'Quiz Study · prática guiada': 'Quiz Study · guided practice',
+  'Acely — Treino de Raciocínio': 'Acely — Reasoning practice',
+  'Acely · prática guiada': 'Acely · guided practice',
   'Pular para as questões': 'Skip to questions',
   'Alternar tema (Sistema / Escuro / Claro)': 'Switch theme (System / Dark / Light)',
   'Tema': 'Theme',
@@ -22,8 +22,8 @@ export default {
   'Animação do fundo': 'Background animation',
   'Animação do fundo: ligada (clique para pausar)': 'Background animation: on (click to pause)',
   'Animação do fundo: pausada (clique para animar)': 'Background animation: paused (click to play)',
-  'Conheça o propósito e diferenciais do Quiz Study': 'Learn what Quiz Study is for and what sets it apart',
-  'Por que o Quiz Study?': 'Why Quiz Study?',
+  'Conheça o propósito e diferenciais do Acely': 'Learn what Acely is for and what sets it apart',
+  'Por que o Acely?': 'Why Acely?',
   'Entrar': 'Sign in',
   'Criar conta grátis': 'Create free account',
   'Criar conta': 'Create account',
@@ -330,8 +330,8 @@ export default {
     'The AI service is unavailable right now. Please try again shortly.',
   'Ocorreu um erro ao processar a requisição.': 'Something went wrong while processing the request.',
 
-  // ── Modal "Por que o Quiz Study?" ─────────────────────────────────────────
-  'Por que o Quiz Study existe?': 'Why does Quiz Study exist?',
+  // ── Modal "Por que o Acely?" ─────────────────────────────────────────
+  'Por que o Acely existe?': 'Why does Acely exist?',
   'Propósito e diferenciais': 'Purpose and differentiators',
   'Da sua apostila a um simulado com gabarito comentado.': 'From your notes to a quiz with an explained answer key.',
   'Fricção zero': 'Zero friction',
@@ -366,10 +366,10 @@ export default {
   'Entendi, vamos treinar': 'Got it, let’s practice',
 
   // ── Login / cadastro ──────────────────────────────────────────────────────
-  'Entrar — Quiz Study': 'Sign in — Quiz Study',
-  'Cadastrar — Quiz Study': 'Sign up — Quiz Study',
-  'Quiz Study · acesso à plataforma': 'Quiz Study · sign in',
-  'Quiz Study · crie sua conta': 'Quiz Study · create your account',
+  'Entrar — Acely': 'Sign in — Acely',
+  'Cadastrar — Acely': 'Sign up — Acely',
+  'Acely · acesso à plataforma': 'Acely · sign in',
+  'Acely · crie sua conta': 'Acely · create your account',
   'Boas-vindas ao': 'Welcome to',
   'Crie sua': 'Create your',
   'conta grátis': 'free account',
@@ -416,9 +416,9 @@ export default {
   'Use uma conta Google com e-mail verificado.': 'Use a Google account with a verified email.',
 
   // ── Recuperação de senha ──────────────────────────────────────────────────
-  'Recuperar Senha — Quiz Study': 'Reset password — Quiz Study',
-  'Definir Nova Senha — Quiz Study': 'Set a new password — Quiz Study',
-  'Quiz Study · recuperação de acesso': 'Quiz Study · account recovery',
+  'Recuperar Senha — Acely': 'Reset password — Acely',
+  'Definir Nova Senha — Acely': 'Set a new password — Acely',
+  'Acely · recuperação de acesso': 'Acely · account recovery',
   'Recuperação de': 'Reset your',
   'Recuperar': 'Reset',
   'Nova': 'New',

@@ -60,7 +60,7 @@ export async function switchToStep2(token) {
 
   if (headerTitle) headerTitle.innerHTML = 'Nova<br><em>Senha</em>';
   if (headerSubtitle) headerSubtitle.textContent = 'Escolha uma nova senha forte para acessar seus simulados.';
-  if (pageTitle) pageTitle.textContent = 'Definir Nova Senha — Quiz Study';
+  if (pageTitle) pageTitle.textContent = 'Definir Nova Senha — Acely';
 
   clearFeedback(confirmFeedback);
 

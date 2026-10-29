@@ -1,24 +1,26 @@
-# Quizes Study
+# Acely
+
+Site: [acely.com.br](https://acely.com.br) · Repositório: `Eduardo2049/QuizesStudies` (o nome do repositório é anterior à marca).
 
 Plataforma de simulados de alto rendimento e treino de raciocínio lógico. Transforme qualquer material em **PDF**, **DOCX** ou **TXT** (ou gere tópicos do zero) em simulados interativos com gabarito pedagógico e **Caderno de Erros inteligente com mutações por IA**.
 
-> **Proposta de Valor Central:** *“Da sua apostila ao simulado ativo em 5 segundos.”*  
+> **Proposta de Valor Central:** *“Da sua apostila ao simulado ativo, com gabarito comentado.”*  
 > Menos tempo formatando flashcards, zero distração com fóruns poluídos e foco total na retenção de raciocínio.
 
 ---
 
-## Por que o Quiz Study existe? (Diferenciais de Mercado)
+## Por que o Acely existe? (Diferenciais de Mercado)
 
 Estudantes para concursos, certificações e vestibulares enfrentam três grandes problemas no mercado atual:
 1. **Criação Lenta de Questões:** Plataformas como o Anki exigem digitação e formatação manual card por card.
 2. **Bancos Estáticos e Rígidos:** Grandes sites (como QConcursos e Gran) dependem exclusivamente de provas antigas de bancas, sem permitir que o aluno pratique sobre suas próprias anotações, resumos ou livros de faculdade.
 3. **Decoreba de Gabarito:** Ao refazer uma questão errada, o cérebro tende a lembrar da letra correta (*"na 3 era a C"*), gerando uma falsa ilusão de aprendizado.
 
-O **Quiz Study** resolve isso unindo a extração instantânea de conteúdo à **Mutação de Questões por IA**: a IA identifica onde você errou e pode gerar variações inéditas mantendo o mesmo conceito teórico e nível de dificuldade, forçando a aplicação real do raciocínio.
+O **Acely** resolve isso unindo a extração instantânea de conteúdo à **Mutação de Questões por IA**: a IA identifica onde você errou e pode gerar variações inéditas mantendo o mesmo conceito teórico e nível de dificuldade, forçando a aplicação real do raciocínio.
 
 ### 📊 Benchmarking Competitivo
 
-| Critério / Ferramenta | Quiz Study | Quizlet | QConcursos / Gran Cursos | Anki |
+| Critério / Ferramenta | Acely | Quizlet | QConcursos / Gran Cursos | Anki |
 |---|:---:|:---:|:---:|:---:|
 | **Geração Instantânea por Material Próprio** | **Sim (PDF, DOCX, TXT)** | Não (Manual ou listas públicas) | Não (Apenas banco próprio de bancas) | Não (Manual card a card) |
 | **Geração de Simulado por Tema via IA** | **Sim (OpenRouter, modelos gratuitos)** | Limitado (em planos pagos) | Não | Não nativo |
@@ -57,7 +59,7 @@ Edite o `.env`:
 | `ALLOWED_ORIGINS` | Não | Lista separada por vírgulas de origens CORS permitidas |
 | `COOKIE_SECURE` | Não | Padrão `true`; use `false` apenas no desenvolvimento HTTP |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Para Tunnel | Token do Cloudflare Zero Trust para expor via túnel HTTPS |
-| `OPENROUTER_API_KEY` | Para IA | Chave do [OpenRouter](https://openrouter.ai). Só modelos gratuitos (`:free`) são usados; libere-os em *Settings → Privacy* |
+| `OPENROUTER_API_KEY` | Para IA | Chave do [OpenRouter](https://openrouter.ai). Só modelos gratuitos (`:free`) são usados; libere-os em *Settings → Privacy* e deixe *ZDR Endpoints Only* desligado (ele bloqueia todos os gratuitos) |
 | `OPENROUTER_FREE_MODELS` | Não | Modelos gratuitos preferidos, em ordem, separados por vírgula |
 | `OPENROUTER_DISCOVER_FREE_MODELS` | Não | Padrão `true`: descobre os modelos gratuitos disponíveis e usa como reserva |
 | `OPENROUTER_MAX_ATTEMPTS` | Não | Modelos tentados por pedido antes de desistir (padrão: `4`) |
@@ -99,6 +101,15 @@ O servidor inicia em `http://localhost:8000` (ou próxima porta livre) e executa
 
 ---
 
+## Idiomas (português e inglês)
+
+- A interface tem um botão **PT/EN** no topo. A escolha fica no `localStorage` (`quiz_lang`); na primeira visita segue o idioma do navegador.
+- O português escrito no HTML e no JS é o texto-fonte. `web/modules/i18n.js` troca textos e atributos pelo dicionário `web/modules/i18n/en.js` e observa o que o `app.js` gera depois; `web/modules/i18n-boot.js` evita mostrar o português por um instante antes da tradução. Elementos com `translate="no"` não são tocados.
+- A IA gera simulados, gabaritos de arquivos e variações no idioma escolhido: as rotas `/api/quiz/generate`, `/api/upload` e `/api/quiz/remix-mistakes` aceitam o campo `language` (`pt-BR` ou `en`; padrão `pt-BR`).
+- Para um idioma novo: crie `web/modules/i18n/<código>.js`, registre em `LANGUAGES` e `DICTIONARIES` (`i18n.js`), repita a regra em `i18n-boot.js` e acrescente o código em `AI_LANGUAGES` (`api/services/ai_service.py`).
+
+---
+
 ## Autenticação e Segurança
 
 - **Visitante (sem cadastro)**: a home abre direto, sem muro de login. Dá para explorar e resolver os simulados públicos, ver o gabarito comentado e enviar arquivos que já tragam gabarito (o simulado fica só no navegador).
@@ -134,7 +145,7 @@ semgrep scan --config auto .
 2. **Prevenção de SSRF e Protocolos Arbitrários**:
    - A integração com a API do OpenRouter em `api/services/ai_service.py` utiliza a biblioteca `requests` com timeout explícito e validação estrita de protocolo HTTP/HTTPS, eliminando riscos de leitura local de arquivos via esquemas como `file://` (`python.lang.security.audit.dynamic-urllib-use-detected`).
 3. **Proteção contra Ataques de Rajada e DDoS (Rate Limiting por Janela Deslizante)**:
-   - Implementação de `RateLimiter` genérico em [`api/handlers/quiz_handler.py`](file:///c:/Users/eduardo.asousa/Projetos/Pessoal/QuizesStudies/api/handlers/quiz_handler.py) protegendo rotas críticas (`/api/auth/*`, `/api/upload`, `/api/quiz/generate`).
+   - Implementação de `RateLimiter` genérico em [`api/handlers/quiz_handler.py`](api/handlers/quiz_handler.py) protegendo rotas críticas (`/api/auth/*`, `/api/upload`, `/api/quiz/generate`).
    - Resolução confiável do IP de origem seguindo a cadeia segura: `CF-Connecting-IP` → primeiro IP confiável de `X-Forwarded-For` → endereço de socket (`client_address`).
 4. **Cota de Proteção de Tokens de IA por IP (`AI_TOKEN_QUOTA_PER_HOUR`)**:
    - Limite configurável de tokens consumidos por hora por IP (padrão: **50.000 tokens/hora**, ajustável no `.env`), impedindo o esgotamento malicioso da cota do OpenRouter.
@@ -201,17 +212,25 @@ c) Opção C
 | `GET` | `/` ou `/index.html` | Pública | Interface principal de simulados |
 | `GET` | `/login` ou `/login.html` | Pública | Página de autenticação |
 | `GET` | `/register` ou `/register.html` | Pública | Página de cadastro de estudante |
+| `GET` | `/termos` e `/privacidade` | Pública | Termos de uso e política de privacidade (LGPD) |
 | `GET` | `/api/quizzes` | Pública | Lista quizzes disponíveis (com cache HTTP e ETag / 304) |
 | `GET` | `/api/quiz?source=<name>` | Pública | Questões de um quiz (sem gabarito; com ETag / 304) |
 | `POST` | `/api/quiz/submit` | Pública | Submete respostas, salva tentativa e retorna score/gabarito |
 | `GET` | `/api/user/attempts` | Autenticado / Convidado | Histórico de tentativas e caderno de erros |
-| `POST` | `/api/quiz/remix-mistakes` | Pública | Cria variações inéditas com IA para questões erradas |
-| `POST` | `/api/quiz/generate` | Pública / Convidado / Autenticado | Gera questões por tema via IA (com cache por hash) |
-| `POST` | `/api/auth/login` | Pública | Login (retorna Bearer Token e cookie HttpOnly) |
+| `POST` | `/api/quiz/remix-mistakes` | Convidado / Autenticado | Cria variações inéditas com IA para questões erradas (aceita `language`) |
+| `POST` | `/api/quiz/generate` | Convidado / Autenticado | Gera questões por tema via IA, com cache por hash (aceita `language`) |
+| `POST` | `/api/auth/login` | Pública | Login (sessão em cookie HttpOnly; o token só vem no JSON com `"return_token": true`) |
 | `POST` | `/api/auth/register` | Pública | Cadastro de estudante |
-| `GET` | `/api/auth/me` | Bearer Token | Dados do usuário autenticado |
-| `POST` | `/api/auth/logout` | Bearer Token | Encerramento de sessão |
-| `POST` | `/api/upload` | Autenticado (20 MB) / Convidado (`?guest=1`, 5 MB) | Upload multipart/form-data (TXT, PDF, DOCX) |
+| `GET` | `/api/auth/me` | Cookie / Bearer Token | Dados do usuário autenticado |
+| `POST` | `/api/auth/logout` | Cookie / Bearer Token | Encerramento de sessão |
+| `POST` | `/api/auth/forgot-password` e `/api/auth/reset-password` | Pública | Pedido e troca de senha por e-mail |
+| `GET` | `/api/auth/providers` | Pública | Informa se o login com Google está ligado |
+| `GET` | `/api/auth/google/start` e `/api/auth/google/callback` | Pública | Login com Google (OAuth, `state` em cookie) |
+| `POST` | `/api/guest/start`, `/api/guest/end` · `GET` `/api/guest/status` | Pública | Sessão de convidado e cota gratuita de IA |
+| `POST` | `/api/quizzes/import` | Autenticado | Salva na conta os simulados criados como convidado |
+| `GET` | `/api/account/export` | Autenticado | Cópia dos dados da conta em JSON (LGPD) |
+| `POST` | `/api/account/delete` | Autenticado (com senha) | Exclui a conta e os dados |
+| `POST` | `/api/upload` | Autenticado (20 MB) / Convidado (`?guest=1`, 5 MB) | Upload multipart/form-data (TXT, PDF, DOCX); aceita `language` |
 
 ---
 
@@ -257,7 +276,7 @@ python tests/load_test_real_api.py --calls 30 --workers 10 --burst --guest
 ## Arquitetura
 
 ```
-Quizes_Study/
+QuizesStudies/
 ├── api/
 │   ├── database/
 │   │   ├── connection.py      # Context managers para PostgreSQL
@@ -274,11 +293,16 @@ Quizes_Study/
 │   ├── models/
 │   │   └── dtos.py            # Data Transfer Objects
 │   ├── repositories/
-│   │   ├── auth_repository.py # Persistência de usuários e sessões
-│   │   └── quiz_repository.py # Persistência de quizzes e questões
+│   │   ├── quiz_repository.py # Persistência de quizzes e questões
+│   │   ├── rate_limit_repository.py # Contadores de rate limit e cotas
+│   │   └── user_repository.py # Usuários, sessões, exportação e exclusão (LGPD)
 │   ├── services/
-│   │   ├── ai_service.py      # Geração de gabarito via OpenRouter (requests)
+│   │   ├── ai_service.py      # IA via OpenRouter (só modelos gratuitos, troca automática de modelo)
 │   │   ├── auth_service.py    # Regras de hash e autenticação
+│   │   ├── email_service.py   # E-mail de redefinição de senha
+│   │   ├── google_auth_service.py # Login com Google (OAuth)
+│   │   ├── guest_service.py   # Modo convidado e cota gratuita de IA
+│   │   ├── import_service.py  # Importa simulados do convidado para a conta
 │   │   ├── quiz_service.py    # Lógica de negócio de simulados
 │   │   └── upload_service.py  # Orquestração de upload TXT/PDF/DOCX
 │   ├── utils/
@@ -293,7 +317,15 @@ Quizes_Study/
 │   ├── index.html             # Interface principal
 │   ├── login.html             # Tela de login moderna
 │   ├── register.html          # Tela de cadastro moderna
+│   ├── reset-password.html    # Troca de senha
+│   ├── termos.html            # Termos de uso
+│   ├── privacidade.html       # Política de privacidade (LGPD)
+│   ├── modules/               # ES Modules (tema, idiomas, atalhos, estatísticas, ícones...)
+│   │   ├── i18n.js            # Tradução da interface (PT/EN)
+│   │   ├── i18n-boot.js       # Evita piscar o português antes da tradução
+│   │   └── i18n/en.js         # Dicionário em inglês
 │   └── styles.css             # Design system completo
+├── 404.html                   # Página 404 própria
 ├── .env.example               # Template de variáveis de ambiente
 ├── docker-compose.yml         # PostgreSQL + app + tunnel
 ├── Dockerfile                 # Multi-stage (builder + runtime) com usuário non-root

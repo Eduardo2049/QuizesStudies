@@ -1,4 +1,4 @@
-# Como Contribuir — Quiz Study
+# Como Contribuir — Acely
 
 Obrigado pelo interesse em contribuir! 🎉
 

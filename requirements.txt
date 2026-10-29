@@ -1,4 +1,4 @@
-# IFuture Study - Dependências Python (Versões fixadas para estabilidade e reprodutibilidade)
+# Acely - Dependências Python (Versões fixadas para estabilidade e reprodutibilidade)
 
 # Banco de dados PostgreSQL
 psycopg2-binary==2.9.10

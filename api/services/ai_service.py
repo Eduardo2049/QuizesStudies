@@ -446,8 +446,8 @@ def _call_openrouter(
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://ifuture-study.app",
-        "X-Title": "IFuture Study",
+        "HTTP-Referer": "https://acely.com.br",
+        "X-Title": "Acely",
     }
 
     deadline = time.monotonic() + timeout

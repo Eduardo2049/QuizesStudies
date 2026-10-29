@@ -110,7 +110,7 @@ class GoogleAuthService:
             raise QuizAPIException("Falha na conexão com o Google. Tente novamente.", 502, "GOOGLE_LOGIN_FAILED")
 
     def login_with_code(self, code: str, redirect_uri: str) -> dict:
-        """Troca o código por uma sessão do Quiz Study. Devolve o mesmo formato de AuthService.login."""
+        """Troca o código por uma sessão do Acely. Devolve o mesmo formato de AuthService.login."""
         if not google_enabled():
             raise QuizAPIException("Login com Google não está disponível.", 404, "GOOGLE_DISABLED")
         if not code:

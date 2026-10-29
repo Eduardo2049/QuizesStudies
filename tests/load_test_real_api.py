@@ -19,7 +19,7 @@ Exemplos:
     python tests/load_test_real_api.py --calls 50 --workers 10 --burst
 
     # Usar servidor remoto
-    python tests/load_test_real_api.py --base-url https://meu-site.vercel.app --calls 10
+    python tests/load_test_real_api.py --base-url https://acely.com.br --calls 10
 
 Tokens estimados por chamada (3 questoes):
     ~800 tokens input  +  ~660 tokens output  =  ~1.460 tokens total
