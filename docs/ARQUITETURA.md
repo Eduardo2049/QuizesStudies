@@ -1,6 +1,36 @@
-# Guia de Localização Rápida no Código (Codebase Lookup Guide)
+# Acely — Arquitetura
 
-Este documento foi criado para evitar a varredura completa do repositório a cada tarefa. Consulte este índice para ir diretamente aos arquivos corretos.
+Visão detalhada das camadas, rotas e decisões de segurança. As regras do projeto (liberdades,
+proibições e o mapa de busca rápida) ficam em [`AGENTS.md`](../AGENTS.md); este documento só
+detalha o que aquele mapa aponta.
+
+---
+
+## 🏗️ Diagrama
+
+```mermaid
+graph TD
+    Client[Cliente / Navegador Web] -->|HTTP / REST| Handler[api/handlers/quiz_handler.py]
+    Handler --> Middleware[api/middleware/http_middleware.py]
+    Handler --> AuthController[api/controllers/auth_controller.py]
+    Handler --> QuizController[api/controllers/quiz_controller.py]
+
+    AuthController --> AuthService[api/services/auth_service.py]
+    AuthService --> UserRepo[api/repositories/user_repository.py]
+
+    QuizController --> UploadService[api/services/upload_service.py]
+    QuizController --> AIService[api/services/ai_service.py]
+    QuizController --> QuizRepo[api/repositories/quiz_repository.py]
+
+    UploadService --> FileParser[api/utils/file_parser.py]
+    UploadService --> AIService
+    UploadService --> QuizRepo
+
+    AIService -->|API, só modelos :free| OpenRouter[OpenRouter API]
+
+    UserRepo --> DB[(PostgreSQL / SQLite)]
+    QuizRepo --> DB
+```
 
 ---
 
@@ -56,5 +86,35 @@ Este documento foi criado para evitar a varredura completa do repositório a cad
 - **`api/repositories/rate_limit_repository.py`**: Contadores persistentes de rate limit e cotas de IA.
 
 ### 5. Configuração e Ponto de Entrada
-- **`quiz_api.py`**: Ponto de entrada que inicializa migrações e sobe o `ThreadingHTTPServer`.
+- **`quiz_api.py`**: Ponto de entrada local (Docker, Procfile) que inicializa migrações e sobe o `ThreadingHTTPServer`.
+- **`api/index.py`**: Ponto de entrada da Vercel; recebe todas as rotas `/api/*` pelo `rewrite` de `vercel.json`.
 - **`api/utils/config.py`**: Leitura de variáveis de ambiente (`PORT`, `HOST`, `DATABASE_URL`, `OPENROUTER_API_KEY`, `OPENROUTER_FREE_MODELS`, `AI_DAILY_CALL_LIMIT`, `GUEST_AI_LIMIT`, `GOOGLE_CLIENT_ID`, `APP_URL`, etc.).
+
+### 6. Scripts de manutenção (`scripts/`)
+- **`reset_admin.py`**, **`reset_sessions.py`**, **`reset_database.py`**: Operações administrativas no banco (a última também roda pelo workflow `reset-database.yml`).
+- **`load_test_real_api.py`**: Teste de carga contra a API real (gasta cota de IA; não roda no `unittest discover`).
+
+---
+
+## 🧪 Como executar e validar
+
+```bash
+python quiz_api.py                                  # servidor local
+python -m unittest discover tests                   # suíte completa
+python -m unittest tests/test_security_fixes.py     # um arquivo
+```
+
+---
+
+## 🛡️ Modelo de segurança de dados e decisão sobre RLS
+
+### Row-Level Security (RLS) vs. isolamento na aplicação
+- **Decisão:** isolamento por dono na camada de repositório, com queries parametrizadas (`WHERE is_public = TRUE OR created_by = %s` e `WHERE user_id = %s`).
+- **Motivo:** o backend conecta ao PostgreSQL por pool em ambiente serverless (Neon/PgBouncer) com uma única role de serviço. RLS com `FORCE ROW LEVEL SECURITY` dependeria de `SET LOCAL app.user_id` a cada requisição, com roundtrips extras e risco de estado reaproveitado no pool transacional.
+- **Garantia:** toda leitura e correção passa pelos repositórios que aplicam o filtro de dono. Só administradores alteram `is_public`.
+- **Schema:** `is_public` tem `DEFAULT FALSE` no `CREATE TABLE` e no `ALTER TABLE`, para que quizzes antigos não fiquem públicos sem querer.
+
+### Mitigações de auditoria
+1. **Timing attack no login:** usuário inexistente roda PBKDF2-HMAC-SHA256 (600.000 iterações) contra salt e hash sentinelas (`_DUMMY_SALT`, `_DUMMY_HASH`), igualando o tempo de resposta e impedindo enumeração de contas.
+2. **Rate limit por falhas com chave composta:** `/api/auth/login` conta só falhas consecutivas por `(IP + usuário)`. Um atacante só bloqueia o próprio IP para aquele usuário, e logins bem-sucedidos limpam o contador (redes com NAT não sofrem).
+3. **Criptografia em trânsito:** bancos remotos usam `sslmode=verify-full` por padrão (ajustável via `DB_SSLMODE`).
