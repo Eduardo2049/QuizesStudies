@@ -13,6 +13,7 @@ pelo fluxo `feature/*` → `develop` → `homolog` → `main` descrito em `docs/
 |---|---|---|
 | `feature/docs-contexto` | Documentação atualizada (idiomas, OpenRouter gratuito, LGPD, rotas) + merge de `fix/openrouter-modelos-gratuitos` | **Já está dentro de `feature/rebrand-acely`.** Não precisa de PR próprio; pode ser apagada depois do merge da rebrand. |
 | `feature/rebrand-acely` | Tudo da linha acima + `develop` atualizada + troca de marca para Acely + este plano | Abrir PR para a `develop`. É a base de todas as fases seguintes. |
+| `feature/banco-credenciais` | Banco independente do provedor (`DATABASE_URL_DIRECT`, TLS `verify-full` com `DB_SSLROOTCERT`, guia `docs/BANCO_DE_DADOS.md` para Neon com conta própria e Supabase), mensagens de andamento na geração e upload com gabarito sem gastar IA | Abrir PR para a `develop`. Independente das fases da IA. |
 
 Para criar a próxima branch: `git checkout develop && git pull && git checkout -b feature/<nome>`
 (depois que a rebrand estiver na `develop`).
