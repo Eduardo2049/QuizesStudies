@@ -6,20 +6,20 @@ AVISO: Este script faz chamadas REAIS ao servidor local (ou remoto) e
 CONSUMIRA TOKENS REAIS da sua conta Gemini / OpenRouter.
 
 Uso:
-    python tests/load_test_real_api.py [opcoes]
+    python scripts/load_test_real_api.py [opcoes]
 
 Exemplos:
     # 5 chamadas, 1 worker (mais seguro para testar)
-    python tests/load_test_real_api.py --calls 5 --workers 1
+    python scripts/load_test_real_api.py --calls 5 --workers 1
 
     # 20 chamadas, 4 workers simultaneos (consumo moderado)
-    python tests/load_test_real_api.py --calls 20 --workers 4
+    python scripts/load_test_real_api.py --calls 20 --workers 4
 
     # Teste de rajada: 50 chamadas, 10 workers (verifica rate-limit)
-    python tests/load_test_real_api.py --calls 50 --workers 10 --burst
+    python scripts/load_test_real_api.py --calls 50 --workers 10 --burst
 
     # Usar servidor remoto
-    python tests/load_test_real_api.py --base-url https://acely.com.br --calls 10
+    python scripts/load_test_real_api.py --base-url https://acely.com.br --calls 10
 
 Tokens estimados por chamada (3 questoes):
     ~800 tokens input  +  ~660 tokens output  =  ~1.460 tokens total

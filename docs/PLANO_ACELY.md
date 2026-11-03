@@ -169,7 +169,7 @@ Endereços (formato OpenAI):
    endereço compatível com OpenAI.
 5. Atualizar `web/privacidade.html` (lista de provedores que recebem o texto; o plano gratuito do
    Gemini **usa o conteúdo para melhorar os produtos do Google**), `README.md`, `AGENTS.md`,
-   `.agents/rules/codebase_lookup_guide.md` e `docs/CICD_E_DEPLOY.md`.
+   `docs/ARQUITETURA.md` e `docs/CICD_E_DEPLOY.md`.
 6. Testes no estilo de `tests/test_openrouter_free.py`, com respostas simuladas por provedor.
 
 **Pronto quando**

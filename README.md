@@ -255,16 +255,16 @@ python -m unittest tests/test_load_and_token_usage.py
 Para testar a infraestrutura com geração real de questões via IA (`POST /api/quiz/generate`):
 ```bash
 # Nível 1: Teste rápido de validação (5 chamadas, 1 worker, ~7k tokens)
-python tests/load_test_real_api.py --calls 5 --workers 1 --guest --questions 3
+python scripts/load_test_real_api.py --calls 5 --workers 1 --guest --questions 3
 
 # Nível 2: Carga moderada (10 chamadas, 3 workers, ~15k tokens)
-python tests/load_test_real_api.py --calls 10 --workers 3 --guest --questions 5
+python scripts/load_test_real_api.py --calls 10 --workers 3 --guest --questions 5
 
 # Nível 3: Teste de estresse com teto de 200k tokens
-python tests/load_test_real_api.py --calls 50 --workers 5 --guest --questions 10 --token-limit 200000
+python scripts/load_test_real_api.py --calls 50 --workers 5 --guest --questions 10 --token-limit 200000
 
 # Nível 4: Rajada imediata para testar bloqueio 429 pelo Rate Limiter
-python tests/load_test_real_api.py --calls 30 --workers 10 --burst --guest
+python scripts/load_test_real_api.py --calls 30 --workers 10 --burst --guest
 ```
 - **Recursos do script**:
   - **Auto-detecção inteligente de porta**: Identifica se o servidor está na porta `8001`, `8002`, etc., evitando conflitos com serviços nativos do Windows (como IIS/HTTP.sys na porta 8000).
@@ -310,8 +310,7 @@ QuizesStudies/
 │   │   ├── file_parser.py     # Extração de texto (TXT/PDF/DOCX) e parse de questões
 │   │   ├── quiz_logic.py      # Correção e pontuação de respostas
 │   │   └── validators.py      # Validação de payloads HTTP
-│   ├── index.py               # Entrypoint Vercel (serverless)
-│   └── main.py                # Inicialização do servidor
+│   └── index.py               # Entrypoint Vercel (serverless)
 ├── web/
 │   ├── app.js                 # Lógica client-side (SPA)
 │   ├── index.html             # Interface principal
@@ -325,6 +324,9 @@ QuizesStudies/
 │   │   ├── i18n-boot.js       # Evita piscar o português antes da tradução
 │   │   └── i18n/en.js         # Dicionário em inglês
 │   └── styles.css             # Design system completo
+├── docs/                      # Arquitetura, CI/CD, design e plano em andamento
+├── scripts/                   # Manutenção do banco e teste de carga da API real
+├── tests/                     # Suíte unittest (+ tests/visual para capturas de tela)
 ├── 404.html                   # Página 404 própria
 ├── .env.example               # Template de variáveis de ambiente
 ├── docker-compose.yml         # PostgreSQL + app + tunnel
