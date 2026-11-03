@@ -28,6 +28,8 @@ Este documento é a referência primária e fixa de arquitetura, permissões, li
 | **Configuração de ambiente, portas, chaves de API** | `api/utils/config.py`<br>`.env.example` | Código de regras de negócio |
 | **Pipelines CI/CD, deploy e Gitflow** | `.github/workflows/`<br>`vercel.json`<br>`docs/CICD_E_DEPLOY.md` | Código de backend `api/` |
 | **Plano em andamento (marca Acely, IA mais rápida e multiprovedor)** | `docs/PLANO_ACELY.md` (ler antes de começar uma fase) | Código fora da fase em execução |
+| **Arquitetura detalhada (camadas, rotas, decisões de segurança)** | `docs/ARQUITETURA.md` | Código, quando a dúvida for só de localização |
+| **Scripts de manutenção e teste de carga** | `scripts/` | `web/` |
 | **Testes unitários e de integração** | `tests/` (execute o teste específico ou a suíte) | `web/` |
 
 ---
@@ -44,7 +46,7 @@ O agente tem total liberdade para:
    - Otimizar sanitização e validação de dados de entrada.
 3. **Novos Testes (`tests/`):**
    - Criar novos cenários de testes unitários ou de integração sem restrições.
-4. **Documentação e Guias (`docs/` ou `.agents/`):**
+4. **Documentação e Guias (`docs/`):**
    - Criar e atualizar documentos de arquitetura, referências e runbooks.
 
 ---
@@ -66,7 +68,10 @@ O agente tem total liberdade para:
 5. **Bypass de Segurança:**
    - **NUNCA** desativar rate limits (`RateLimiter`), hashing seguro de senhas (PBKDF2), verificação de permissões de administrador (`role == 'admin'`) ou proteção contra CSRF/CORS.
    - **NUNCA** liberar endpoints de IA para quem não tem conta nem sessão de convidado, nem mover a contagem da cota do convidado (`GuestService`) para o navegador. O cliente só exibe a cota; quem decide é o servidor.
-6. **Varreduras Globais Inúteis:**
+6. **Protocolo JSON e arquivos de deploy:**
+   - Todo endpoint sob `/api/` responde `{"status": "success", "data": ...}` ou `{"status": "error", "error": ...}`.
+   - `Dockerfile`, `docker-compose.yml`, `Procfile` e `vercel.json` só mudam em tarefas de DevOps/deploy.
+7. **Varreduras Globais Inúteis:**
    - Não execute comandos como `list_dir` recursivo na raiz inteira ou buscas genéricas que consumam contexto quando o problema apontar para um arquivo específico.
 
 ---
