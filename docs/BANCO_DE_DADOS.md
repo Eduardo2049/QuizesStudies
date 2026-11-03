@@ -1,0 +1,88 @@
+# Banco de dados — provedores, credenciais e segurança
+
+O Acely usa PostgreSQL comum (`psycopg2`, sem extensões e sem recursos exclusivos de um
+provedor). Qualquer PostgreSQL 14+ serve: Neon, Supabase, Docker local ou outro. Trocar de
+provedor é trocar as variáveis abaixo e rodar o primeiro deploy (as migrations criam as tabelas).
+
+## 1. Variáveis
+
+| Variável | Para que serve | Obrigatória |
+|---|---|---|
+| `DATABASE_URL` | URL usada pela aplicação. Na Vercel, **com pooler**. Tem prioridade sobre as variáveis da integração Neon (`POSTGRES_URL`, `DATABASE_URL_UNPOOLED`, `POSTGRES_PRISMA_URL`), que ficam só como reserva. | Sim |
+| `DATABASE_URL_DIRECT` | URL **sem pooler** para migrations e `scripts/reset_database.py`. Vazio = usa a `DATABASE_URL`. | Não |
+| `DB_SSLMODE` | Modo TLS quando a URL não traz `sslmode`. Padrão `verify-full`. | Não |
+| `DB_SSLROOTCERT` | Certificado da autoridade para `verify-full`: caminho (relativo à raiz do projeto ou absoluto) ou `system`. Vazio = `system`. | Só no Supabase |
+| `DB_SSLROOTCERT_PEM` | Alternativa ao anterior para a Vercel: o conteúdo do `.crt` colado na variável (pode usar `\n` no lugar das quebras de linha). O certificado é público, não é segredo. | Não |
+| `AUTO_MIGRATE` | `true` roda as migrations na primeira requisição. | Não |
+
+Regra de segurança importante: se `DATABASE_URL` foi cadastrada à mão, as migrations **nunca**
+usam `DATABASE_URL_UNPOOLED` (que pode ter sobrado da integração Neon e apontar para outro
+banco). Elas usam `DATABASE_URL_DIRECT` ou a própria `DATABASE_URL`.
+
+### TLS
+
+- Sem `sslmode` na URL, o app usa `verify-full` e, sem certificado configurado,
+  `sslrootcert=system` (certificados do sistema; precisa de libpq 16+, que já vem no
+  `psycopg2-binary` do `requirements.txt`).
+- Se a URL trouxer `sslmode=require` (as URLs geradas pela integração Neon da Vercel costumam
+  trazer), a conexão é cifrada mas **não valida o certificado**. O servidor avisa uma vez no log:
+  `[db] Aviso: conexão com ... usa sslmode=require`. Para corrigir, troque por
+  `sslmode=verify-full` na URL (Neon: funciona com `system`; Supabase: veja a seção 3).
+- Os logs mostram só host, porta e banco (`describe_database_target`), nunca usuário ou senha.
+
+## 2. Neon com conta própria (recomendado hoje)
+
+Assim as credenciais são suas e não dependem da integração da Vercel.
+
+1. Crie a conta e o projeto em neon.com, na região mais próxima da função da Vercel
+   (veja `docs/CICD_E_DEPLOY.md`, seção 8).
+2. Crie um branch por ambiente: `main` (produção) e `homolog`/`develop` (Preview). Branches são
+   grátis no plano Free.
+3. Em **Connect**, copie as duas URLs de cada branch:
+   - com pooler (host com `-pooler`) → `DATABASE_URL`;
+   - sem pooler → `DATABASE_URL_DIRECT`.
+   Troque `sslmode=require` por `sslmode=verify-full` nas duas.
+4. Vercel → Settings → Environment Variables: cadastre `DATABASE_URL` e `DATABASE_URL_DIRECT`
+   em Production com o branch `main` e em Preview com o branch de homologação.
+5. GitHub → Settings → Environments (`production`, `homolog`): atualize o secret `DATABASE_URL`
+   usado pelo workflow de limpeza, de preferência com a URL **sem** pooler.
+6. Faça um deploy e confira no log que não aparece o aviso de `sslmode`.
+7. Só depois de tudo funcionando: remova a integração Neon em Vercel → Storage, se ainda existir
+   (ela recria `POSTGRES_URL` e afins). Para levar os dados de um banco ao outro:
+   `pg_dump --no-owner --no-acl "$ORIGEM" | psql "$DESTINO"`.
+
+## 3. Supabase
+
+O Acely não usa o login, o armazenamento nem a API REST do Supabase; ele seria só o PostgreSQL.
+Atenção ao plano gratuito: projetos sem uso por uma semana são pausados e precisam ser reativados
+à mão no painel.
+
+1. Crie o projeto na região mais próxima da função da Vercel.
+2. **Connect** → copie:
+   - **Transaction pooler** (porta `6543`) → `DATABASE_URL`. Obrigatório na Vercel: a conexão
+     direta do Supabase é só IPv6 e a Vercel só sai por IPv4. O `psycopg2` não usa prepared
+     statements por padrão, então o modo transação funciona sem ajuste.
+   - **Session pooler** (porta `5432` no host `pooler.supabase.com`) → `DATABASE_URL_DIRECT`.
+3. Certificado: Project Settings → Database → SSL Configuration → baixe o `.crt`. Use uma das
+   duas formas:
+   - cole o conteúdo em `DB_SSLROOTCERT_PEM` (mais simples na Vercel); ou
+   - salve em `certs/supabase-ca.crt` no repositório e defina `DB_SSLROOTCERT=certs/supabase-ca.crt`.
+   Sem isso, `verify-full` falha (o certificado do Supabase não é de uma autoridade pública).
+4. Depois do primeiro deploy (tabelas criadas), rode `scripts/sql/supabase_fechar_api_publica.sql`
+   no SQL Editor, ou desligue a Data API em Project Settings → Data API. Isso impede que a API
+   REST automática exponha as tabelas do esquema `public`.
+5. Plano gratuito: 2 projetos ativos. Use um para produção e outro para Preview.
+
+## 4. Docker local
+
+`docker compose up -d` sobe o PostgreSQL em `127.0.0.1:5433` com o banco `quiz_study` (nome
+mantido de propósito; trocar aponta o contêiner para um banco vazio). Conexões em `localhost`
+não recebem `sslmode`.
+
+## 5. Boas práticas
+
+- Nunca commitar URLs com senha; valores reais só na Vercel, no GitHub Secrets ou no `.env` local.
+- Um banco (ou branch) por ambiente: Preview nunca aponta para produção.
+- Senha forte e exclusiva por ambiente; ao trocar de provedor, gere senhas novas.
+- Espaço: os planos gratuitos têm ~0,5 GB. Tabelas que crescem sem parar (como `rate_limits` e as
+  futuras `ai_jobs`/`ai_cache` do `docs/PLANO_ACELY.md`) precisam de limpeza dos registros antigos.

@@ -21,13 +21,49 @@ PORT = int(os.getenv("PORT", os.getenv("QUIZ_PORT", "8000")))
 # Logging
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
-# Banco de dados PostgreSQL (suporta DATABASE_URL, POSTGRES_URL e DATABASE_URL_UNPOOLED da Vercel/Neon)
+# Banco de dados PostgreSQL — qualquer provedor (Neon, Supabase, Docker, outro).
+# DATABASE_URL, cadastrada por você, tem prioridade. POSTGRES_URL, DATABASE_URL_UNPOOLED e
+# POSTGRES_PRISMA_URL são os nomes que a integração Neon da Vercel cria e ficam só como reserva.
+_EXPLICIT_DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip()
 DATABASE_URL = (
-    os.getenv("DATABASE_URL")
+    _EXPLICIT_DATABASE_URL
     or os.getenv("POSTGRES_URL")
     or os.getenv("DATABASE_URL_UNPOOLED")
     or os.getenv("POSTGRES_PRISMA_URL")
 )
+
+
+def _resolve_direct_database_url() -> str | None:
+    """URL sem pooler, usada por migrations e scripts de manutenção.
+
+    Ordem: DATABASE_URL_DIRECT; se DATABASE_URL foi cadastrada à mão, a própria DATABASE_URL
+    (assim uma variável esquecida da integração Neon nunca aponta as migrations para outro
+    banco); senão, as variáveis sem pooler da integração.
+    """
+    direct = (os.getenv("DATABASE_URL_DIRECT") or "").strip()
+    if direct:
+        return direct
+    if _EXPLICIT_DATABASE_URL:
+        return _EXPLICIT_DATABASE_URL
+    return (
+        os.getenv("DATABASE_URL_UNPOOLED")
+        or os.getenv("POSTGRES_URL_NON_POOLING")
+        or DATABASE_URL
+    )
+
+
+DATABASE_URL_DIRECT = _resolve_direct_database_url()
+
+# TLS do banco. DB_SSLMODE só é aplicado quando a URL não traz sslmode.
+# DB_SSLROOTCERT: caminho do certificado da autoridade (ex.: o .crt baixado do Supabase) ou
+# "system" para usar os certificados do sistema (Neon). Necessário para sslmode=verify-full.
+DB_SSLMODE = os.getenv("DB_SSLMODE", "verify-full").strip() or "verify-full"
+DB_SSLROOTCERT = os.getenv("DB_SSLROOTCERT", "").strip()
+if DB_SSLROOTCERT and DB_SSLROOTCERT != "system" and not Path(DB_SSLROOTCERT).is_absolute():
+    DB_SSLROOTCERT = str(ROOT / DB_SSLROOTCERT)  # caminho relativo à raiz do projeto
+# Alternativa para a Vercel: o conteúdo PEM do certificado direto na variável. O servidor grava
+# num arquivo temporário e usa como DB_SSLROOTCERT (o certificado é público, não é segredo).
+DB_SSLROOTCERT_PEM = os.getenv("DB_SSLROOTCERT_PEM", "").strip()
 
 # Provedor de Inteligência Artificial: OpenRouter, só com modelos gratuitos (id terminado em ":free").
 # Enquanto não houver faturamento, nenhum modelo pago é chamado.

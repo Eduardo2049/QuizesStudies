@@ -24,10 +24,12 @@ Este documento é a referência primária e fixa de arquitetura, permissões, li
 | **Entrar com Google e importar simulados do convidado** | `api/services/google_auth_service.py`<br>`api/services/import_service.py`<br>`web/modules/auth_page.js` | `web/styles.css` |
 | **Idiomas da interface (PT/EN) e idioma da IA** | `web/modules/i18n.js`<br>`web/modules/i18n/en.js` (dicionário)<br>`web/modules/i18n-boot.js`<br>`api/services/ai_service.py` (`normalize_language`, campo `language`) | `api/repositories/`<br>`api/database/` |
 | **Regras de design (skill adotada)** | `.claude/skills/landing-page-design/SKILL.md`<br>`docs/DESIGN_SKILLS.md` | Pasta `api/` |
-| **Banco de dados, tabelas, consultas SQL, migrations** | `api/database/migrations.py`<br>`api/repositories/quiz_repository.py`<br>`api/repositories/user_repository.py` | Toda a pasta `web/` |
+| **Banco de dados, tabelas, consultas SQL, migrations** | `api/database/migrations.py`<br>`api/database/connection.py` (URL, pooler, TLS)<br>`api/repositories/quiz_repository.py`<br>`api/repositories/user_repository.py`<br>`docs/BANCO_DE_DADOS.md` (Neon, Supabase, credenciais) | Toda a pasta `web/` |
 | **Configuração de ambiente, portas, chaves de API** | `api/utils/config.py`<br>`.env.example` | Código de regras de negócio |
 | **Pipelines CI/CD, deploy e Gitflow** | `.github/workflows/`<br>`vercel.json`<br>`docs/CICD_E_DEPLOY.md` | Código de backend `api/` |
 | **Plano em andamento (marca Acely, IA mais rápida e multiprovedor)** | `docs/PLANO_ACELY.md` (ler antes de começar uma fase) | Código fora da fase em execução |
+| **Arquitetura detalhada (camadas, rotas, decisões de segurança)** | `docs/ARQUITETURA.md` | Código, quando a dúvida for só de localização |
+| **Scripts de manutenção e teste de carga** | `scripts/` | `web/` |
 | **Testes unitários e de integração** | `tests/` (execute o teste específico ou a suíte) | `web/` |
 
 ---
@@ -44,7 +46,7 @@ O agente tem total liberdade para:
    - Otimizar sanitização e validação de dados de entrada.
 3. **Novos Testes (`tests/`):**
    - Criar novos cenários de testes unitários ou de integração sem restrições.
-4. **Documentação e Guias (`docs/` ou `.agents/`):**
+4. **Documentação e Guias (`docs/`):**
    - Criar e atualizar documentos de arquitetura, referências e runbooks.
 
 ---
@@ -66,7 +68,10 @@ O agente tem total liberdade para:
 5. **Bypass de Segurança:**
    - **NUNCA** desativar rate limits (`RateLimiter`), hashing seguro de senhas (PBKDF2), verificação de permissões de administrador (`role == 'admin'`) ou proteção contra CSRF/CORS.
    - **NUNCA** liberar endpoints de IA para quem não tem conta nem sessão de convidado, nem mover a contagem da cota do convidado (`GuestService`) para o navegador. O cliente só exibe a cota; quem decide é o servidor.
-6. **Varreduras Globais Inúteis:**
+6. **Protocolo JSON e arquivos de deploy:**
+   - Todo endpoint sob `/api/` responde `{"status": "success", "data": ...}` ou `{"status": "error", "error": ...}`.
+   - `Dockerfile`, `docker-compose.yml`, `Procfile` e `vercel.json` só mudam em tarefas de DevOps/deploy.
+7. **Varreduras Globais Inúteis:**
    - Não execute comandos como `list_dir` recursivo na raiz inteira ou buscas genéricas que consumam contexto quando o problema apontar para um arquivo específico.
 
 ---

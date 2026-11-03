@@ -4322,3 +4322,17 @@ a.access-cta.primary:hover { color: var(--btn-primary-text); }
   color: var(--accent-text);
 }
 .btn-quick-submit:hover { background: var(--coral-glow); color: var(--accent-text); }
+
+/* Upload: aviso de que arquivo com gabarito não gasta IA; dica durante a geração */
+.upload-ai-hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--muted);
+}
+.upload-status-hint {
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--muted);
+}
+.upload-status-hint[hidden] { display: none; }
