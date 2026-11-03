@@ -22,9 +22,12 @@ PORT = int(os.getenv("PORT", os.getenv("QUIZ_PORT", "8000")))
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 # Banco de dados PostgreSQL — qualquer provedor (Neon, Supabase, Docker, outro).
-# DATABASE_URL, cadastrada por você, tem prioridade. POSTGRES_URL, DATABASE_URL_UNPOOLED e
-# POSTGRES_PRISMA_URL são os nomes que a integração Neon da Vercel cria e ficam só como reserva.
-_EXPLICIT_DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip()
+# Ordem: ACELY_DATABASE_URL (sua, com nome que nenhuma integração usa), DATABASE_URL e, por
+# último, os outros nomes que a integração Neon da Vercel cria (POSTGRES_URL,
+# DATABASE_URL_UNPOOLED, POSTGRES_PRISMA_URL). A integração ocupa e trava o nome DATABASE_URL
+# na Vercel; para usar uma URL sua lá (ex.: com sslmode=verify-full), cadastre ACELY_DATABASE_URL.
+_OWN_DATABASE_URL = (os.getenv("ACELY_DATABASE_URL") or "").strip()
+_EXPLICIT_DATABASE_URL = _OWN_DATABASE_URL or (os.getenv("DATABASE_URL") or "").strip()
 DATABASE_URL = (
     _EXPLICIT_DATABASE_URL
     or os.getenv("POSTGRES_URL")
@@ -36,11 +39,12 @@ DATABASE_URL = (
 def _resolve_direct_database_url() -> str | None:
     """URL sem pooler, usada por migrations e scripts de manutenção.
 
-    Ordem: DATABASE_URL_DIRECT; se DATABASE_URL foi cadastrada à mão, a própria DATABASE_URL
-    (assim uma variável esquecida da integração Neon nunca aponta as migrations para outro
-    banco); senão, as variáveis sem pooler da integração.
+    Ordem: ACELY_DATABASE_URL_DIRECT ou DATABASE_URL_DIRECT; se a URL da aplicação foi
+    cadastrada à mão (ACELY_DATABASE_URL ou DATABASE_URL), a própria URL da aplicação (assim
+    uma variável da integração Neon nunca aponta as migrations para outro banco); senão, as
+    variáveis sem pooler da integração.
     """
-    direct = (os.getenv("DATABASE_URL_DIRECT") or "").strip()
+    direct = (os.getenv("ACELY_DATABASE_URL_DIRECT") or os.getenv("DATABASE_URL_DIRECT") or "").strip()
     if direct:
         return direct
     if _EXPLICIT_DATABASE_URL:
