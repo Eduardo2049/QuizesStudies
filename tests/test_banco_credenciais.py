@@ -37,8 +37,23 @@ class BuildDatabaseUrlTests(unittest.TestCase):
         url = connection.build_database_url("postgres://u:p@ep-x-pooler.aws.neon.tech/neondb")
         self.assertTrue(url.startswith("postgresql://"))
         self.assertIn("sslmode=verify-full", url)
-        self.assertIn("sslrootcert=system", url)
         self.assertIn("connect_timeout=5", url)
+        # Arquivo de verdade, nunca "system" (o OpenSSL do psycopg2-binary não acha o do sistema)
+        import certifi
+        self.assertIn("sslrootcert=" + certifi.where(), url)
+        self.assertNotIn("sslrootcert=system", url)
+
+    def test_system_in_url_is_replaced_by_real_file(self):
+        url = connection.build_database_url(
+            "postgresql://u:p@ep-x-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=verify-full&sslrootcert=system"
+        )
+        self.assertNotIn("sslrootcert=system", url)
+        self.assertEqual(url.count("sslrootcert="), 1)
+
+    def test_default_ca_file_exists(self):
+        path = connection._default_ca_file()
+        self.assertNotEqual(path, "system")
+        self.assertTrue(Path(path).is_file())
 
     def test_existing_sslmode_is_kept(self):
         url = connection.build_database_url("postgresql://u:p@h.example.com/db?sslmode=require")
