@@ -86,3 +86,28 @@ não recebem `sslmode`.
 - Senha forte e exclusiva por ambiente; ao trocar de provedor, gere senhas novas.
 - Espaço: os planos gratuitos têm ~0,5 GB. Tabelas que crescem sem parar (como `rate_limits` e as
   futuras `ai_jobs`/`ai_cache` do `docs/PLANO_ACELY.md`) precisam de limpeza dos registros antigos.
+
+## 6. Desempenho das conexões
+
+**Pool (`api/database/connection.py`).** Na Vercel, a instância da função guarda o pool entre
+visitas, e a Neon desliga o banco após 5 minutos sem uso, derrubando as conexões abertas.
+- Conexão parada há mais de 30 s (`POOL_CHECK_AFTER_S`) é testada com um `SELECT 1` antes de
+  ser reaproveitada; se morreu, é trocada por uma nova sem erro para a pessoa.
+- Conexão fechada ou quebrada no meio da requisição é descartada com `putconn(close=True)`,
+  liberando a vaga. Antes, cada queda prendia uma das 10 vagas e, esgotado o pool, toda
+  requisição abria conexão nova (handshake TLS completo).
+- A URL ganha keepalive TCP (`keepalives_idle=30`) para perceber conexões derrubadas.
+
+**Região.** Cada requisição da home faz algumas idas ao banco (limite de requisições,
+sessão, consulta). Função e banco em continentes diferentes somam ~120 ms por ida. Confira:
+1. Região do banco: Neon → Project settings (ex.: `aws-sa-east-1`); Supabase → Project Settings → General.
+2. Vercel → Settings → Functions → Function Region: a mesma região (`gru1` para São Paulo,
+   `iad1` para Virgínia). Se preferir no código, `"regions": ["gru1"]` no `vercel.json`.
+
+**Primeira visita depois de uma pausa** soma três esperas: a função "acorda" (cold start),
+a Neon religa o banco (algumas centenas de ms) e a conexão TLS é aberta. Isso só some com
+banco sempre ligado (plano pago, `scale to zero` desligado).
+
+**Speed Insights.** O Real Experience Score mistura FCP, LCP, CLS e INP medidos no navegador.
+Com poucas visitas por dia, o P75 oscila muito e some nos dias sem acesso; compare semanas,
+não dias.

@@ -230,3 +230,4 @@ Fora do código (dono do projeto): DNS no Registro.br, `APP_URL` em Production, 
 Cada requisição faz várias idas e voltas ao PostgreSQL (sessão, rate limit, consulta). Se a função da Vercel roda nos EUA (`iad1`, o padrão) e o banco está em São Paulo, cada ida e volta custa ~120 ms e o carregamento passa de 1 s.
 - Veja a região do banco no console da Neon (Project settings).
 - Na Vercel, em **Settings > Functions > Function Region**, escolha a mesma região (ex.: `gru1` para `sa-east-1`, `iad1` para `us-east-1`).
+- **Hoje:** o banco de produção (Neon `quiz-study`, organização `Vercel: …`) está em `sa-east-1`, e o `vercel.json` fixa `"regions": ["gru1"]`. Se o banco mudar de região, mude os dois juntos.
