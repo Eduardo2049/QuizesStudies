@@ -3,6 +3,7 @@ Gerenciamento otimizado de conexões com PostgreSQL.
 Usa ThreadedConnectionPool com fallback seguro para conexões diretas.
 """
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -47,8 +48,33 @@ def _append_param(url: str, key: str, value: str) -> str:
 _pem_path: str | None = None
 
 
+# Arquivos de certificados conhecidos (Debian/Ubuntu e Amazon Linux/RHEL, que é a base da Vercel)
+_SYSTEM_CA_FILES = ("/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt")
+
+
+def _default_ca_file() -> str:
+    """Arquivo de autoridades para verify-full quando nada foi configurado.
+
+    Não usa `sslrootcert=system`: o OpenSSL embutido no psycopg2-binary procura os
+    certificados do "sistema" na pasta de compilação do pacote (/host/tmp/libpq.build), que
+    não existe em lugar nenhum, e toda conexão falha com "certificate verify failed".
+    Ordem: pacote do certifi (já instalado com o requests), arquivo do sistema, "system".
+    """
+    try:
+        import certifi
+        path = certifi.where()
+        if os.path.isfile(path):
+            return path
+    except Exception:
+        pass
+    for path in _SYSTEM_CA_FILES:
+        if os.path.isfile(path):
+            return path
+    return "system"
+
+
 def _sslrootcert() -> str:
-    """Certificado para verify-full: DB_SSLROOTCERT_PEM (gravado em /tmp), DB_SSLROOTCERT ou "system"."""
+    """Certificado para verify-full: DB_SSLROOTCERT_PEM (gravado em /tmp), DB_SSLROOTCERT ou o padrão."""
     global _pem_path
     if DB_SSLROOTCERT_PEM:
         if _pem_path is None:
@@ -58,7 +84,9 @@ def _sslrootcert() -> str:
                 fh.write(pem if pem.endswith("\n") else pem + "\n")
             _pem_path = path
         return _pem_path
-    return DB_SSLROOTCERT or "system"
+    if DB_SSLROOTCERT and DB_SSLROOTCERT != "system":
+        return DB_SSLROOTCERT
+    return _default_ca_file()
 
 
 def build_database_url(raw_url: str | None) -> str:
@@ -67,7 +95,7 @@ def build_database_url(raw_url: str | None) -> str:
     - `postgres://` vira `postgresql://`.
     - Sem `sslmode` na URL, usa DB_SSLMODE (padrão verify-full).
     - Com verify-ca/verify-full e sem `sslrootcert`, usa DB_SSLROOTCERT ou, na falta dele,
-      `system` (certificados do sistema; libpq 16+). Sem isso o libpq procura
+      o arquivo de autoridades do certifi (ver `_default_ca_file`). Sem isso o libpq procura
       ~/.postgresql/root.crt e a conexão falha.
     """
     url = (raw_url or "").strip()
@@ -80,8 +108,13 @@ def build_database_url(raw_url: str | None) -> str:
     if "sslmode" not in params:
         url = _append_param(url, "sslmode", DB_SSLMODE)
         params["sslmode"] = DB_SSLMODE
-    if params["sslmode"].lower() in _VERIFYING_SSLMODES and "sslrootcert" not in params:
-        url = _append_param(url, "sslrootcert", _sslrootcert())
+    if params["sslmode"].lower() in _VERIFYING_SSLMODES:
+        if "sslrootcert" not in params:
+            url = _append_param(url, "sslrootcert", _sslrootcert())
+        elif params["sslrootcert"].lower() == "system":
+            # "system" não funciona com o OpenSSL do psycopg2-binary (ver _default_ca_file)
+            url = re.sub(r"sslrootcert=system", "sslrootcert=" + quote(_sslrootcert(), safe="/:"),
+                         url, flags=re.IGNORECASE)
     if "connect_timeout" not in params:
         url = _append_param(url, "connect_timeout", "5")
     # Keepalive TCP: detecta conexão derrubada pelo provedor em vez de esperar

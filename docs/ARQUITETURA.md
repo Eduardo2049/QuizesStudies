@@ -118,4 +118,4 @@ python -m unittest tests/test_security_fixes.py     # um arquivo
 ### Mitigações de auditoria
 1. **Timing attack no login:** usuário inexistente roda PBKDF2-HMAC-SHA256 (600.000 iterações) contra salt e hash sentinelas (`_DUMMY_SALT`, `_DUMMY_HASH`), igualando o tempo de resposta e impedindo enumeração de contas.
 2. **Rate limit por falhas com chave composta:** `/api/auth/login` conta só falhas consecutivas por `(IP + usuário)`. Um atacante só bloqueia o próprio IP para aquele usuário, e logins bem-sucedidos limpam o contador (redes com NAT não sofrem).
-3. **Criptografia em trânsito:** bancos remotos usam `sslmode=verify-full` por padrão (ajustável via `DB_SSLMODE`), com `sslrootcert=system` ou o certificado de `DB_SSLROOTCERT`/`DB_SSLROOTCERT_PEM`. URL com `sslmode` mais fraco gera um aviso no log. Detalhes em `docs/BANCO_DE_DADOS.md`.
+3. **Criptografia em trânsito:** bancos remotos usam `sslmode=verify-full` por padrão (ajustável via `DB_SSLMODE`), com o arquivo de autoridades do `certifi` ou o certificado de `DB_SSLROOTCERT`/`DB_SSLROOTCERT_PEM`. URL com `sslmode` mais fraco gera um aviso no log. Detalhes em `docs/BANCO_DE_DADOS.md`.

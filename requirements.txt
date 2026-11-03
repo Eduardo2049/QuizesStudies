@@ -14,3 +14,7 @@ python-docx==1.1.2
 
 # Cliente HTTP para integrações externas (Gemini / OpenRouter AI)
 requests==2.34.2
+
+# Autoridades certificadoras para sslmode=verify-full do banco (já vinha com o requests;
+# fixado porque api/database/connection.py usa direto)
+certifi==2026.10.18

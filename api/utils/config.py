@@ -59,8 +59,8 @@ def _resolve_direct_database_url() -> str | None:
 DATABASE_URL_DIRECT = _resolve_direct_database_url()
 
 # TLS do banco. DB_SSLMODE só é aplicado quando a URL não traz sslmode.
-# DB_SSLROOTCERT: caminho do certificado da autoridade (ex.: o .crt baixado do Supabase) ou
-# "system" para usar os certificados do sistema (Neon). Necessário para sslmode=verify-full.
+# DB_SSLROOTCERT: caminho do certificado da autoridade (ex.: o .crt baixado do Supabase).
+# Vazio = arquivo do certifi (Neon e outras autoridades públicas). Ver connection._default_ca_file.
 DB_SSLMODE = os.getenv("DB_SSLMODE", "verify-full").strip() or "verify-full"
 DB_SSLROOTCERT = os.getenv("DB_SSLROOTCERT", "").strip()
 if DB_SSLROOTCERT and DB_SSLROOTCERT != "system" and not Path(DB_SSLROOTCERT).is_absolute():
