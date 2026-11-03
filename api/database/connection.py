@@ -6,9 +6,11 @@ import os
 import sys
 import tempfile
 import threading
+import time
 from contextlib import contextmanager
 from urllib.parse import parse_qsl, quote, urlsplit
 import psycopg2
+import psycopg2.extensions
 import psycopg2.extras
 from psycopg2.pool import ThreadedConnectionPool
 from api.utils.config import (
@@ -82,6 +84,11 @@ def build_database_url(raw_url: str | None) -> str:
         url = _append_param(url, "sslrootcert", _sslrootcert())
     if "connect_timeout" not in params:
         url = _append_param(url, "connect_timeout", "5")
+    # Keepalive TCP: detecta conexão derrubada pelo provedor em vez de esperar
+    if "keepalives" not in params:
+        for key, value in (("keepalives", "1"), ("keepalives_idle", "30"),
+                           ("keepalives_interval", "10"), ("keepalives_count", "3")):
+            url = _append_param(url, key, value)
     return url
 
 
@@ -186,6 +193,50 @@ def get_direct_cursor(dict_cursor: bool = True):
         conn.close()
 
 
+# Conexão parada há mais que isto é testada (SELECT 1) antes de ser reaproveitada.
+# Na Vercel a instância da função guarda o pool entre visitas, e a Neon desliga após
+# 5 min sem uso (o Supabase também derruba conexões ociosas): sem o teste, a primeira
+# requisição depois da pausa pegava uma conexão morta e falhava ou esperava o timeout.
+POOL_CHECK_AFTER_S = 30
+_last_used: dict[int, float] = {}
+
+
+def _is_alive(conn) -> bool:
+    """Uma ida ao banco (SELECT 1) sem abrir transação."""
+    try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+        conn.autocommit = False
+        return True
+    except Exception:
+        return False
+
+
+def _discard(pool, conn) -> None:
+    """Fecha a conexão e libera a vaga dela no pool."""
+    _last_used.pop(id(conn), None)
+    try:
+        pool.putconn(conn, close=True)
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _checkout(pool):
+    """Pega uma conexão do pool já validada; troca por uma nova se estiver morta."""
+    for _ in range(2):
+        conn = pool.getconn()
+        last = _last_used.get(id(conn))  # None = acabou de ser aberta pelo pool
+        idle = 0.0 if last is None else time.monotonic() - last
+        if not conn.closed and (idle < POOL_CHECK_AFTER_S or _is_alive(conn)):
+            return conn
+        _discard(pool, conn)
+    return pool.getconn()
+
+
 @contextmanager
 def get_connection():
     """
@@ -199,11 +250,8 @@ def get_connection():
     try:
         if pool:
             try:
-                conn = pool.getconn()
+                conn = _checkout(pool)
                 from_pool = True
-                if conn.closed:
-                    conn = _connect_db()
-                    from_pool = False
             except Exception:
                 conn = _connect_db()
                 from_pool = False
@@ -215,18 +263,25 @@ def get_connection():
         conn.commit()
     except Exception:
         if conn and not conn.closed:
-            conn.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                pass
         raise
     finally:
         if conn:
-            if from_pool and pool and not conn.closed:
-                try:
-                    pool.putconn(conn)
-                except Exception:
+            if from_pool and pool:
+                broken = bool(conn.closed) or (
+                    conn.info.transaction_status != psycopg2.extensions.TRANSACTION_STATUS_IDLE
+                )
+                if broken:
+                    _discard(pool, conn)
+                else:
+                    _last_used[id(conn)] = time.monotonic()
                     try:
-                        conn.close()
+                        pool.putconn(conn)
                     except Exception:
-                        pass
+                        _discard(pool, conn)
             else:
                 try:
                     conn.close()
