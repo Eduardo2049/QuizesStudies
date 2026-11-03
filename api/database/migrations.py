@@ -3,7 +3,7 @@ Migrações do banco de dados — executa na inicialização.
 Usa CREATE TABLE IF NOT EXISTS para ser idempotente.
 """
 import json
-from api.database.connection import get_cursor
+from api.database.connection import get_direct_cursor
 from api.utils.config import DEBUG
 
 SCHEMA_SQL = """
@@ -122,7 +122,8 @@ def run_migrations():
     Chamado na inicialização do servidor ou como etapa de release via CLI.
     """
     try:
-        with get_cursor() as cur:
+        # Conexão sem pooler (DATABASE_URL_DIRECT, ou a própria DATABASE_URL se não houver)
+        with get_direct_cursor() as cur:
             cur.execute(SCHEMA_SQL)
         
         # Criar admin padrão se não houver usuários

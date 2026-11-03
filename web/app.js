@@ -3,7 +3,7 @@ import { initTheme, toggleTheme } from './modules/theme.js?v=9';
 import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js?v=5';
 import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=7';
 import { initTimerDrag } from './modules/timer-drag.js?v=1';
-import { getLanguage } from './modules/i18n.js?v=3';
+import { getLanguage } from './modules/i18n.js?v=4';
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 const quiz = document.querySelector('#quiz');
@@ -1460,6 +1460,62 @@ const filePreview = document.querySelector('#filePreview');
 const filePreviewName = document.querySelector('#filePreviewName');
 const uploadStatus = document.querySelector('#uploadStatus');
 const uploadStatusText = document.querySelector('#uploadStatusText');
+const uploadStatusHint = document.querySelector('#uploadStatusHint');
+
+// ─── Mensagens de andamento (upload e geração) ─────────────────────────────
+// Os modelos gratuitos podem levar de segundos a mais de um minuto. Em vez de uma frase
+// parada, a mensagem acompanha as etapas e mostra o tempo decorrido. O texto fica em
+// português e o i18n.js traduz ao vivo (chave '{0} · {1} s' no en.js).
+const TOPIC_PROGRESS_STEPS = [
+  [0, 'Preparando o pedido para a IA…'],
+  [2, 'A IA está escrevendo as questões sobre o tema…'],
+  [10, 'Montando as alternativas e o gabarito…'],
+  [20, 'Revisando as explicações de cada questão…'],
+  [35, 'Os modelos gratuitos estão com fila. Ainda trabalhando, pode levar até um minuto…'],
+  [60, 'Está demorando mais que o normal. Se der erro, o uso de IA não é descontado.'],
+];
+const UPLOAD_PROGRESS_STEPS = [
+  [0, 'Enviando arquivo…'],
+  [2, 'Lendo o arquivo e procurando as questões e o gabarito…'],
+  [6, 'Organizando as questões. Se faltar gabarito, a IA resolve, e isso leva mais tempo…'],
+  [30, 'Os modelos gratuitos estão com fila. Ainda trabalhando, pode levar até um minuto…'],
+  [60, 'Está demorando mais que o normal. Se der erro, o uso de IA não é descontado.'],
+];
+let stopProgress = null;
+
+function confirmLeaveWhileBusy(event) {
+  event.preventDefault();
+  event.returnValue = '';
+}
+
+/** Mostra as etapas no #uploadStatusText até `stopProgressMessages()`. */
+function startProgressMessages(steps) {
+  stopProgressMessages();
+  const startedAt = Date.now();
+  const render = () => {
+    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    let text = steps[0][1];
+    for (const [from, message] of steps) {
+      if (elapsed >= from) text = message;
+    }
+    uploadStatusText.textContent = elapsed >= 3 ? `${text} · ${elapsed} s` : text;
+  };
+  render();
+  const timer = setInterval(render, 1000);
+  if (uploadStatusHint) uploadStatusHint.hidden = false;
+  // Recarregar agora abandona o pedido: o navegador pergunta antes de sair
+  window.addEventListener('beforeunload', confirmLeaveWhileBusy);
+  stopProgress = () => {
+    clearInterval(timer);
+    window.removeEventListener('beforeunload', confirmLeaveWhileBusy);
+    if (uploadStatusHint) uploadStatusHint.hidden = true;
+  };
+}
+
+function stopProgressMessages() {
+  if (stopProgress) stopProgress();
+  stopProgress = null;
+}
 const uploadError = document.querySelector('#uploadError');
 const uploadSuccess = document.querySelector('#uploadSuccess');
 const confirmUploadBtn = document.querySelector('#confirmUpload');
@@ -1543,6 +1599,7 @@ function closeModal() {
 }
 
 function resetModalState() {
+  stopProgressMessages();
   selectedFile = null;
   filePreview.hidden = true;
   filePreviewName.textContent = '';
@@ -2117,7 +2174,7 @@ async function doUpload() {
   if (!selectedFile) return;
 
   uploadStatus.hidden = false;
-  uploadStatusText.textContent = 'Enviando arquivo…';
+  startProgressMessages(UPLOAD_PROGRESS_STEPS);
   uploadError.hidden = true;
   uploadSuccess.hidden = true;
   confirmUploadBtn.disabled = true;
@@ -2139,7 +2196,6 @@ async function doUpload() {
   }
 
   try {
-    uploadStatusText.textContent = 'Processando… (pode levar alguns segundos se usar IA)';
     const response = await fetch('/api/upload', {
       method: 'POST',
       credentials: 'same-origin',
@@ -2147,6 +2203,7 @@ async function doUpload() {
     });
     const raw = await readJson(response);
     const data = raw.data || raw;
+    stopProgressMessages();
 
     if (!response.ok) {
       uploadStatus.hidden = true;
@@ -2177,6 +2234,7 @@ async function doUpload() {
 
     setTimeout(closeModal, 1800);
   } catch (err) {
+    stopProgressMessages();
     showUploadError('Falha na conexão. Verifique o servidor e tente novamente.');
     uploadStatus.hidden = true;
     confirmUploadBtn.disabled = false;
@@ -2199,7 +2257,7 @@ async function doGenerateTopic() {
   }
 
   uploadStatus.hidden = false;
-  uploadStatusText.textContent = 'A IA está elaborando as questões e o gabarito…';
+  startProgressMessages(TOPIC_PROGRESS_STEPS);
   uploadError.hidden = true;
   uploadSuccess.hidden = true;
   confirmGenerateTopicBtn.disabled = true;
@@ -2228,6 +2286,7 @@ async function doGenerateTopic() {
 
     const raw = await readJson(response);
     const data = raw.data || raw;
+    stopProgressMessages();
 
     if (!response.ok) {
       uploadStatus.hidden = true;
@@ -2258,6 +2317,7 @@ async function doGenerateTopic() {
 
     setTimeout(closeModal, 1400);
   } catch (err) {
+    stopProgressMessages();
     showUploadError('Falha na conexão. Verifique o servidor ou a chave de IA.');
     uploadStatus.hidden = true;
     confirmGenerateTopicBtn.disabled = false;

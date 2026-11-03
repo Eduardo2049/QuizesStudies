@@ -62,11 +62,15 @@ O projeto roda como uma aplicação unificada na Vercel:
 4. Pushes para qualquer outro branch (`develop`, `homolog`, `feature/*`) geram deploys de **Preview** com URLs isoladas.
 
 ### 3.2 Variáveis de Ambiente por Escopo
+Provedores de banco (Neon com conta própria, Supabase), pooler e TLS: veja `docs/BANCO_DE_DADOS.md`.
+
 Acesse **Settings > Environment Variables** no painel da Vercel e cadastre as variáveis marcando o ambiente correspondente:
 
 | Variável | Escopo Production (`main`) | Escopo Preview (`develop`, `homolog`) |
 |---|---|---|
 | `DATABASE_URL` | String de conexão do PostgreSQL de produção | String do PostgreSQL de homolog/dev |
+| `DATABASE_URL_DIRECT` | (Opcional) URL sem pooler de produção, para migrations | URL sem pooler de homolog/dev |
+| `DB_SSLROOTCERT_PEM` | (Só Supabase) conteúdo do certificado `.crt` | Idem |
 | `ADMIN_USERNAME` | Nome seguro do administrador | `admin` |
 | `ADMIN_PASSWORD` | Senha forte e exclusiva | Senha de homologação |
 | `OPENROUTER_API_KEY` | Chave do OpenRouter de produção (só modelos `:free`) | Chave de homolog/dev |
