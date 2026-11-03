@@ -34,6 +34,17 @@
   }
   </script>
   <link rel="stylesheet" href="/web/styles.css?v=26">
+  <!-- Desempenho: a fonte do texto e os módulos do app.js começam a baixar junto com o CSS,
+       em vez de em cascata depois do app.js (manter os ?v= iguais aos dos imports) -->
+  <link rel="preload" href="/web/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="modulepreload" href="/web/app.js?v=20">
+  <link rel="modulepreload" href="/web/modules/icons.js?v=6">
+  <link rel="modulepreload" href="/web/modules/theme.js?v=9">
+  <link rel="modulepreload" href="/web/modules/shortcuts.js?v=5">
+  <link rel="modulepreload" href="/web/modules/stats.js?v=7">
+  <link rel="modulepreload" href="/web/modules/timer-drag.js?v=1">
+  <link rel="modulepreload" href="/web/modules/i18n.js?v=4">
+  <link rel="modulepreload" href="/web/modules/i18n/en.js?v=4">
   <!-- Script de prevenção de FOUC de tema (execução imediata, bloqueante) -->
   <script src="/web/modules/theme-boot.js"></script>
   <script src="/web/modules/i18n-boot.js?v=1"></script>
@@ -641,7 +652,7 @@
     </div>
   </div>
 
-  <script type="module" src="/web/modules/backdrop.js?v=7"></script>
+  <script type="module" src="/web/modules/backdrop.js?v=8"></script>
   <script type="module" src="/web/app.js?v=20"></script>
 </body>
 </html>
