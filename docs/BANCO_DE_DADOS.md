@@ -9,6 +9,8 @@ provedor é trocar as variáveis abaixo e rodar o primeiro deploy (as migrations
 | Variável | Para que serve | Obrigatória |
 |---|---|---|
 | `DATABASE_URL` | URL usada pela aplicação. Na Vercel, **com pooler**. Tem prioridade sobre as variáveis da integração Neon (`POSTGRES_URL`, `DATABASE_URL_UNPOOLED`, `POSTGRES_PRISMA_URL`), que ficam só como reserva. | Sim |
+| `ACELY_DATABASE_URL` | Sua URL, com prioridade sobre todas as outras. Use na Vercel quando a integração Neon trava o nome `DATABASE_URL` (seção 2.1). | Não |
+| `ACELY_DATABASE_URL_DIRECT` | Versão sem pooler da anterior (vazio = usa a `ACELY_DATABASE_URL`). | Não |
 | `DATABASE_URL_DIRECT` | URL **sem pooler** para migrations e `scripts/reset_database.py`. Vazio = usa a `DATABASE_URL`. | Não |
 | `DB_SSLMODE` | Modo TLS quando a URL não traz `sslmode`. Padrão `verify-full`. | Não |
 | `DB_SSLROOTCERT` | Certificado da autoridade para `verify-full`: caminho (relativo à raiz do projeto ou absoluto) ou `system`. Vazio = `system`. | Só no Supabase |
@@ -50,6 +52,24 @@ Assim as credenciais são suas e não dependem da integração da Vercel.
 7. Só depois de tudo funcionando: remova a integração Neon em Vercel → Storage, se ainda existir
    (ela recria `POSTGRES_URL` e afins). Para levar os dados de um banco ao outro:
    `pg_dump --no-owner --no-acl "$ORIGEM" | psql "$DESTINO"`.
+
+## 2.1 Neon criada pela Vercel (integração) com URL própria
+
+Com a integração, o banco fica na organização `Vercel: <time>` da Neon (entre por Vercel →
+Storage → **Open in Neon**) e a integração cria e trava `DATABASE_URL`, `DATABASE_URL_UNPOOLED`,
+`POSTGRES_URL` e afins: não dá para editar. Para usar uma URL sua (ex.: com `verify-full`):
+
+1. Neon → **Connect**: branch `main`, banco `neondb`, role `neondb_owner`, **Connection pooling
+   ligado** (host com `-pooler`). **Show password** e copie.
+2. Troque `sslmode=require` por `sslmode=verify-full` (pode manter `channel_binding=require`).
+3. Vercel → Settings → Environment Variables → **Add**: nome `ACELY_DATABASE_URL`, cole a URL,
+   marque só **Production** e **Sensitive**. Salve.
+4. **Redeploy** da produção (variáveis novas só valem em deploys novos).
+5. Confira nos logs da função que **não** aparece o aviso `[db] Aviso: ... sslmode=require`.
+
+Preview continua usando as variáveis da integração (um banco/branch separado). Se a senha do
+`neondb_owner` for trocada na Neon (**Reset password**), atualize a `ACELY_DATABASE_URL` também:
+ela não é atualizada sozinha como as variáveis da integração.
 
 ## 3. Supabase
 

@@ -23,6 +23,7 @@ def _reload_config(env: dict):
     keys = (
         "DATABASE_URL", "POSTGRES_URL", "DATABASE_URL_UNPOOLED", "POSTGRES_PRISMA_URL",
         "POSTGRES_URL_NON_POOLING", "DATABASE_URL_DIRECT",
+        "ACELY_DATABASE_URL", "ACELY_DATABASE_URL_DIRECT",
     )
     clean = {k: v for k, v in os.environ.items() if k not in keys}
     clean.update(env)
@@ -126,6 +127,22 @@ class DirectUrlResolutionTests(unittest.TestCase):
         })
         self.assertEqual(cfg.DATABASE_URL, "postgresql://neon@pooler/db")
         self.assertEqual(cfg.DATABASE_URL_DIRECT, "postgresql://neon@direct/db")
+
+    def test_own_url_wins_over_locked_integration_vars(self):
+        cfg = _reload_config({
+            "ACELY_DATABASE_URL": "postgresql://eu@ep-x-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=verify-full",
+            "DATABASE_URL": "postgresql://integracao@ep-x-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require",
+            "DATABASE_URL_UNPOOLED": "postgresql://integracao@ep-x.sa-east-1.aws.neon.tech/neondb?sslmode=require",
+        })
+        self.assertIn("eu@", cfg.DATABASE_URL)
+        self.assertIn("eu@", cfg.DATABASE_URL_DIRECT)
+
+    def test_own_direct_url(self):
+        cfg = _reload_config({
+            "ACELY_DATABASE_URL": "postgresql://eu@pooler/db",
+            "ACELY_DATABASE_URL_DIRECT": "postgresql://eu@direct/db",
+        })
+        self.assertEqual(cfg.DATABASE_URL_DIRECT, "postgresql://eu@direct/db")
 
     def test_relative_root_cert_resolves_from_project_root(self):
         cfg = _reload_config({"DB_SSLROOTCERT": "certs/supabase-ca.crt"})
