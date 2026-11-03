@@ -638,4 +638,20 @@ export function initBackdrop() {
   return instance;
 }
 
-initBackdrop();
+/**
+ * Cria o WebGL só depois da página pronta e com o navegador ocioso: compilar os
+ * shaders bloqueia a thread principal e, no começo, atrasava o primeiro desenho do
+ * conteúdo (FCP/LCP no Speed Insights). Até lá aparece o gradiente de --bg-gradient,
+ * e o canvas entra com o fade de .backdrop.is-running.
+ */
+function scheduleBackdrop() {
+  const run = () => initBackdrop();
+  const whenIdle = () => {
+    if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 1500 });
+    else setTimeout(run, 200);
+  };
+  if (document.readyState === 'complete') whenIdle();
+  else window.addEventListener('load', whenIdle, { once: true });
+}
+
+scheduleBackdrop();
