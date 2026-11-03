@@ -13,7 +13,7 @@ provedor é trocar as variáveis abaixo e rodar o primeiro deploy (as migrations
 | `ACELY_DATABASE_URL_DIRECT` | Versão sem pooler da anterior (vazio = usa a `ACELY_DATABASE_URL`). | Não |
 | `DATABASE_URL_DIRECT` | URL **sem pooler** para migrations e `scripts/reset_database.py`. Vazio = usa a `DATABASE_URL`. | Não |
 | `DB_SSLMODE` | Modo TLS quando a URL não traz `sslmode`. Padrão `verify-full`. | Não |
-| `DB_SSLROOTCERT` | Certificado da autoridade para `verify-full`: caminho (relativo à raiz do projeto ou absoluto) ou `system`. Vazio = `system`. | Só no Supabase |
+| `DB_SSLROOTCERT` | Certificado da autoridade para `verify-full`: caminho (relativo à raiz do projeto ou absoluto). Vazio = arquivo do `certifi`. | Só no Supabase |
 | `DB_SSLROOTCERT_PEM` | Alternativa ao anterior para a Vercel: o conteúdo do `.crt` colado na variável (pode usar `\n` no lugar das quebras de linha). O certificado é público, não é segredo. | Não |
 | `AUTO_MIGRATE` | `true` roda as migrations na primeira requisição. | Não |
 
@@ -23,13 +23,14 @@ banco). Elas usam `DATABASE_URL_DIRECT` ou a própria `DATABASE_URL`.
 
 ### TLS
 
-- Sem `sslmode` na URL, o app usa `verify-full` e, sem certificado configurado,
-  `sslrootcert=system` (certificados do sistema; precisa de libpq 16+, que já vem no
-  `psycopg2-binary` do `requirements.txt`).
+- Sem `sslmode` na URL, o app usa `verify-full` e, sem certificado configurado, o arquivo de
+  autoridades do `certifi` (fixado no `requirements.txt`). `sslrootcert=system` não é usado: o
+  OpenSSL do `psycopg2-binary` procura os certificados numa pasta que só existia na máquina
+  onde o pacote foi compilado, e a conexão falha com "certificate verify failed".
 - Se a URL trouxer `sslmode=require` (as URLs geradas pela integração Neon da Vercel costumam
   trazer), a conexão é cifrada mas **não valida o certificado**. O servidor avisa uma vez no log:
   `[db] Aviso: conexão com ... usa sslmode=require`. Para corrigir, troque por
-  `sslmode=verify-full` na URL (Neon: funciona com `system`; Supabase: veja a seção 3).
+  `sslmode=verify-full` na URL (Neon: funciona com o `certifi`, sem mais nada; Supabase: veja a seção 3).
 - Os logs mostram só host, porta e banco (`describe_database_target`), nunca usuário ou senha.
 
 ## 2. Neon com conta própria (recomendado hoje)
@@ -59,16 +60,19 @@ Com a integração, o banco fica na organização `Vercel: <time>` da Neon (entr
 Storage → **Open in Neon**) e a integração cria e trava `DATABASE_URL`, `DATABASE_URL_UNPOOLED`,
 `POSTGRES_URL` e afins: não dá para editar. Para usar uma URL sua (ex.: com `verify-full`):
 
-1. Neon → **Connect**: branch `main`, banco `neondb`, role `neondb_owner`, **Connection pooling
-   ligado** (host com `-pooler`). **Show password** e copie.
+1. Neon → **Connect**: branch de produção, banco e role padrão, **Connection pooling ligado**
+   (host com `-pooler`). Copie a string direto para a Vercel, sem salvar em arquivo nem colar em chat.
 2. Troque `sslmode=require` por `sslmode=verify-full` (pode manter `channel_binding=require`).
+   Não acrescente `sslrootcert=system`: o OpenSSL embutido no `psycopg2-binary` não encontra os
+   certificados do sistema e a conexão falha com "certificate verify failed". O app usa o
+   arquivo de autoridades do `certifi` sozinho (e troca `system` por ele se estiver na URL).
 3. Vercel → Settings → Environment Variables → **Add**: nome `ACELY_DATABASE_URL`, cole a URL,
    marque só **Production** e **Sensitive**. Salve.
 4. **Redeploy** da produção (variáveis novas só valem em deploys novos).
 5. Confira nos logs da função que **não** aparece o aviso `[db] Aviso: ... sslmode=require`.
 
 Preview continua usando as variáveis da integração (um banco/branch separado). Se a senha do
-`neondb_owner` for trocada na Neon (**Reset password**), atualize a `ACELY_DATABASE_URL` também:
+banco for trocada na Neon (**Reset password**), atualize a `ACELY_DATABASE_URL` também:
 ela não é atualizada sozinha como as variáveis da integração.
 
 ## 3. Supabase
