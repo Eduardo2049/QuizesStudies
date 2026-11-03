@@ -22,8 +22,8 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from api.database.connection import get_cursor  # noqa: E402
-from api.utils.config import ADMIN_USERNAME, DATABASE_URL  # noqa: E402
+from api.database.connection import get_direct_cursor  # noqa: E402
+from api.utils.config import ADMIN_USERNAME, DATABASE_URL, DATABASE_URL_DIRECT  # noqa: E402
 
 CONFIRM_WORD = "APAGAR"
 SCOPES = ("content", "all")
@@ -67,7 +67,7 @@ def run(scope: str, dry_run: bool, admin_username: str = ADMIN_USERNAME) -> dict
     """Conta (dry_run) ou apaga as linhas de cada passo. Retorna {rótulo: linhas}."""
     steps = build_steps(scope, admin_username)
     result: dict[str, int] = {}
-    with get_cursor() as cur:
+    with get_direct_cursor() as cur:
         for label, sql, params in steps:
             if dry_run:
                 cur.execute(_count_sql(sql), params)
@@ -105,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     mode = "SIMULAÇÃO (nada será apagado)" if args.dry_run else "LIMPEZA"
-    print(f"[reset-db] {mode} | escopo: {args.scope} | alvo: {describe_target(DATABASE_URL)}")
+    print(f"[reset-db] {mode} | escopo: {args.scope} | alvo: {describe_target(DATABASE_URL_DIRECT or DATABASE_URL)}")
     if args.scope == "all":
         print(f"[reset-db] O usuário admin '{ADMIN_USERNAME}' é preservado.")
 

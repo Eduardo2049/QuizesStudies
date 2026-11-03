@@ -53,6 +53,7 @@ Edite o `.env`:
 | Variável | Obrigatória | Descrição |
 |---|---|---|
 | `DATABASE_URL` | ✅ | `postgresql://user:password@host:5432/dbname` |
+| `DATABASE_URL_DIRECT` | Não | URL sem pooler para migrations e scripts (vazio = `DATABASE_URL`). Neon, Supabase e TLS: `docs/BANCO_DE_DADOS.md` |
 | `POSTGRES_PASSWORD` | ✅ Docker | Senha forte do PostgreSQL local |
 | `ADMIN_USERNAME` | Não | Usuário do administrador inicial (padrão: `admin`) |
 | `ADMIN_PASSWORD` | ✅ | Senha forte do administrador inicial |

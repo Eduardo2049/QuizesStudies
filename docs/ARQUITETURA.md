@@ -112,9 +112,10 @@ python -m unittest tests/test_security_fixes.py     # um arquivo
 - **Decisão:** isolamento por dono na camada de repositório, com queries parametrizadas (`WHERE is_public = TRUE OR created_by = %s` e `WHERE user_id = %s`).
 - **Motivo:** o backend conecta ao PostgreSQL por pool em ambiente serverless (Neon/PgBouncer) com uma única role de serviço. RLS com `FORCE ROW LEVEL SECURITY` dependeria de `SET LOCAL app.user_id` a cada requisição, com roundtrips extras e risco de estado reaproveitado no pool transacional.
 - **Garantia:** toda leitura e correção passa pelos repositórios que aplicam o filtro de dono. Só administradores alteram `is_public`.
+- **Supabase:** a API REST automática dele não é usada. `scripts/sql/supabase_fechar_api_publica.sql` liga RLS **sem** `FORCE` (o dono das tabelas, usado pelo app, não é afetado) e revoga `anon`/`authenticated`, só para fechar essa API. Ver `docs/BANCO_DE_DADOS.md`.
 - **Schema:** `is_public` tem `DEFAULT FALSE` no `CREATE TABLE` e no `ALTER TABLE`, para que quizzes antigos não fiquem públicos sem querer.
 
 ### Mitigações de auditoria
 1. **Timing attack no login:** usuário inexistente roda PBKDF2-HMAC-SHA256 (600.000 iterações) contra salt e hash sentinelas (`_DUMMY_SALT`, `_DUMMY_HASH`), igualando o tempo de resposta e impedindo enumeração de contas.
 2. **Rate limit por falhas com chave composta:** `/api/auth/login` conta só falhas consecutivas por `(IP + usuário)`. Um atacante só bloqueia o próprio IP para aquele usuário, e logins bem-sucedidos limpam o contador (redes com NAT não sofrem).
-3. **Criptografia em trânsito:** bancos remotos usam `sslmode=verify-full` por padrão (ajustável via `DB_SSLMODE`).
+3. **Criptografia em trânsito:** bancos remotos usam `sslmode=verify-full` por padrão (ajustável via `DB_SSLMODE`), com `sslrootcert=system` ou o certificado de `DB_SSLROOTCERT`/`DB_SSLROOTCERT_PEM`. URL com `sslmode` mais fraco gera um aviso no log. Detalhes em `docs/BANCO_DE_DADOS.md`.

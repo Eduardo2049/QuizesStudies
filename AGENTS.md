@@ -24,7 +24,7 @@ Este documento é a referência primária e fixa de arquitetura, permissões, li
 | **Entrar com Google e importar simulados do convidado** | `api/services/google_auth_service.py`<br>`api/services/import_service.py`<br>`web/modules/auth_page.js` | `web/styles.css` |
 | **Idiomas da interface (PT/EN) e idioma da IA** | `web/modules/i18n.js`<br>`web/modules/i18n/en.js` (dicionário)<br>`web/modules/i18n-boot.js`<br>`api/services/ai_service.py` (`normalize_language`, campo `language`) | `api/repositories/`<br>`api/database/` |
 | **Regras de design (skill adotada)** | `.claude/skills/landing-page-design/SKILL.md`<br>`docs/DESIGN_SKILLS.md` | Pasta `api/` |
-| **Banco de dados, tabelas, consultas SQL, migrations** | `api/database/migrations.py`<br>`api/repositories/quiz_repository.py`<br>`api/repositories/user_repository.py` | Toda a pasta `web/` |
+| **Banco de dados, tabelas, consultas SQL, migrations** | `api/database/migrations.py`<br>`api/database/connection.py` (URL, pooler, TLS)<br>`api/repositories/quiz_repository.py`<br>`api/repositories/user_repository.py`<br>`docs/BANCO_DE_DADOS.md` (Neon, Supabase, credenciais) | Toda a pasta `web/` |
 | **Configuração de ambiente, portas, chaves de API** | `api/utils/config.py`<br>`.env.example` | Código de regras de negócio |
 | **Pipelines CI/CD, deploy e Gitflow** | `.github/workflows/`<br>`vercel.json`<br>`docs/CICD_E_DEPLOY.md` | Código de backend `api/` |
 | **Plano em andamento (marca Acely, IA mais rápida e multiprovedor)** | `docs/PLANO_ACELY.md` (ler antes de começar uma fase) | Código fora da fase em execução |

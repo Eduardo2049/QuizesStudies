@@ -6,7 +6,8 @@ Fluxo:
 2. Extrai texto (TXT/PDF/DOCX)
 3. Faz parse das questões
 4. Detecta se tem gabarito
-5. Se NÃO tem gabarito → chama IA (OpenRouter) para gerar
+5. Se NÃO tem gabarito → chama IA (OpenRouter) para gerar. Com questões e gabarito
+   reconhecidos no arquivo, a IA não é chamada e nenhuma cota (convidado) é gasta.
 6. Salva no PostgreSQL
 7. Retorna dados do quiz criado
 """
@@ -222,6 +223,9 @@ class UploadService:
         label = stem.replace("_", " ").replace("-", " ").title()
         name = _slugify(stem)
 
+        # Arquivo com questões e gabarito reconhecidos: nenhuma chamada à IA, nenhuma cota gasta
+        no_ai_note = " Gabarito lido do arquivo, sem gastar usos de IA." if not ai_generated else ""
+
         if not persist:
             return {
                 "quiz_id": None,
@@ -229,9 +233,10 @@ class UploadService:
                 "label": label,
                 "question_count": len(questions),
                 "ai_generated": ai_generated,
+                "ai_used": ai_generated,
                 "local_only": True,
                 "questions": questions,
-                "message": f"Quiz '{label}' carregado somente neste dispositivo",
+                "message": f"Quiz '{label}' carregado somente neste dispositivo.{no_ai_note}",
             }
 
         # Garantir nome único
@@ -263,8 +268,9 @@ class UploadService:
             "label": quiz["label"],
             "question_count": len(questions),
             "ai_generated": ai_generated,
+            "ai_used": ai_generated,
             "message": (
                 f"Quiz '{label}' criado com {len(questions)} questões"
-                + (" (gabarito gerado por IA)" if ai_generated else "")
+                + (" (gabarito gerado por IA)." if ai_generated else f".{no_ai_note}")
             ),
         }
