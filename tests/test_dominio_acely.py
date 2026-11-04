@@ -25,7 +25,8 @@ from api.handlers.quiz_handler import QuizHandler
 from api.services.email_service import EmailService
 
 ROOT = Path(__file__).resolve().parent.parent
-WEB_DIR = ROOT / "web"
+PUBLIC_DIR = ROOT / "public"  # raiz dos endereços na Vercel: public/web/x é servido em /web/x
+WEB_DIR = PUBLIC_DIR / "web"
 DOMAIN = "https://acely.com.br"
 ROOT_FILES = {
     "/robots.txt": "text/plain",
@@ -33,20 +34,20 @@ ROOT_FILES = {
     "/site.webmanifest": "application/manifest+json",
 }
 PAGES = [
-    "web/index.html",
-    "web/login.html",
-    "web/register.html",
-    "web/reset-password.html",
-    "web/termos.html",
-    "web/privacidade.html",
+    "public/web/index.html",
+    "public/web/login.html",
+    "public/web/register.html",
+    "public/web/reset-password.html",
+    "public/web/termos.html",
+    "public/web/privacidade.html",
     "404.html",
 ]
 CANONICAL = {
-    "web/index.html": f"{DOMAIN}/",
-    "web/login.html": f"{DOMAIN}/login",
-    "web/register.html": f"{DOMAIN}/register",
-    "web/termos.html": f"{DOMAIN}/termos",
-    "web/privacidade.html": f"{DOMAIN}/privacidade",
+    "public/web/index.html": f"{DOMAIN}/",
+    "public/web/login.html": f"{DOMAIN}/login",
+    "public/web/register.html": f"{DOMAIN}/register",
+    "public/web/termos.html": f"{DOMAIN}/termos",
+    "public/web/privacidade.html": f"{DOMAIN}/privacidade",
 }
 
 
@@ -82,7 +83,7 @@ class TestVercelDomain(unittest.TestCase):
         for path in ROOT_FILES:
             with self.subTest(path=path):
                 self.assertIn(path, rewrites)
-                self.assertTrue((ROOT / rewrites[path].lstrip("/")).is_file(), rewrites[path])
+                self.assertTrue((PUBLIC_DIR / rewrites[path].lstrip("/")).is_file(), rewrites[path])
 
     def test_www_redirects_to_apex(self):
         redirect = next(
@@ -109,7 +110,7 @@ class TestPagesPointToDomain(unittest.TestCase):
                 self.assertIn(f'<meta property="og:image" content="{DOMAIN}/web/icons/og-image.png">', html)
 
     def test_private_pages_are_not_indexed(self):
-        for page in ("web/reset-password.html", "404.html"):
+        for page in ("public/web/reset-password.html", "404.html"):
             with self.subTest(page=page):
                 self.assertIn('<meta name="robots" content="noindex">', (ROOT / page).read_text(encoding="utf-8"))
 
@@ -127,7 +128,7 @@ class TestManifestAndSitemap(unittest.TestCase):
         self.assertEqual(manifest["name"], "Acely")
         sizes = set()
         for icon in manifest["icons"]:
-            path = ROOT / icon["src"].split("?", 1)[0].lstrip("/")
+            path = PUBLIC_DIR / icon["src"].split("?", 1)[0].lstrip("/")
             with self.subTest(icon=icon["src"]):
                 self.assertTrue(path.is_file())
             sizes.add(icon["sizes"])

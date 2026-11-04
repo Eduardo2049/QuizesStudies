@@ -7,13 +7,14 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-WEB = ROOT / "web"
+PUBLIC = ROOT / "public"  # raiz dos endereços: public/web/app.js é servido em /web/app.js
+WEB = PUBLIC / "web"
 
 
 def _imports_of(path: Path, seen: set[str]) -> None:
     for spec in re.findall(r"""^\s*import\s[^'"]*['"](\.[^'"]+)['"]""", path.read_text(encoding="utf-8"), re.M):
         target = (path.parent / spec.split("?")[0]).resolve()
-        url = "/" + target.relative_to(ROOT).as_posix() + ("?" + spec.split("?", 1)[1] if "?" in spec else "")
+        url = "/" + target.relative_to(PUBLIC).as_posix() + ("?" + spec.split("?", 1)[1] if "?" in spec else "")
         if url not in seen:
             seen.add(url)
             _imports_of(target, seen)
@@ -33,7 +34,7 @@ class ModulePreloadTests(unittest.TestCase):
         css = (WEB / "styles.css").read_text(encoding="utf-8")
         for href in re.findall(r'<link rel="preload" href="([^"]+\.woff2)"', html):
             self.assertIn(f"url('{href}')", css)
-            self.assertTrue((ROOT / href.lstrip("/")).exists())
+            self.assertTrue((PUBLIC / href.lstrip("/")).exists())
 
 
 if __name__ == "__main__":

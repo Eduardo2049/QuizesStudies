@@ -35,7 +35,7 @@ MAX_CONTEXT_CHARS = 2000
 # Tempo mínimo da resposta de "Esqueci minha senha" (cobre o envio do e-mail por SMTP)
 FORGOT_PASSWORD_MIN_SECONDS = 3.0
 
-# Content-Type dos arquivos estáticos servidos de web/ (e da raiz, como robots.txt)
+# Content-Type dos arquivos estáticos servidos de public/web/ (e da raiz, como robots.txt)
 STATIC_CONTENT_TYPES = {
     ".css": "text/css; charset=utf-8",
     ".js": "application/javascript; charset=utf-8",
@@ -1180,7 +1180,7 @@ class QuizHandler(BaseHTTPRequestHandler):
         return f"{base}/api/auth/google/callback" if base else None
 
     def _send_html_file(self, path, status_code: int = 200):
-        """Envia uma página HTML de web/ com os cabeçalhos de segurança."""
+        """Envia uma página HTML de public/web/ com os cabeçalhos de segurança."""
         if not path.is_file():
             status, data = ResponseFormatter.not_found("Página não encontrada")
             HTTPMiddleware.send_json_response(self, status, data)
