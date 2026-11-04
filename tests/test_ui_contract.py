@@ -11,7 +11,7 @@ import unittest
 from html.parser import HTMLParser
 from pathlib import Path
 
-WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+WEB_DIR = Path(__file__).resolve().parent.parent / "public" / "web"
 
 # Script principal de cada página -> páginas onde ele roda
 PAGE_SCRIPTS = {

@@ -61,7 +61,7 @@
       ]
     },
     {
-      "source": "/web/(.*)",
+      "source": "/web/(.*)\\.(js|css|woff2|png|svg|ico)",
       "headers": [
         {
           "key": "Cache-Control",

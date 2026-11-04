@@ -105,9 +105,9 @@ O servidor inicia em `http://localhost:8000` (ou próxima porta livre) e executa
 ## Idiomas (português e inglês)
 
 - A interface tem um botão **PT/EN** no topo. A escolha fica no `localStorage` (`quiz_lang`); na primeira visita segue o idioma do navegador.
-- O português escrito no HTML e no JS é o texto-fonte. `web/modules/i18n.js` troca textos e atributos pelo dicionário `web/modules/i18n/en.js` e observa o que o `app.js` gera depois; `web/modules/i18n-boot.js` evita mostrar o português por um instante antes da tradução. Elementos com `translate="no"` não são tocados.
+- O português escrito no HTML e no JS é o texto-fonte. `public/web/modules/i18n.js` troca textos e atributos pelo dicionário `public/web/modules/i18n/en.js` e observa o que o `app.js` gera depois; `public/web/modules/i18n-boot.js` evita mostrar o português por um instante antes da tradução. Elementos com `translate="no"` não são tocados.
 - A IA gera simulados, gabaritos de arquivos e variações no idioma escolhido: as rotas `/api/quiz/generate`, `/api/upload` e `/api/quiz/remix-mistakes` aceitam o campo `language` (`pt-BR` ou `en`; padrão `pt-BR`).
-- Para um idioma novo: crie `web/modules/i18n/<código>.js`, registre em `LANGUAGES` e `DICTIONARIES` (`i18n.js`), repita a regra em `i18n-boot.js` e acrescente o código em `AI_LANGUAGES` (`api/services/ai_service.py`).
+- Para um idioma novo: crie `public/web/modules/i18n/<código>.js`, registre em `LANGUAGES` e `DICTIONARIES` (`i18n.js`), repita a regra em `i18n-boot.js` e acrescente o código em `AI_LANGUAGES` (`api/services/ai_service.py`).
 
 ---
 
@@ -312,7 +312,7 @@ QuizesStudies/
 │   │   ├── quiz_logic.py      # Correção e pontuação de respostas
 │   │   └── validators.py      # Validação de payloads HTTP
 │   └── index.py               # Entrypoint Vercel (serverless)
-├── web/
+├── public/web/                # Front-end, servido pela CDN da Vercel em /web/...
 │   ├── app.js                 # Lógica client-side (SPA)
 │   ├── index.html             # Interface principal
 │   ├── login.html             # Tela de login moderna

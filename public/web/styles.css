@@ -3781,7 +3781,7 @@ h1 { font-weight: 700; letter-spacing: -0.03em; text-wrap: balance; }
 .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .auth-guest-btn { width: 100%; margin-top: 0; }
 
-/* ═══ Cronômetro arrastável e redimensionável (web/modules/timer-drag.js) ═══ */
+/* ═══ Cronômetro arrastável e redimensionável (public/web/modules/timer-drag.js) ═══ */
 #timer {
   --timer-scale: 1;
   font-size: calc(12px * var(--timer-scale));
@@ -3870,7 +3870,7 @@ h1 { font-weight: 700; letter-spacing: -0.03em; text-wrap: balance; }
   .timer-resize-handle { transition: none; }
 }
 
-/* ─── Fundo animado em WebGL: cena "Frosty Gradient" (ver web/modules/backdrop.js) ── */
+/* ─── Fundo animado em WebGL: cena "Frosty Gradient" (ver public/web/modules/backdrop.js) ── */
 :root {
   /* Paleta original do tema claro no mesmo modelo: manchas verde-ciano e
      laranja sobre o papel, linhas teal. As manchas são claras para o texto

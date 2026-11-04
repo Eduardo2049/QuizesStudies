@@ -480,7 +480,7 @@ export default {
   'Falha ao redefinir senha.': 'Failed to reset the password.',
   'Não foi possível validar o link. Verifique sua conexão.': 'Could not validate the link. Check your connection.',
   'Não foi possível conectar ao servidor. Verifique sua conexão.': 'Could not reach the server. Check your connection.',
-  // Andamento do upload e da geração (web/app.js, startProgressMessages)
+  // Andamento do upload e da geração (public/web/app.js, startProgressMessages)
   '{0} · {1} s': '{0} · {1} s',
   'Preparando o pedido para a IA…': 'Preparing the request for the AI…',
   'A IA está escrevendo as questões sobre o tema…': 'The AI is writing questions on the topic…',
