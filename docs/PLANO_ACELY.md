@@ -25,13 +25,13 @@ Para criar a próxima branch: `git checkout develop && git pull && git checkout 
 ### 1.1 Já feito na `feature/rebrand-acely`
 
 - Nome "Quiz Study" / "Quizes Study" / "IFuture Study" trocado por **Acely** em telas, títulos,
-  e-mails, termos, privacidade, 404, tradução em inglês (`web/modules/i18n/en.js`), documentação,
+  e-mails, termos, privacidade, 404, tradução em inglês (`public/web/modules/i18n/en.js`), documentação,
   `pyproject.toml` e `docker-compose.yml` (nomes de contêiner).
-- **Logo nova** (`web/icons/favicon.svg`): um "A" cuja perna direita vira o sinal de acerto, nas
+- **Logo nova** (`public/web/icons/favicon.svg`): um "A" cuja perna direita vira o sinal de acerto, nas
   cores atuais (fundo `#0d3f3d`, traço `#f4f0e8`, acerto `#ff7a5c`). Gerados a partir do SVG:
   `favicon-16x16.png`, `favicon-32x32.png`, `favicon-192.png`, `favicon.png` (512),
   `apple-touch-icon.png` (180, fundo cheio) e `favicon.ico` (16/32/48).
-- **Imagem de compartilhamento** `web/icons/og-image.png` (1200×630) e, na home: `og:url`,
+- **Imagem de compartilhamento** `public/web/icons/og-image.png` (1200×630) e, na home: `og:url`,
   `og:image` absoluto, `canonical`, `twitter:card = summary_large_image`, `theme-color`.
 - OpenRouter recebe `HTTP-Referer: https://acely.com.br` e `X-Title: Acely`.
 - Remetente padrão `noreply@acely.com.br`; seed do admin com `admin@acely.com.br`;
@@ -41,9 +41,9 @@ Para criar a próxima branch: `git checkout develop && git pull && git checkout 
 ### 1.1.1 Integração com o domínio (também na `feature/rebrand-acely`, 29/10/2026)
 
 - `vercel.json`: `www.acely.com.br` → `https://acely.com.br` (301) e rewrites de `/robots.txt`,
-  `/sitemap.xml` e `/site.webmanifest` (arquivos em `web/`); o servidor local serve os mesmos
+  `/sitemap.xml` e `/site.webmanifest` (arquivos em `public/web/`); o servidor local serve os mesmos
   caminhos (`quiz_handler.py`, tabela `STATIC_CONTENT_TYPES`).
-- `web/site.webmanifest` (nome Acely, ícones 192/512/SVG, cores do tema) ligado em todas as páginas.
+- `public/web/site.webmanifest` (nome Acely, ícones 192/512/SVG, cores do tema) ligado em todas as páginas.
 - `canonical`, `og:*` e `theme-color` em login, cadastro, termos e privacidade; `noindex` na
   recuperação de senha (o token vai na URL) e na 404; dados estruturados (`WebSite` + `Organization`
   com a logo) na home.
@@ -75,7 +75,7 @@ Para criar a próxima branch: `git checkout develop && git pull && git checkout 
    links `https://acely.com.br/privacidade` e `https://acely.com.br/termos`.
 5. **E-mail:** para enviar como `noreply@acely.com.br` é preciso um provedor de e-mail no domínio
    (com SPF e DKIM no DNS); até lá, manter `SMTP_FROM` com o Gmail atual. Opcional: criar
-   `contato@acely.com.br` e trocar o e-mail de contato em `web/termos.html` e `web/privacidade.html`.
+   `contato@acely.com.br` e trocar o e-mail de contato em `public/web/termos.html` e `public/web/privacidade.html`.
 6. **Google Search Console:** verificar `acely.com.br` (registro TXT no DNS) e enviar o sitemap
    `https://acely.com.br/sitemap.xml`.
 7. Conferir o compartilhamento do link (WhatsApp, LinkedIn) para ver a `og-image.png`.
@@ -87,14 +87,14 @@ Para criar a próxima branch: `git checkout develop && git pull && git checkout 
 Teste manual no celular e no desktop: a geração por tema demorou demais; ao recarregar a página,
 foi preciso fazer a mesma consulta de novo.
 
-**Causas encontradas no código (`api/services/ai_service.py`, `web/app.js`):**
+**Causas encontradas no código (`api/services/ai_service.py`, `public/web/app.js`):**
 
 1. Os modelos padrão são os Nemotron `:free` do OpenRouter, que ficam em fila compartilhada.
    `_call_openrouter` tenta até `OPENROUTER_MAX_ATTEMPTS` (4) modelos **em sequência** dentro de um
    tempo total de 60–75 s; um modelo travado consome quase todo o tempo antes de passar ao próximo.
 2. O simulado inteiro sai em **uma** resposta (até ~3.200 tokens de saída para 10 questões); nada
    aparece até o JSON completo chegar e ser validado.
-3. `doGenerateTopic()` em `web/app.js` faz um único `fetch` e só guarda o resultado depois da
+3. `doGenerateTopic()` em `public/web/app.js` faz um único `fetch` e só guarda o resultado depois da
    resposta. Recarregar abandona o pedido; o convidado perde o simulado e a cota pode ter sido usada.
 4. O cache de temas (`_quiz_generation_cache`) fica **na memória** do processo. Na Vercel cada
    instância tem a sua, então quase nunca é reaproveitado.
@@ -124,7 +124,7 @@ Branch sugerida: `feature/ia-tarefas-persistentes`
 4. Trocar o cache em memória por `ai_cache` (pode manter a memória como primeiro nível).
 5. Em `_call_openrouter`: tempo máximo **por tentativa** (nova variável `AI_ATTEMPT_TIMEOUT`,
    padrão 20 s) além do tempo total; registrar no log a latência de cada modelo.
-6. `web/app.js`: gerar `crypto.randomUUID()` antes do `fetch`, salvar
+6. `public/web/app.js`: gerar `crypto.randomUUID()` antes do `fetch`, salvar
    `{id, payload, startedAt}` em `sessionStorage` (`quiz_pending_job`); ao carregar a página, se houver
    pendente com menos de 10 min, mostrar "Seu simulado ainda está sendo gerado" e consultar
    `/api/quiz/jobs/<id>` a cada 3 s até `done`/`failed`. Limpar a chave no fim. Textos novos com
@@ -168,7 +168,7 @@ Endereços (formato OpenAI):
    8 mil tokens/minuto: um simulado de 10 questões gasta ~5 mil tokens.
 4. Reativar o Gemini usando o bloco já comentado em `config.py` e `ai_service.py`, agora pelo
    endereço compatível com OpenAI.
-5. Atualizar `web/privacidade.html` (lista de provedores que recebem o texto; o plano gratuito do
+5. Atualizar `public/web/privacidade.html` (lista de provedores que recebem o texto; o plano gratuito do
    Gemini **usa o conteúdo para melhorar os produtos do Google**), `README.md`, `AGENTS.md`,
    `docs/ARQUITETURA.md` e `docs/CICD_E_DEPLOY.md`.
 6. Testes no estilo de `tests/test_openrouter_free.py`, com respostas simuladas por provedor.

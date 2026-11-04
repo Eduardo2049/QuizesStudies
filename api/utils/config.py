@@ -12,7 +12,10 @@ except ImportError:
 # Caminhos
 ROOT = Path(__file__).parent.parent.parent
 API_DIR = ROOT / "api"
-WEB_DIR = ROOT / "web"
+# Na Vercel, só o que está em public/ vai para a CDN; o resto passa pela função Python.
+# public/web/app.js continua no endereço /web/app.js.
+PUBLIC_DIR = ROOT / "public"
+WEB_DIR = PUBLIC_DIR / "web"
 
 # Server
 HOST = os.getenv("HOST", "0.0.0.0")
