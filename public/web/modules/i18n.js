@@ -8,7 +8,7 @@
  * app.js gera depois também sai traduzido.
  *
  * Elementos com translate="no" (e o que estiver dentro deles) não são tocados.
- * Para acrescentar um idioma: crie web/modules/i18n/<código>.js e registre em
+ * Para acrescentar um idioma: crie public/web/modules/i18n/<código>.js e registre em
  * LANGUAGES e DICTIONARIES. O i18n-boot.js precisa da mesma regra de getLanguage().
  */
 import en from './i18n/en.js?v=4';

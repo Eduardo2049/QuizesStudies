@@ -52,8 +52,9 @@ Os workflows estão configurados em `.github/workflows/`:
 ## 🚀 3. Configuração na Vercel
 
 O projeto roda como uma aplicação unificada na Vercel:
-- **Frontend:** Estáticos servidos a partir de `web/` com rotas e headers definidos em `vercel.json`.
+- **Frontend:** Estáticos em `public/web/`, servidos pela CDN da Vercel no endereço `/web/...` (ex.: `public/web/app.js` → `/web/app.js`), com rotas e headers definidos em `vercel.json`.
 - **Backend:** Funções serverless Python servidas a partir de `api/index.py`.
+- **Por que `public/`:** a Vercel detecta o projeto como aplicação Python e manda para a função toda requisição que não corresponda a um arquivo de `public/`. Com os estáticos fora de `public/`, cada visita (e cada robô que pede `/` ou `/robots.txt`) acordava a função. Não mova os arquivos do front de volta para a raiz.
 
 ### 3.1 Configuração de Branch de Produção
 1. No painel do projeto na Vercel, acesse **Settings > Git**.
@@ -217,9 +218,9 @@ O cabeçalho do e-mail mostra a logo em PNG (`/web/icons/favicon-192.png`) busca
 
 O que já está no código:
 - `vercel.json` redireciona `www.acely.com.br` para `https://acely.com.br` (301). Configure o mesmo sentido em **Settings > Domains** (nunca o contrário, ou vira um laço de redirecionamento).
-- `/robots.txt`, `/sitemap.xml` e `/site.webmanifest` são servidos na raiz (rewrites no `vercel.json`, rota equivalente no `quiz_handler.py`; os arquivos ficam em `web/`).
+- `/robots.txt`, `/sitemap.xml` e `/site.webmanifest` são servidos na raiz (rewrites no `vercel.json`, rota equivalente no `quiz_handler.py`; os arquivos ficam em `public/web/`).
 - As páginas públicas têm `canonical` e `og:url` no domínio; `reset-password` e a 404 têm `noindex`. Os deploys de Preview da Vercel já recebem `X-Robots-Tag: noindex` automaticamente.
-- Nova página pública: adicionar ao `web/sitemap.xml` (o teste `tests/test_dominio_acely.py` confere que cada endereço do sitemap tem rewrite).
+- Nova página pública: adicionar ao `public/web/sitemap.xml` (o teste `tests/test_dominio_acely.py` confere que cada endereço do sitemap tem rewrite).
 
 Fora do código (dono do projeto): DNS no Registro.br, `APP_URL` em Production, URIs do OAuth do Google e envio do sitemap (`https://acely.com.br/sitemap.xml`) no Google Search Console. A lista completa está em `docs/PLANO_ACELY.md`, seção 1.2.
 

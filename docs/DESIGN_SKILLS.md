@@ -18,7 +18,7 @@ e revise a seção 3 deste arquivo.
 
 1. Antes de criar ou mudar qualquer tela, leia a skill (Parte A para textos e estrutura,
    Parte B para valores visuais) e a tabela de tradução abaixo.
-2. Todo valor visual novo sai dos tokens de `web/styles.css`. Se a skill pedir um valor que não
+2. Todo valor visual novo sai dos tokens de `public/web/styles.css`. Se a skill pedir um valor que não
    existe como token, crie o token em `:root` (e no tema escuro) em vez de escrever o número solto.
 3. No PR, marque o checklist da seção 4.
 
@@ -31,7 +31,7 @@ A skill fala em classes do Tailwind; aqui o Tailwind é proibido (`AGENTS.md`). 
 
 | Regra da skill | Como fica no Acely |
 |---|---|
-| **B1 Fonte única** (Geist, Manrope…) | Manrope (`--font-sans`), self-hosted em `web/fonts/`. DM Mono (`--font-mono`) só para dado numérico: cronômetro, contadores, chip de cota de IA. |
+| **B1 Fonte única** (Geist, Manrope…) | Manrope (`--font-sans`), self-hosted em `public/web/fonts/`. DM Mono (`--font-mono`) só para dado numérico: cronômetro, contadores, chip de cota de IA. |
 | **B1 Sem itálico, peso máx. bold** | `font-style: normal` em toda a interface (inclusive `em` de destaque, que só muda a cor). Pesos 400, 500, 600 e 700; 800/900 proibidos. |
 | **B1 Escala tipográfica** | `--text-xs` 12/16, `--text-sm` 14/20, `--text-md` 16/24, 18/28, 20/28, 24/32, 30/36, 36/40, 48, 60, 72. Valores fora da escala descem para o degrau abaixo. |
 | **B1 Botões** | Principal: 16px semibold. Botões pequenos do cabeçalho: 14px semibold. Altura mínima 44px no mobile. |
@@ -40,9 +40,9 @@ A skill fala em classes do Tailwind; aqui o Tailwind é proibido (`AGENTS.md`). 
 | **B3 Raio** | `--radius-sm` 8, `--radius-md` 12, `--radius-lg` 16. Raio interno = externo menos o espaçamento, quando o espaçamento for menor que 32px e o resultado maior que 2. |
 | **B4 Bordas e fundos** | Borda em volta toda ou nenhuma. Fundos chapados. Escuro: preferir #000000, #181818, #1F1F1F, #272727, #313131. |
 | **B5 Hero** | Título e subtítulo com no máximo 680px e quebras de linha onde a ideia quebra. |
-| **B6 Ícones** | SVG inline em `web/modules/icons.js` (a CSP não permite CDN). Ícones novos: copiar o SVG do Phosphor (MIT) para o módulo. |
+| **B6 Ícones** | SVG inline em `public/web/modules/icons.js` (a CSP não permite CDN). Ícones novos: copiar o SVG do Phosphor (MIT) para o módulo. |
 | **B7 Movimento** | Curva base `--ease-out` = `cubic-bezier(0.22, 1, 0.36, 1)`. Posição/layout 500ms; cor e opacidade 300ms (nunca abaixo de 200ms: `--dur-fast` = 200ms). Animar só `transform` e `opacity`. Em `prefers-reduced-motion`, trocar movimento por opacidade. |
-| **B8 Conteúdo** | Frases em caixa normal ("Criar simulado", não "Criar Simulado"). Mensagens de sistema calmas e específicas, sem ponto de exclamação: o que falhou e o que fazer. Sem promessas que não dá para comprovar (ex.: "em 5 segundos"). A mesma regra vale para a tradução em inglês (`web/modules/i18n/en.js`). |
+| **B8 Conteúdo** | Frases em caixa normal ("Criar simulado", não "Criar Simulado"). Mensagens de sistema calmas e específicas, sem ponto de exclamação: o que falhou e o que fazer. Sem promessas que não dá para comprovar (ex.: "em 5 segundos"). A mesma regra vale para a tradução em inglês (`public/web/modules/i18n/en.js`). |
 | **B9 Estados** | Hover, active (`scale(0.98)`), foco visível, carregando (skeleton), vazio (orientação de próximo passo) e erro inline. Nunca `alert()`. |
 | **B10 Itens de entrega** | Link "pular para o conteúdo", `<title>`, meta description, `og:*`, alt text, HTML semântico, caminho de volta em toda página. Termos, privacidade (LGPD) e 404 própria já entregues. |
 | **A4 Conversão** | Um CTA principal por tela, verbo + o que a pessoa recebe ("Criar conta grátis"), redução de risco visível ("Grátis · sem cartão"). |
@@ -53,7 +53,7 @@ A skill fala em classes do Tailwind; aqui o Tailwind é proibido (`AGENTS.md`). 
 
 | Regra | Situação atual | Recomendação |
 |---|---|---|
-| B4 "nunca usar gradiente no fundo" | O fundo animado em WebGL (`web/modules/backdrop.js`) e `--bg-gradient` são parte da identidade documentada em `AGENTS.md`. | Manter por enquanto (decisão anterior do projeto vence). Se adotar a skill à risca, trocar por fundo chapado (`--paper`) e deixar a animação só na futura landing page. |
+| B4 "nunca usar gradiente no fundo" | O fundo animado em WebGL (`public/web/modules/backdrop.js`) e `--bg-gradient` são parte da identidade documentada em `AGENTS.md`. | Manter por enquanto (decisão anterior do projeto vence). Se adotar a skill à risca, trocar por fundo chapado (`--paper`) e deixar a animação só na futura landing page. |
 | B11 seção de tagline obrigatória | Vale para landing pages; a home é uma ferramenta. | Criar uma landing page própria (ex.: `/sobre`) com hero, benefícios, como funciona, FAQ e a seção de tagline. |
 
 ---
@@ -80,6 +80,6 @@ A skill fala em classes do Tailwind; aqui o Tailwind é proibido (`AGENTS.md`). 
 - [ ] Transições com `--ease-out`, ≥ 200ms, animando só `transform`/`opacity`, com fallback de `prefers-reduced-motion`
 - [ ] Estados completos: hover, active, foco visível, carregando, vazio e erro inline
 - [ ] Contraste AA nos dois temas e alvo de toque ≥ 44px no mobile
-- [ ] Textos novos com tradução em `web/modules/i18n/en.js`
+- [ ] Textos novos com tradução em `public/web/modules/i18n/en.js`
 - [ ] `python -m unittest discover tests` passando (inclui `test_ui_contract.py`)
 - [ ] `?v=` de `styles.css`/`app.js` incrementado nos HTMLs
