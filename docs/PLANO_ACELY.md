@@ -7,16 +7,17 @@ pelo fluxo `feature/*` → `develop` → `homolog` → `main` descrito em `docs/
 
 ---
 
-## 0. Estado das branches (em 29/10/2026)
+## 0. Estado das branches (em 06/11/2026)
+
+`main`, `homolog` e `develop` estão no mesmo commit (PR #67, 04/11/2026): a rebrand Acely e a
+`feature/banco-credenciais` já foram integradas, e as branches antigas não existem mais no remoto.
 
 | Branch | Conteúdo | O que fazer |
 |---|---|---|
-| `feature/docs-contexto` | Documentação atualizada (idiomas, OpenRouter gratuito, LGPD, rotas) + merge de `fix/openrouter-modelos-gratuitos` | **Já está dentro de `feature/rebrand-acely`.** Não precisa de PR próprio; pode ser apagada depois do merge da rebrand. |
-| `feature/rebrand-acely` | Tudo da linha acima + `develop` atualizada + troca de marca para Acely + este plano | Abrir PR para a `develop`. É a base de todas as fases seguintes. |
-| `feature/banco-credenciais` | Banco independente do provedor (`DATABASE_URL_DIRECT`, TLS `verify-full` com `DB_SSLROOTCERT`, guia `docs/BANCO_DE_DADOS.md` para Neon com conta própria e Supabase), pool que troca conexões mortas e não vaza vagas, fundo WebGL adiado e `modulepreload` na home (LCP), mensagens de andamento na geração e upload com gabarito sem gastar IA | Abrir PR para a `develop`. Independente das fases da IA. |
+| `feature/ia-tarefas-persistentes` | **Fase 1** (seção 3): `request_id`, `ai_jobs`/`ai_cache`, `GET /api/quiz/jobs/<id>`, streaming com `AI_ATTEMPT_TIMEOUT`, retomada no navegador | Revisar e abrir PR para a `develop`. |
+| `feature/ia-multiprovedor` | **Fase 2** (seção 3), criada a partir da Fase 1: Groq, Gemini, Cerebras e OpenRouter em sequência | Abrir PR para a `develop` depois do merge da Fase 1 (o PR mostra só a Fase 2). |
 
-Para criar a próxima branch: `git checkout develop && git pull && git checkout -b feature/<nome>`
-(depois que a rebrand estiver na `develop`).
+Para criar a próxima branch: `git checkout develop && git pull && git checkout -b feature/<nome>`.
 
 ---
 
@@ -105,8 +106,22 @@ Observação: não é limite da Vercel (Hobby com Fluid compute permite até 300
 
 ## 3. Fases de implementação
 
-### Fase 1 — Pedido persistente, cache no banco e tempo por tentativa
-Branch sugerida: `feature/ia-tarefas-persistentes`
+### Fase 1 — Pedido persistente, cache no banco e tempo por tentativa ✅
+Branch: `feature/ia-tarefas-persistentes` (concluída em 06/11/2026, aguardando PR)
+
+**Como ficou (diferenças em relação às tarefas abaixo)**
+- O "tempo por tentativa" virou tempo **sem resposta**: o pedido ao OpenRouter vai com
+  `stream: true`, e um modelo que fica `AI_ATTEMPT_TIMEOUT` s sem mandar nada (os comentários
+  `: OPENROUTER PROCESSING` da fila não contam) é abandonado. Um tempo fixo de 20 s para a
+  resposta inteira cortaria modelos lentos que estão escrevendo 10 questões.
+- A tabela `ai_jobs` guarda também `error_code` e `error_status`; job `running` parado há mais de
+  6 min aparece como `failed` e pode ser refeito com o mesmo id. Jobs ficam 24 h.
+- O que vem do `ai_cache` devolve o uso ao convidado (a IA não foi chamada).
+- `request_id` de outro dono ou com outros dados: 409. Sem `request_id`, tudo como antes.
+- No navegador, upload retoma só consultando o andamento (o arquivo não é guardado); variações
+  (remix) mandam `request_id`, mas não são retomadas depois de recarregar.
+- Não existe SQLite de fallback no código: sem banco, os jobs e o cache ficam na memória.
+
 
 **Tarefas**
 1. Migration idempotente (`api/database/migrations.py`) com duas tabelas:
