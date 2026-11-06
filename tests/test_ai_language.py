@@ -40,7 +40,7 @@ class TestPromptLanguage(unittest.TestCase):
     def setUp(self):
         self.prompts = []
         patches = [
-            patch.object(ai_service, "_call_openrouter", side_effect=_capture_prompt(self.prompts)),
+            patch.object(ai_service, "_call_ai", side_effect=_capture_prompt(self.prompts)),
             patch.object(ai_service, "check_ai_token_quota", return_value=0),
             patch.object(ai_service, "OPENROUTER_API_KEY", "test-key"),
         ]

@@ -199,7 +199,7 @@ class TestSessionAndCacheClearing(unittest.TestCase):
 class TestMistakesRetentionAndRemix(unittest.TestCase):
     """Testes para o Caderno de Erros e Mutação por IA"""
 
-    @patch("api.services.ai_service._call_openrouter")
+    @patch("api.services.ai_service._call_ai")
     def test_remix_questions_by_ai(self, mock_call):
         from api.services.ai_service import remix_questions_by_ai
         mock_ai_json = (
