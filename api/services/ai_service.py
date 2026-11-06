@@ -451,6 +451,13 @@ def _read_chat_response(resp, attempt_timeout: float, deadline: float) -> dict:
     if "text/event-stream" not in content_type:
         return resp.json()
 
+    try:
+        return _read_event_stream(resp, attempt_timeout, deadline)
+    finally:
+        _close_quietly(resp)  # devolve a conexão mesmo se o [DONE] chegou antes do fim do corpo
+
+
+def _read_event_stream(resp, attempt_timeout: float, deadline: float) -> dict:
     started = time.monotonic()
     parts: list[str] = []
     usage: dict = {}
