@@ -59,14 +59,16 @@ graph TD
   - `GET /api/quizzes`, `GET /api/quiz/{name}`
   - `POST /api/upload` (processamento de arquivos multipart)
   - `POST /api/quiz/generate` (geração de simulado por tema via IA; aceita `language`)
+  - `GET /api/quiz/jobs/<request_id>` (andamento de um pedido de IA: `running`, `done` com o resultado ou `failed`; só o dono vê)
   - `POST /api/quiz/submit` (correção e validação de gabarito)
   - `POST /api/quiz/remix-mistakes` (variação de questões erradas via IA; aceita `language`)
+  - As três rotas de IA aceitam `request_id` (uuid gerado no navegador). Com ele, o mesmo pedido repetido (página recarregada, conexão caída) devolve o resultado já pronto sem chamar a IA nem gastar cota, ou `202` enquanto ainda roda. O navegador guarda o pedido em `sessionStorage` (`quiz_pending_job`) e retoma ao abrir a página.
 - **`api/middleware/http_middleware.py`**: Utilitários para extração de token de sessão dos cookies, parsing de IP do cliente, formatação de respostas JSON padronizadas e recusa de POST vindo de outro site (`Origin` / `Sec-Fetch-Site`).
 
 ### 3. Camada de Controle e Negócio (Controllers & Services)
 - **`api/controllers/quiz_controller.py`**: Recebe chamadas do handler, orquestra serviços e formata respostas de quizzes e uploads.
 - **`api/controllers/auth_controller.py`**: Controla operações de autenticação e validação de payload.
-- **`api/services/ai_service.py`**: Integração com o OpenRouter usando só modelos gratuitos (`:free`): os preferidos de `OPENROUTER_FREE_MODELS` e, como reserva, os descobertos na lista pública (cache de 6 h). Se um modelo falha, tenta o próximo e pausa o que falhou. Os modelos gratuitos raciocinam antes de responder e o raciocínio gasta o mesmo `max_tokens`, então o raciocínio vai desligado (effort `none`); se o modelo recusar, repete com effort `low` e 50% de folga no limite. Conta com "ZDR Endpoints Only" ligado bloqueia todos os gratuitos (404 "ZDR violation"): o serviço para na hora e registra no log onde mudar. Teto global diário (`AI_DAILY_CALL_LIMIT`). O Google AI Studio (Gemini) está desativado, com o código comentado aqui e em `config.py`. Funções principais:
+- **`api/services/ai_service.py`**: Integração com o OpenRouter usando só modelos gratuitos (`:free`): os preferidos de `OPENROUTER_FREE_MODELS` e, como reserva, os descobertos na lista pública (cache de 6 h). Se um modelo falha, tenta o próximo e pausa o que falhou. Os modelos gratuitos raciocinam antes de responder e o raciocínio gasta o mesmo `max_tokens`, então o raciocínio vai desligado (effort `none`); se o modelo recusar, repete com effort `low` e 50% de folga no limite. Conta com "ZDR Endpoints Only" ligado bloqueia todos os gratuitos (404 "ZDR violation"): o serviço para na hora e registra no log onde mudar. Teto global diário (`AI_DAILY_CALL_LIMIT`). A resposta vem em partes (streaming): um modelo que fica `AI_ATTEMPT_TIMEOUT` s (padrão 20) sem mandar nada é abandonado e o próximo é tentado, sem cortar um modelo que já está escrevendo; cada tentativa gera uma linha de log com o tempo. Simulados por tema ficam em cache em dois níveis: memória (1 h) e tabela `ai_cache` (`AI_CACHE_TTL_DAYS`, padrão 7); o que vem do cache não gasta a cota do convidado. O Google AI Studio (Gemini) está desativado, com o código comentado aqui e em `config.py`. Funções principais:
   - `generate_quiz_by_topic(topic, num_questions, difficulty, context, client_ip, language)`: Cria simulado completo a partir de tema.
   - `parse_and_structure_questions_with_ai(text, max_chars, client_ip, num_questions, context, language)`: Estrutura arquivos sem padrão ou transforma material teórico em questões.
   - `generate_answer_key(questions, client_ip)`: Resolve e cria gabarito fundamentado para questões sem resposta.
@@ -84,6 +86,7 @@ graph TD
 - **`api/repositories/quiz_repository.py`**: Operações SQL para salvar, buscar e listar quizzes públicos e privados.
 - **`api/repositories/user_repository.py`**: Operações SQL de usuários e sessões ativas, exportação (`export_user_data`) e exclusão de conta (`delete_user_and_data`).
 - **`api/repositories/rate_limit_repository.py`**: Contadores persistentes de rate limit e cotas de IA.
+- **`api/repositories/ai_job_repository.py`**: Pedidos de IA por `request_id` (tabela `ai_jobs`, guardados 24 h; `running` parado há mais de 6 min vira `failed`) e cache de simulados por tema (tabela `ai_cache`). Com o banco fora, usa a memória do processo.
 
 ### 5. Configuração e Ponto de Entrada
 - **`quiz_api.py`**: Ponto de entrada local (Docker, Procfile) que inicializa migrações e sobe o `ThreadingHTTPServer`.

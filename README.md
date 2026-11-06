@@ -219,7 +219,8 @@ c) Opção C
 | `POST` | `/api/quiz/submit` | Pública | Submete respostas, salva tentativa e retorna score/gabarito |
 | `GET` | `/api/user/attempts` | Autenticado / Convidado | Histórico de tentativas e caderno de erros |
 | `POST` | `/api/quiz/remix-mistakes` | Convidado / Autenticado | Cria variações inéditas com IA para questões erradas (aceita `language`) |
-| `POST` | `/api/quiz/generate` | Convidado / Autenticado | Gera questões por tema via IA, com cache por hash (aceita `language`) |
+| `POST` | `/api/quiz/generate` | Convidado / Autenticado | Gera questões por tema via IA, com cache no banco (aceita `language` e `request_id`) |
+| `GET` | `/api/quiz/jobs/<request_id>` | Dono do pedido | Andamento de um pedido de IA (`running`, `done` com o resultado, `failed`) |
 | `POST` | `/api/auth/login` | Pública | Login (sessão em cookie HttpOnly; o token só vem no JSON com `"return_token": true`) |
 | `POST` | `/api/auth/register` | Pública | Cadastro de estudante |
 | `GET` | `/api/auth/me` | Cookie / Bearer Token | Dados do usuário autenticado |
@@ -294,6 +295,7 @@ QuizesStudies/
 │   ├── models/
 │   │   └── dtos.py            # Data Transfer Objects
 │   ├── repositories/
+│   │   ├── ai_job_repository.py # Pedidos de IA por request_id e cache de temas
 │   │   ├── quiz_repository.py # Persistência de quizzes e questões
 │   │   ├── rate_limit_repository.py # Contadores de rate limit e cotas
 │   │   └── user_repository.py # Usuários, sessões, exportação e exclusão (LGPD)

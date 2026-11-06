@@ -152,3 +152,78 @@ class TestDatabaseIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(_local_db_enabled(), "QUIZ_DB_INTEGRATION=1 com banco local não configurado")
+class TestAIJobsIntegration(unittest.TestCase):
+    """ai_jobs e ai_cache no PostgreSQL de verdade (docs/PLANO_ACELY.md, Fase 1)."""
+
+    @classmethod
+    def setUpClass(cls):
+        from api.database.migrations import run_migrations
+        run_migrations()
+
+    def setUp(self):
+        from api.database.connection import get_cursor
+        from api.repositories.ai_job_repository import AIJobRepository
+        with get_cursor() as cur:
+            cur.execute("DELETE FROM ai_jobs")
+            cur.execute("DELETE FROM ai_cache")
+        self.repo = AIJobRepository()
+
+    def _id(self):
+        import uuid
+        return str(uuid.uuid4())
+
+    def test_job_lifecycle_survives_another_instance(self):
+        from api.repositories.ai_job_repository import AIJobRepository
+        job_id = self._id()
+        created, _ = self.repo.start(job_id, "guest", "g1", "generate", "h")
+        self.assertTrue(created)
+        other = AIJobRepository()  # outra instância (memória vazia)
+        created, job = other.start(job_id, "guest", "g1", "generate", "h")
+        self.assertFalse(created)
+        self.assertEqual(job["status"], "running")
+        self.repo.finish(job_id, {"http_status": 201, "data": {"name": "quiz-x"}})
+        job = other.get(job_id)
+        self.assertEqual(job["status"], "done")
+        self.assertEqual(job["result"]["data"]["name"], "quiz-x")
+        self.assertEqual(other._jobs, {})  # veio do banco, não da memória
+
+    def test_conflict_failed_restart_and_abandoned(self):
+        from api.database.connection import get_cursor
+        from api.repositories.ai_job_repository import JobConflict
+        job_id = self._id()
+        self.repo.start(job_id, "user", "1", "generate", "h")
+        with self.assertRaises(JobConflict):
+            self.repo.start(job_id, "user", "2", "generate", "h")
+        self.repo.fail(job_id, "fora", "QUIZ_ERROR", 422)
+        created, _ = self.repo.start(job_id, "user", "1", "generate", "h")
+        self.assertTrue(created)
+        with get_cursor() as cur:
+            cur.execute("UPDATE ai_jobs SET updated_at = NOW() - INTERVAL '7 minutes' WHERE id = %s", (job_id,))
+        self.assertEqual(self.repo.get(job_id)["status"], "failed")
+        created, _ = self.repo.start(job_id, "user", "1", "generate", "h")
+        self.assertTrue(created)
+
+    def test_parallel_starts_create_only_one(self):
+        import threading
+        job_id = self._id()
+        results = []
+        def start():
+            results.append(self.repo.start(job_id, "guest", "g", "generate", "h")[0])
+        threads = [threading.Thread(target=start) for _ in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(sorted(results), [False, False, False, False, True])
+
+    def test_cache_roundtrip_and_expiry(self):
+        from api.database.connection import get_cursor
+        self.repo.cache_set("k1", {"questions": [{"q": "ç"}]})
+        self.repo.cache_set("k1", {"questions": [{"q": "novo"}]})
+        self.assertEqual(self.repo.cache_get("k1"), {"questions": [{"q": "novo"}]})
+        with get_cursor() as cur:
+            cur.execute("UPDATE ai_cache SET created_at = NOW() - INTERVAL '8 days'")
+        self.assertIsNone(self.repo.cache_get("k1"))

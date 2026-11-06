@@ -113,6 +113,35 @@ CREATE INDEX IF NOT EXISTS idx_rate_limits_timestamp ON rate_limits(timestamp);
 CREATE INDEX IF NOT EXISTS idx_quizzes_public_created ON quizzes(is_public, created_at);
 CREATE INDEX IF NOT EXISTS idx_quizzes_created_by ON quizzes(created_by);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+
+-- Pedidos de IA com identificador vindo do navegador: recarregar a página não refaz a geração
+-- nem gasta outra cota (docs/PLANO_ACELY.md, Fase 1)
+CREATE TABLE IF NOT EXISTS ai_jobs (
+    id           VARCHAR(36) PRIMARY KEY,
+    owner_kind   VARCHAR(10) NOT NULL,          -- 'user' ou 'guest'
+    owner_id     VARCHAR(80) NOT NULL,
+    kind         VARCHAR(20) NOT NULL,          -- 'generate', 'upload', 'remix'
+    params_hash  VARCHAR(64) NOT NULL,
+    status       VARCHAR(10) NOT NULL,          -- 'running', 'done', 'failed'
+    result       JSONB,
+    error        TEXT,
+    error_code   VARCHAR(40),
+    error_status INTEGER,
+    created_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_jobs_owner_created ON ai_jobs(owner_kind, owner_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_ai_jobs_created ON ai_jobs(created_at);
+
+-- Simulados por tema já gerados (chave: sha256 de tema, quantidade, dificuldade, contexto, idioma)
+CREATE TABLE IF NOT EXISTS ai_cache (
+    key          VARCHAR(64) PRIMARY KEY,
+    result       JSONB NOT NULL,
+    created_at   TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_cache_created ON ai_cache(created_at);
 """
 
 

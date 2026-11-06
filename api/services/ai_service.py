@@ -20,9 +20,11 @@ from api.utils.config import (
     OPENROUTER_FREE_MODELS,
     OPENROUTER_DISCOVER_FREE_MODELS,
     OPENROUTER_MAX_ATTEMPTS,
+    AI_ATTEMPT_TIMEOUT,
     AI_DAILY_CALL_LIMIT,
     DEBUG,
 )
+from api.repositories.ai_job_repository import ai_job_repo
 # Google AI Studio desativado por enquanto (ver api/utils/config.py):
 # from api.utils.config import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_BASE_URL
 import sys
@@ -84,9 +86,15 @@ _AI_TOKEN_WINDOW_SECONDS = 3600  # 1 hora
 
 
 # ─── Cache de geração de simulados por IA ────────────────────────────────────
+# Dois níveis: memória do processo (1 h, resposta imediata) e a tabela ai_cache no banco
+# (AI_CACHE_TTL_DAYS, compartilhada entre as instâncias da Vercel).
 _quiz_generation_cache: dict[str, tuple[float, dict]] = {}
 _QUIZ_CACHE_TTL = 3600  # 1 hora de cache para temas idênticos
 _quiz_cache_lock = Lock()
+
+
+class _AttemptTimeout(Exception):
+    """O modelo ficou AI_ATTEMPT_TIMEOUT segundos sem mandar nada."""
 
 
 class _QuotaUsageDict(defaultdict):
@@ -394,6 +402,18 @@ def _pause_model(model: str, seconds: int) -> None:
     _model_cooldown[model] = time.time() + seconds
 
 
+def _log_latency(model: str, outcome: str, started: float, provider: str = "openrouter") -> None:
+    """Uma linha por tentativa no log do servidor: mostra qual modelo está lento ou parado."""
+    _log_ops(f"{provider} {model}: {outcome} em {time.monotonic() - started:.1f} s")
+
+
+def _close_quietly(resp) -> None:
+    try:
+        resp.close()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def parse_json_response(content: str):
     """Lê o JSON da resposta da IA, tolerando o que modelos gratuitos costumam acrescentar:
     blocos <think>, cercas ```json e texto antes ou depois do objeto."""
@@ -409,6 +429,61 @@ def parse_json_response(content: str):
         if not starts or end <= min(starts):
             raise
         return json.loads(text[min(starts):end + 1])
+
+
+class _StreamError(Exception):
+    """O provedor abriu a resposta (200) e mandou um erro no meio dela."""
+
+
+def _read_chat_response(resp, attempt_timeout: float, deadline: float) -> dict:
+    """Lê a resposta de /chat/completions no formato sem streaming ({"choices": ..., "usage": ...}).
+
+    Com streaming (text/event-stream) junta os trechos e levanta _AttemptTimeout se o modelo
+    ainda não mandou nada depois de `attempt_timeout` s ou se o tempo total acabou. O OpenRouter
+    manda comentários ": OPENROUTER PROCESSING" enquanto o pedido está na fila: eles mantêm a
+    conexão viva mas não contam como resposta. Sem streaming (provedor que ignora o pedido, ou
+    respostas simuladas nos testes), usa resp.json().
+    """
+    try:
+        content_type = str(resp.headers.get("Content-Type") or "")
+    except Exception:  # noqa: BLE001
+        content_type = ""
+    if "text/event-stream" not in content_type:
+        return resp.json()
+
+    started = time.monotonic()
+    parts: list[str] = []
+    usage: dict = {}
+    alive = False  # o modelo já mandou algum trecho (texto ou raciocínio)
+    for line in resp.iter_lines(chunk_size=1024):
+        now = time.monotonic()
+        if now > deadline or (not alive and now - started > attempt_timeout):
+            raise _AttemptTimeout()
+        if not line or line.startswith(b":") or not line.startswith(b"data:"):
+            continue
+        data = line[5:].strip()
+        if data == b"[DONE]":
+            break
+        try:
+            chunk = json.loads(data)
+        except ValueError:
+            continue
+        if chunk.get("error"):
+            err = chunk["error"]
+            raise _StreamError(str(err.get("message") if isinstance(err, dict) else err))
+        if chunk.get("usage"):
+            usage = chunk["usage"]
+        for choice in chunk.get("choices") or []:
+            delta = choice.get("delta") or {}
+            piece = delta.get("content")
+            if piece:
+                parts.append(piece)
+                alive = True
+            elif delta.get("reasoning") or delta.get("reasoning_content"):
+                alive = True
+            if choice.get("finish_reason") == "error":
+                raise _StreamError("finish_reason=error")
+    return {"choices": [{"message": {"content": "".join(parts)}}], "usage": usage}
 
 
 def _call_openrouter(
@@ -465,6 +540,9 @@ def _call_openrouter(
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
+            # Em partes: um modelo parado na fila é abandonado em AI_ATTEMPT_TIMEOUT s sem
+            # cortar o que já está escrevendo (ver _read_chat_response)
+            "stream": True,
         }
         # Só pede JSON estruturado a quem declara suporte; sem a lista, confia no prompt
         if params and ("response_format" in params or "structured_outputs" in params):
@@ -479,30 +557,55 @@ def _call_openrouter(
             else:
                 payload["reasoning"] = {"effort": "none", "exclude": True}
 
+        attempt_timeout = min(float(AI_ATTEMPT_TIMEOUT), remaining)
+        attempt_started = time.monotonic()
         try:
             _log_ai(f"[IA] OpenRouter: tentando '{model}'...")
-            resp = session.post(url, json=payload, headers=headers, timeout=remaining)
+            # (conexão, leitura): a leitura vale para cada trecho, não para a resposta inteira
+            resp = session.post(
+                url, json=payload, headers=headers, timeout=(5, attempt_timeout), stream=True
+            )
         except requests.exceptions.RequestException as e:
+            _log_latency(model, "conexão falhou", attempt_started)
             _log_ai(f"[IA AVISO] Falha de conexão com '{model}': {e}")
             _pause_model(model, _COOLDOWN_RATE_LIMIT)
+            last_status, last_raw = 0, ""
             continue
-
-        raw = resp.text
-        last_status, last_raw = resp.status_code, raw
 
         if resp.ok:
             try:
-                data = resp.json()
+                data = _read_chat_response(resp, attempt_timeout, deadline)
                 content = data["choices"][0]["message"].get("content") or ""
                 parse_json_response(content)
+            except (_AttemptTimeout, requests.exceptions.RequestException) as e:
+                # Parado na fila ou conexão caiu no meio: abandona e passa ao próximo
+                _close_quietly(resp)
+                _log_latency(model, "sem resposta", attempt_started)
+                _log_ai(f"[IA AVISO] '{model}' abandonado sem resposta ({type(e).__name__})")
+                _pause_model(model, _COOLDOWN_RATE_LIMIT)
+                last_status, last_raw = 0, ""
+                continue
+            except _StreamError as e:
+                _close_quietly(resp)
+                _log_latency(model, "erro no meio da resposta", attempt_started)
+                _log_ai(f"[IA AVISO] '{model}' mandou erro no meio da resposta ({e})")
+                _pause_model(model, _COOLDOWN_RATE_LIMIT)
+                last_status, last_raw = 0, ""
+                continue
             except (ValueError, KeyError, IndexError, TypeError) as e:
                 # Modelo respondeu, mas vazio, cortado ou fora do formato: tenta o próximo
+                _log_latency(model, "fora do formato", attempt_started)
                 _log_ai(f"[IA AVISO] '{model}' respondeu fora do formato JSON ({e})")
+                last_status, last_raw = resp.status_code, "fora do formato"
                 continue
             usage = data.get("usage") or {}
+            _log_latency(model, "ok", attempt_started)
             _log_ai(f"[IA] Sucesso com '{model}' | Tokens: {usage}")
             return content, model, usage
 
+        raw = resp.text
+        last_status, last_raw = resp.status_code, raw
+        _log_latency(model, f"HTTP {resp.status_code}", attempt_started)
         lower_raw = raw.lower()
         if resp.status_code == 400 and "reasoning" in lower_raw and model not in _reasoning_required:
             # Modelo não aceita desligar o raciocínio: repete o mesmo modelo com esforço baixo
@@ -704,7 +807,15 @@ def generate_quiz_by_topic(
             if now - ts < _QUIZ_CACHE_TTL:
                 if DEBUG:
                     print(f"⚡ [ai_cache] Retornando simulado em cache para '{clean_topic}'")
-                return copy.deepcopy(cached_result)
+                return {**copy.deepcopy(cached_result), "cached": True}
+
+    # Segundo nível: tabela ai_cache, compartilhada entre as instâncias
+    stored = ai_job_repo.cache_get(cache_key)
+    if isinstance(stored, dict) and stored.get("questions"):
+        with _quiz_cache_lock:
+            _quiz_generation_cache[cache_key] = (now, copy.deepcopy(stored))
+        _log_ai(f"⚡ [ai_cache] Simulado de '{clean_topic}' lido do banco")
+        return {**copy.deepcopy(stored), "cached": True}
 
     prompt_lines = [
         "Você é um professor e elaborador sênior de provas e simulados acadêmicos e de concursos.",
@@ -847,9 +958,10 @@ def generate_quiz_by_topic(
         "provider": provider_name,
     }
 
-    # Armazena no cache local
+    # Armazena nos dois níveis de cache
     with _quiz_cache_lock:
         _quiz_generation_cache[cache_key] = (time.time(), copy.deepcopy(result))
+    ai_job_repo.cache_set(cache_key, result)
 
     return result
 

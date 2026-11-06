@@ -495,6 +495,19 @@ export default {
     'Organizing the questions. If the answer key is missing, the AI solves them, which takes longer…',
   'Não feche nem recarregue a página enquanto o simulado é preparado.':
     'Do not close or reload the page while the quiz is being prepared.',
+  // Pedido de IA retomado depois de recarregar (public/web/app.js, resumePendingJob)
+  'Pode recarregar a página: o simulado continua sendo preparado e aparece aqui.':
+    'You can reload the page: the quiz keeps being prepared and shows up here.',
+  'Seu simulado ainda está sendo gerado. Continuando de onde parou…':
+    'Your quiz is still being generated. Picking up where it left off…',
+  'A geração demorou demais e foi cancelada. Tente novamente.':
+    'The generation took too long and was cancelled. Please try again.',
+  'O envio do arquivo foi interrompido antes de chegar. Escolha o arquivo e envie de novo.':
+    'The file upload was interrupted before it arrived. Choose the file and send it again.',
+  'A geração foi interrompida antes de terminar. Tente novamente.':
+    'The generation was interrupted before it finished. Please try again.',
+  'Este pedido já foi usado com outros dados. Tente novamente.':
+    'This request was already used with different data. Please try again.',
   'Arquivo que já tem as questões e o gabarito vira simulado na hora e não gasta usos de IA.':
     'A file that already has the questions and the answer key becomes a quiz right away and uses no AI.',
   "✓ Quiz '{0}' criado com {1} questões. Gabarito lido do arquivo, sem gastar usos de IA.":
