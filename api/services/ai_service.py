@@ -1,6 +1,10 @@
 """
-Serviço de IA via OpenRouter, usando só modelos gratuitos (":free").
+Serviço de IA com provedores gratuitos em sequência (Groq, Gemini, Cerebras, OpenRouter).
 Gera simulados, gabaritos e variações de questões.
+
+Todos os provedores falam o formato de chat da OpenAI. `_call_ai` percorre os que têm chave,
+na ordem de AI_PROVIDERS; quando um bate no limite, falha ou fica sem resposta, passa ao
+próximo. No OpenRouter só modelos gratuitos (":free") são usados.
 """
 import copy
 import hashlib
@@ -9,6 +13,8 @@ import os
 import re
 import time
 import requests
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict, deque
 from threading import Lock
 from requests.adapters import HTTPAdapter
@@ -22,11 +28,25 @@ from api.utils.config import (
     OPENROUTER_MAX_ATTEMPTS,
     AI_ATTEMPT_TIMEOUT,
     AI_DAILY_CALL_LIMIT,
+    AI_PROVIDERS,
+    GROQ_API_KEY,
+    GROQ_BASE_URL,
+    GROQ_MODELS,
+    GROQ_DAILY_REQUESTS,
+    GROQ_DAILY_TOKENS,
+    GEMINI_API_KEY,
+    GEMINI_BASE_URL,
+    GEMINI_MODELS,
+    GEMINI_DAILY_REQUESTS,
+    GEMINI_DAILY_TOKENS,
+    CEREBRAS_API_KEY,
+    CEREBRAS_BASE_URL,
+    CEREBRAS_MODELS,
+    CEREBRAS_DAILY_REQUESTS,
+    CEREBRAS_DAILY_TOKENS,
     DEBUG,
 )
 from api.repositories.ai_job_repository import ai_job_repo
-# Google AI Studio desativado por enquanto (ver api/utils/config.py):
-# from api.utils.config import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_BASE_URL
 import sys
 
 # Mensagem única para o aluno quando a falha é de configuração ou de conta do provedor
@@ -498,6 +518,7 @@ def _call_openrouter(
     temperature: float,
     max_tokens: int,
     timeout: int = 75,
+    count_budget: bool = True,
 ) -> tuple[str, str, dict]:
     """
     Chama o OpenRouter usando só modelos gratuitos, tentando o próximo quando um
@@ -509,19 +530,13 @@ def _call_openrouter(
         _log_ops("nenhuma chave de IA configurada (defina OPENROUTER_API_KEY)")
         raise AIServiceError(AI_UNAVAILABLE_MESSAGE)
 
-    # Google AI Studio (desativado por enquanto). Para reativar, descomente as variáveis em
-    # config.py e use a mesma API compatível com OpenAI:
-    #   url = f"{GEMINI_BASE_URL.rstrip('/')}/chat/completions"
-    #   headers = {"Authorization": f"Bearer {GEMINI_API_KEY}", "Content-Type": "application/json"}
-    #   payload = {"model": GEMINI_MODEL, "messages": messages, "temperature": temperature,
-    #              "max_tokens": max_tokens, "response_format": {"type": "json_object"}}
-
     candidates = _free_model_candidates()
     if not candidates:
         _log_ops("nenhum modelo gratuito configurado ou disponível (veja OPENROUTER_FREE_MODELS)")
         raise AIServiceError(AI_UNAVAILABLE_MESSAGE)
 
-    _check_daily_ai_budget()
+    if count_budget:  # _call_ai já contou o pedido no teto global
+        _check_daily_ai_budget()
 
     session = _get_http_session()
     url = f"{OPENROUTER_BASE_URL.rstrip('/')}/chat/completions"
@@ -635,13 +650,289 @@ def _call_openrouter(
     raise AIServiceError(_format_user_friendly_error(last_status, last_raw))
 
 
-def _unpack_call_result(res) -> tuple[str, str, dict]:
-    """Suporta retorno de 2-tupla (mocks em testes) e 3-tupla (chamadas reais com usage)."""
+# ─── Vários provedores gratuitos (docs/PLANO_ACELY.md, Fase 2) ─────────────────
+_DAY_SECONDS = 24 * 60 * 60
+_COOLDOWN_PROVIDER_ACCOUNT = 15 * 60   # chave recusada ou conta sem crédito
+_DAILY_LIMIT_HINTS = ("per day", "per-day", "perday", "per_day", "tokens per day", "requests per day",
+                      "(tpd)", "(rpd)", "daily")
+
+
+@dataclass(frozen=True)
+class Provider:
+    name: str
+    label: str
+    base_url: str
+    api_key: str
+    models: tuple
+    daily_requests: int = 0       # orçamento por modelo a cada 24 h (0 = sem controle)
+    daily_tokens: int = 0
+    max_tokens_field: str = "max_tokens"
+    json_mode: bool = True
+
+
+class _ProviderSkip(Exception):
+    """O provedor não conseguiu responder agora: passa ao próximo."""
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+
+# Provedor pausado: nome -> (até quando, mensagem para a pessoa se todos estiverem pausados)
+_provider_pause: dict[str, tuple[float, str]] = {}
+# Modelos que recusaram parâmetros opcionais: tentados de novo sem eles
+_no_reasoning_param: set[str] = set()
+_no_json_mode: set[str] = set()
+
+
+def _configured_providers() -> list[Provider]:
+    """Provedores com chave, na ordem de AI_PROVIDERS (lidos na hora: os testes trocam as chaves)."""
+    table = {
+        # Groq não aceita o modo JSON junto com a resposta em partes: vale o prompt + leitura tolerante
+        "groq": Provider("groq", "Groq", GROQ_BASE_URL, GROQ_API_KEY, tuple(GROQ_MODELS),
+                         GROQ_DAILY_REQUESTS, GROQ_DAILY_TOKENS, json_mode=False),
+        "gemini": Provider("gemini", "Gemini", GEMINI_BASE_URL, GEMINI_API_KEY, tuple(GEMINI_MODELS),
+                           GEMINI_DAILY_REQUESTS, GEMINI_DAILY_TOKENS),
+        "cerebras": Provider("cerebras", "Cerebras", CEREBRAS_BASE_URL, CEREBRAS_API_KEY,
+                             tuple(CEREBRAS_MODELS), CEREBRAS_DAILY_REQUESTS, CEREBRAS_DAILY_TOKENS,
+                             max_tokens_field="max_completion_tokens"),
+        "openrouter": Provider("openrouter", "OpenRouter", OPENROUTER_BASE_URL, OPENROUTER_API_KEY,
+                               tuple(OPENROUTER_FREE_MODELS)),
+    }
+    found = []
+    for name in AI_PROVIDERS:
+        provider = table.get(name)
+        if provider and provider.api_key and (provider.models or name == "openrouter"):
+            found.append(provider)
+    return found
+
+
+def ai_configured() -> bool:
+    """Há pelo menos um provedor de IA com chave."""
+    return bool(_configured_providers())
+
+
+def _seconds_until_utc_midnight() -> int:
+    now = datetime.now(timezone.utc)
+    tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(60, int((tomorrow - now).total_seconds()))
+
+
+def _pause_provider(name: str, seconds: int, message: str) -> None:
+    """Pula o provedor nos próximos pedidos. Com um provedor só não há para onde ir: não pausa."""
+    if len(_configured_providers()) > 1:
+        _provider_pause[name] = (time.time() + seconds, message)
+
+
+def _budget_keys(provider: Provider, model: str) -> tuple[str, str]:
+    base = f"ai_budget:{provider.name}:{model}"
+    return f"{base}:requests", f"{base}:tokens"
+
+
+def _within_budget(provider: Provider, model: str) -> bool:
+    """O modelo ainda cabe no orçamento diário (contado no banco, vale entre instâncias)."""
+    req_key, tok_key = _budget_keys(provider, model)
+    try:
+        if provider.daily_requests and rate_limit_repo.is_blocked(req_key, provider.daily_requests, _DAY_SECONDS)[0]:
+            return False
+        if provider.daily_tokens and rate_limit_repo.is_blocked(tok_key, provider.daily_tokens, _DAY_SECONDS)[0]:
+            return False
+    except Exception:  # noqa: BLE001 - sem contagem, deixa o provedor responder 429 se for o caso
+        return True
+    return True
+
+
+def _record_budget(provider: Provider, model: str, tokens: int = 0, request: bool = False) -> None:
+    req_key, tok_key = _budget_keys(provider, model)
+    try:
+        if request and provider.daily_requests:
+            rate_limit_repo.record(req_key, 1)
+        if tokens and provider.daily_tokens:
+            rate_limit_repo.record(tok_key, int(tokens))
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _is_daily_limit(raw: str) -> bool:
+    lower = (raw or "").lower()
+    return any(hint in lower for hint in _DAILY_LIMIT_HINTS)
+
+
+def _call_compatible(
+    provider: Provider,
+    messages: list[dict],
+    temperature: float,
+    max_tokens: int,
+    deadline: float,
+) -> tuple[str, str, dict]:
+    """Groq, Gemini e Cerebras: mesmo formato de chat da OpenAI, com resposta em partes.
+
+    Tenta os modelos do provedor em ordem (pausados por último). Levanta _ProviderSkip quando
+    nenhum responde, para `_call_ai` passar ao próximo provedor.
+    """
+    session = _get_http_session()
+    url = f"{provider.base_url.rstrip('/')}/chat/completions"
+    headers = {"Authorization": f"Bearer {provider.api_key}", "Content-Type": "application/json"}
+    prompt_chars = sum(len(str(m.get("content") or "")) for m in messages)
+
+    now = time.time()
+    keys = {model: f"{provider.name}:{model}" for model in provider.models}
+    ready = [m for m in provider.models if _model_cooldown.get(keys[m], 0) <= now]
+    queue = ready + [m for m in provider.models if m not in ready]
+    skip_message = AI_BUSY_MESSAGE
+
+    while queue:
+        model = queue.pop(0)
+        key = keys[model]
+        if not _within_budget(provider, model):
+            _log_ai(f"[IA] {provider.label} '{model}' sem orçamento hoje; pulando")
+            continue
+        remaining = deadline - time.monotonic()
+        if remaining < 5:
+            break
+
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            provider.max_tokens_field: max_tokens,
+            "stream": True,
+        }
+        if provider.json_mode and key not in _no_json_mode:
+            payload["response_format"] = {"type": "json_object"}
+        if "gpt-oss" in model and key not in _no_reasoning_param:
+            # gpt-oss raciocina antes de responder e o raciocínio gasta o mesmo limite: esforço
+            # baixo e folga no limite (o mesmo cuidado dos modelos gratuitos do OpenRouter)
+            payload["reasoning_effort"] = "low"
+            payload[provider.max_tokens_field] = int(max_tokens * _REASONING_TOKEN_HEADROOM)
+
+        attempt_timeout = min(float(AI_ATTEMPT_TIMEOUT), remaining)
+        started = time.monotonic()
+        _record_budget(provider, model, request=True)
+        try:
+            resp = session.post(url, json=payload, headers=headers, timeout=(5, attempt_timeout), stream=True)
+        except requests.exceptions.RequestException as e:
+            _log_latency(model, "conexão falhou", started, provider.name)
+            _log_ai(f"[IA AVISO] {provider.label} '{model}': falha de conexão ({e})")
+            _pause_model(key, _COOLDOWN_RATE_LIMIT)
+            continue
+
+        if resp.ok:
+            try:
+                data = _read_chat_response(resp, attempt_timeout, deadline)
+                content = data["choices"][0]["message"].get("content") or ""
+                parse_json_response(content)
+            except (_AttemptTimeout, _StreamError, requests.exceptions.RequestException) as e:
+                _close_quietly(resp)
+                _log_latency(model, "sem resposta", started, provider.name)
+                _log_ai(f"[IA AVISO] {provider.label} '{model}' abandonado ({type(e).__name__})")
+                _pause_model(key, _COOLDOWN_RATE_LIMIT)
+                continue
+            except (ValueError, KeyError, IndexError, TypeError) as e:
+                _log_latency(model, "fora do formato", started, provider.name)
+                _log_ai(f"[IA AVISO] {provider.label} '{model}' respondeu fora do formato JSON ({e})")
+                continue
+            usage = data.get("usage") or {}
+            tokens = int(usage.get("total_tokens") or 0) or (prompt_chars + len(content)) // 4
+            _record_budget(provider, model, tokens=tokens)
+            _log_latency(model, "ok", started, provider.name)
+            return content, model, usage
+
+        raw = resp.text or ""
+        lower = raw.lower()
+        status = resp.status_code
+        _log_latency(model, f"HTTP {status}", started, provider.name)
+
+        if status == 400 and "reasoning" in lower and "reasoning_effort" in payload:
+            _no_reasoning_param.add(key)
+            queue.insert(0, model)
+            continue
+        if status == 400 and ("response_format" in lower or "json" in lower) and "response_format" in payload:
+            _no_json_mode.add(key)
+            queue.insert(0, model)
+            continue
+        if status == 429 and _is_daily_limit(raw):
+            # Limite diário: os outros modelos deste provedor podem ter cota própria (Groq conta
+            # por modelo); este fica parado até a virada do dia
+            _log_ops(f"{provider.name} '{model}': limite diário atingido")
+            _pause_model(key, _seconds_until_utc_midnight())
+            skip_message = AI_DAILY_LIMIT_MESSAGE
+            continue
+        if status in (401, 402, 403):
+            _log_ops(f"{provider.name} recusou o pedido (HTTP {status}): verifique a chave {provider.name.upper()}_API_KEY")
+            _pause_provider(provider.name, _COOLDOWN_PROVIDER_ACCOUNT, AI_UNAVAILABLE_MESSAGE)
+            raise _ProviderSkip(AI_UNAVAILABLE_MESSAGE)
+        if status in (400, 413) or "context" in lower:
+            # Pedido grande demais para este modelo (ex.: contexto pequeno no plano grátis)
+            _log_ai(f"[IA AVISO] {provider.label} '{model}' recusou o pedido ({status})")
+            continue
+        _pause_model(key, _COOLDOWN_RATE_LIMIT if status == 429 else _COOLDOWN_UNAVAILABLE)
+
+    if skip_message == AI_DAILY_LIMIT_MESSAGE and all(
+        _model_cooldown.get(keys[m], 0) > time.time() + _COOLDOWN_UNAVAILABLE for m in provider.models
+    ):
+        _pause_provider(provider.name, _seconds_until_utc_midnight(), AI_DAILY_LIMIT_MESSAGE)
+    raise _ProviderSkip(skip_message)
+
+
+def _call_ai(
+    messages: list[dict],
+    temperature: float,
+    max_tokens: int,
+    timeout: int = 75,
+) -> tuple[str, str, dict, str]:
+    """Pede a resposta ao primeiro provedor que conseguir, na ordem de AI_PROVIDERS.
+
+    `timeout` é o tempo total, somando provedores e modelos. Retorna
+    (content, modelo, usage, nome do provedor).
+    """
+    providers = _configured_providers()
+    if not providers:
+        _log_ops("nenhuma chave de IA configurada (defina GROQ_API_KEY, GEMINI_API_KEY ou OPENROUTER_API_KEY)")
+        raise AIServiceError(AI_UNAVAILABLE_MESSAGE)
+
+    now = time.time()
+    ready = [p for p in providers if _provider_pause.get(p.name, (0, ""))[0] <= now]
+    if not ready:
+        # Todos pausados: a mensagem é a do que volta primeiro
+        soonest = min(providers, key=lambda p: _provider_pause[p.name][0])
+        raise AIServiceError(_provider_pause[soonest.name][1])
+
+    _check_daily_ai_budget()
+    deadline = time.monotonic() + timeout
+    last_message = AI_BUSY_MESSAGE
+    for provider in ready:
+        remaining = deadline - time.monotonic()
+        if remaining < 5:
+            break
+        try:
+            if provider.name == "openrouter":
+                content, model, usage = _unpack_call_result(_call_openrouter(
+                    messages, temperature, max_tokens, timeout=int(remaining), count_budget=False,
+                ))[:3]
+                return content, model, usage, provider.label
+            content, model, usage = _call_compatible(provider, messages, temperature, max_tokens, deadline)
+            return content, model, usage, provider.label
+        except _ProviderSkip as e:
+            last_message = e.message
+        except AIServiceError as e:  # vindo do OpenRouter
+            last_message = str(e)
+            if last_message == AI_DAILY_LIMIT_MESSAGE:
+                _pause_provider(provider.name, _seconds_until_utc_midnight(), last_message)
+            elif last_message == AI_UNAVAILABLE_MESSAGE:
+                _pause_provider(provider.name, _COOLDOWN_PROVIDER_ACCOUNT, last_message)
+        _log_ai(f"[IA] {provider.label} não respondeu; tentando o próximo provedor")
+    raise AIServiceError(last_message)
+
+
+def _unpack_call_result(res) -> tuple[str, str, dict, str]:
+    """Aceita 2-tupla (mocks), 3-tupla (OpenRouter) e 4-tupla (_call_ai, com o provedor)."""
+    if isinstance(res, tuple) and len(res) == 4:
+        return res[0], res[1], res[2], res[3]
     if isinstance(res, tuple) and len(res) == 3:
-        return res[0], res[1], res[2]
+        return res[0], res[1], res[2], "OpenRouter"
     elif isinstance(res, tuple) and len(res) == 2:
-        return res[0], res[1], {}
-    return str(res), "mock", {}
+        return res[0], res[1], {}, "OpenRouter"
+    return str(res), "mock", {}, "OpenRouter"
 
 
 def generate_answer_key(questions: list[dict], client_ip: str | None = None) -> list[dict]:
@@ -662,13 +953,13 @@ def generate_answer_key(questions: list[dict], client_ip: str | None = None) -> 
     prompt = _build_prompt(questions)
     check_ai_token_quota(prompt, ip=client_ip)
     max_tokens = min(3500, max(500, len(questions) * 120))
-    call_res = _call_openrouter(
+    call_res = _call_ai(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.1,
         max_tokens=max_tokens,
-        timeout=60,  # tempo total, somando as tentativas em modelos gratuitos
+        timeout=60,  # tempo total, somando provedores e modelos
     )
-    content, used_model, usage = _unpack_call_result(call_res)
+    content, used_model, usage, provider_name = _unpack_call_result(call_res)
 
     if DEBUG:
         print(f"🤖 IA [{used_model}] respondeu:\n{content[:300]}")
@@ -785,8 +1076,8 @@ def generate_quiz_by_topic(
         AIServiceError: Se falhar a comunicação ou o modelo não gerar questões válidas
         AIQuotaExceededError: Se o IP exceder a cota de tokens por hora
     """
-    if not OPENROUTER_API_KEY:
-        _log_ops("nenhuma chave de IA configurada (defina OPENROUTER_API_KEY)")
+    if not ai_configured():
+        _log_ops("nenhuma chave de IA configurada (defina GROQ_API_KEY, GEMINI_API_KEY ou OPENROUTER_API_KEY)")
         raise AIServiceError(AI_UNAVAILABLE_MESSAGE)
 
     clean_topic = topic.strip() if topic else ""
@@ -867,13 +1158,13 @@ def generate_quiz_by_topic(
     prompt = "\n".join(prompt_lines)
     check_ai_token_quota(prompt, ip=client_ip)
     max_tokens = min(4096, max(800, qty * 320))
-    call_res = _call_openrouter(
+    call_res = _call_ai(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.5,
         max_tokens=max_tokens,
-        timeout=75,  # tempo total, somando as tentativas em modelos gratuitos
+        timeout=75,  # tempo total, somando provedores e modelos
     )
-    content, used_model, usage = _unpack_call_result(call_res)
+    content, used_model, usage, provider_name = _unpack_call_result(call_res)
 
     if DEBUG:
         print(f"🤖 IA Quiz Gerado [{used_model}]:\n{content[:300]}")
@@ -955,7 +1246,6 @@ def generate_quiz_by_topic(
     if not valid_questions:
         raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
 
-    provider_name = "OpenRouter"
     result = {
         "title": str(title).strip(),
         "topic": clean_topic,
@@ -1017,13 +1307,13 @@ def remix_questions_by_ai(
     check_ai_token_quota(prompt, ip=client_ip)
     max_tokens = min(3500, max(800, len(selected_questions) * 320))
 
-    call_res = _call_openrouter(
+    call_res = _call_ai(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.6,
         max_tokens=max_tokens,
-        timeout=60,  # tempo total, somando as tentativas em modelos gratuitos
+        timeout=60,  # tempo total, somando provedores e modelos
     )
-    content, used_model, usage = _unpack_call_result(call_res)
+    content, used_model, usage, provider_name = _unpack_call_result(call_res)
 
     try:
         parsed = parse_json_response(content)
@@ -1147,13 +1437,13 @@ def parse_and_structure_questions_with_ai(
     needed_tokens = (target_count or 10) * 320
     max_tokens = min(4096, max(1200, needed_tokens))
 
-    call_res = _call_openrouter(
+    call_res = _call_ai(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.25,
         max_tokens=max_tokens,
         timeout=75,
     )
-    content, used_model, usage = _unpack_call_result(call_res)
+    content, used_model, usage, provider_name = _unpack_call_result(call_res)
 
     if DEBUG:
         _log_ai(f"🤖 IA [{used_model}] estruturou documento:\n{content[:400]}")

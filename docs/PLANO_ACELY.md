@@ -150,8 +150,23 @@ Branch: `feature/ia-tarefas-persistentes` (concluída em 06/11/2026, aguardando 
 - Repetir o mesmo tema/quantidade/dificuldade/idioma responde do `ai_cache` sem chamar a IA.
 - Um modelo que não responde é abandonado em ~20 s.
 
-### Fase 2 — Vários provedores gratuitos em sequência
-Branch sugerida: `feature/ia-multiprovedor`
+### Fase 2 — Vários provedores gratuitos em sequência ✅
+Branch: `feature/ia-multiprovedor` (concluída em 06/11/2026, aguardando PR; depende da Fase 1)
+
+**Como ficou (diferenças em relação às tarefas abaixo)**
+- `_call_openrouter` continua existindo (descoberta de modelos `:free`); `_call_ai` chama ele
+  quando chega a vez do OpenRouter e usa `_call_compatible` para Groq, Gemini e Cerebras.
+- Padrão: `AI_PROVIDERS=groq,gemini,cerebras,openrouter`; Groq `openai/gpt-oss-120b,openai/gpt-oss-20b`,
+  Gemini `gemini-3.5-flash-lite,gemini-flash-lite-latest`, Cerebras `gpt-oss-120b` (conferidos em
+  nov/2026). `GEMINI_MODEL` (nome antigo) ainda é aceito.
+- O orçamento é **por modelo** (o Groq conta os limites por modelo): `GROQ_DAILY_TOKENS=190000`,
+  `GROQ_DAILY_REQUESTS=950`, `GEMINI_DAILY_REQUESTS=450`, `CEREBRAS_DAILY_TOKENS=950000`.
+- O Groq não recebe `response_format` (não aceita junto com streaming); a Fase 4 pode usar
+  `json_schema` sem streaming onde valer a pena.
+- Com um provedor só, nada é pausado (não há para onde ir), como era antes.
+- Não testado contra as APIs reais (sem chaves no ambiente de desenvolvimento): conferir os
+  logs `[ia] groq ...` depois de cadastrar as chaves em Preview.
+
 
 **Ideia:** Groq, Google Gemini (AI Studio), Cerebras e OpenRouter aceitam o formato de chat da
 OpenAI. `_call_openrouter` vira `_call_ai`, que percorre uma lista de provedores; quando um bate no

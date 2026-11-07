@@ -23,7 +23,7 @@ O **Acely** resolve isso unindo a extração instantânea de conteúdo à **Muta
 | Critério / Ferramenta | Acely | Quizlet | QConcursos / Gran Cursos | Anki |
 |---|:---:|:---:|:---:|:---:|
 | **Geração Instantânea por Material Próprio** | **Sim (PDF, DOCX, TXT)** | Não (Manual ou listas públicas) | Não (Apenas banco próprio de bancas) | Não (Manual card a card) |
-| **Geração de Simulado por Tema via IA** | **Sim (OpenRouter, modelos gratuitos)** | Limitado (em planos pagos) | Não | Não nativo |
+| **Geração de Simulado por Tema via IA** | **Sim (Groq, Gemini e OpenRouter, planos gratuitos)** | Limitado (em planos pagos) | Não | Não nativo |
 | **Caderno de Erros com Mutação IA** | **Sim (Gera variações inéditas)** | Não (Apenas repete o card) | Não (Filtra questões estáticas) | Não (Repete o mesmo card) |
 | **Explicação Didática Passo a Passo** | **Sim (Imediata via IA)** | Raras (Geralmente apenas definição) | Sim (Fórum / Comentários de profs) | Apenas se o usuário tiver escrito |
 | **Experiência Limpa e Sem Fricção** | **Sim (Modo foco + cronômetro)** | Não (Gameficado/Anúncios) | Não (Poluído de propagandas e fórum) | Interface crua e curva alta |
@@ -64,7 +64,14 @@ Edite o `.env`:
 | `OPENROUTER_FREE_MODELS` | Não | Modelos gratuitos preferidos, em ordem, separados por vírgula |
 | `OPENROUTER_DISCOVER_FREE_MODELS` | Não | Padrão `true`: descobre os modelos gratuitos disponíveis e usa como reserva |
 | `OPENROUTER_MAX_ATTEMPTS` | Não | Modelos tentados por pedido antes de desistir (padrão: `4`) |
-| `AI_DAILY_CALL_LIMIT` | Não | Teto diário de chamadas de IA; deixe abaixo do limite gratuito do OpenRouter (50/dia sem créditos) |
+| `AI_DAILY_CALL_LIMIT` | Não | Teto diário de chamadas de IA somando os provedores; só com o OpenRouter sem créditos, deixe abaixo de 50 |
+| `AI_PROVIDERS` | Não | Ordem dos provedores (padrão `groq,gemini,cerebras,openrouter`); provedor sem chave fica de fora |
+| `GROQ_API_KEY` / `GROQ_MODELS` | Não (recomendado) | [Groq](https://console.groq.com/keys): o mais rápido; padrão `openai/gpt-oss-120b,openai/gpt-oss-20b` |
+| `GEMINI_API_KEY` / `GEMINI_MODELS` | Não | [Google AI Studio](https://aistudio.google.com/apikey); no plano grátis o Google usa o conteúdo enviado |
+| `CEREBRAS_API_KEY` / `CEREBRAS_MODELS` | Não | [Cerebras](https://cloud.cerebras.ai) (teste com cartão, contexto curto) |
+| `<PROVEDOR>_DAILY_REQUESTS` / `<PROVEDOR>_DAILY_TOKENS` | Não | Orçamento diário por modelo; o provedor é pulado antes de responder 429 |
+| `AI_ATTEMPT_TIMEOUT` | Não | Segundos que um modelo pode ficar sem mandar nada antes de passar ao próximo (padrão `20`) |
+| `AI_CACHE_TTL_DAYS` | Não | Dias que um simulado por tema fica em cache no banco (padrão `7`) |
 | `AI_TOKEN_QUOTA_PER_HOUR` | Não | Cota de tokens estimados por hora por IP (padrão: `50000`) |
 | `AI_DAILY_CALL_LIMIT` | Não | Teto global de chamadas à IA a cada 24 h, somando todos os usuários (padrão: `1000`; `0` desliga). Trava de emergência contra a conta do provedor estourar |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Não | Liga o botão "Entrar com Google". Redirect URI: `<APP_URL>/api/auth/google/callback` (defina `APP_URL` em produção) |
@@ -300,7 +307,7 @@ QuizesStudies/
 │   │   ├── rate_limit_repository.py # Contadores de rate limit e cotas
 │   │   └── user_repository.py # Usuários, sessões, exportação e exclusão (LGPD)
 │   ├── services/
-│   │   ├── ai_service.py      # IA via OpenRouter (só modelos gratuitos, troca automática de modelo)
+│   │   ├── ai_service.py      # IA: Groq, Gemini, Cerebras e OpenRouter em sequência (planos gratuitos)
 │   │   ├── auth_service.py    # Regras de hash e autenticação
 │   │   ├── email_service.py   # E-mail de redefinição de senha
 │   │   ├── google_auth_service.py # Login com Google (OAuth)
