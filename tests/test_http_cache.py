@@ -92,7 +92,7 @@ class TestHttpCacheAndEtag(unittest.TestCase):
         diff = "Médio"
         cache_key = hashlib.sha256(f"{clean_topic}:{qty}:{diff}:".encode("utf-8")).hexdigest()
 
-        with patch("api.services.ai_service._call_openrouter") as mock_call, \
+        with patch("api.services.ai_service._call_ai") as mock_call, \
              patch("api.services.ai_service.check_ai_token_quota"), \
              patch("api.services.ai_service.OPENROUTER_API_KEY", "fake_key"):
 

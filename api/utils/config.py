@@ -92,17 +92,49 @@ OPENROUTER_FREE_MODELS = [
 # usa os outros gratuitos como reserva.
 OPENROUTER_DISCOVER_FREE_MODELS = os.getenv("OPENROUTER_DISCOVER_FREE_MODELS", "true").lower() == "true"
 
-# Google AI Studio (Gemini) — desativado por enquanto. Para voltar a usar no futuro:
-# descomente o bloco abaixo, o import em ai_service.py e o trecho "Google AI Studio" em _call_openrouter().
-# GEMINI_API_KEY = (
-#     os.getenv("GEMINI_API_KEY")
-#     or os.getenv("GOOGLE_API_KEY")
-#     or os.getenv("GEMINI_KEY")
-#     or os.getenv("GOOGLE_AI_KEY")
-#     or ""
-# ).strip()
-# GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest").strip()
-# GEMINI_BASE_URL = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai").strip()
+# ─── Vários provedores gratuitos em sequência (docs/PLANO_ACELY.md, Fase 2) ──────────────────
+# Todos falam o formato de chat da OpenAI. A IA tenta os provedores na ordem de AI_PROVIDERS;
+# quando um bate no limite (429), falha ou fica sem resposta, passa ao próximo. Provedor sem
+# chave fica de fora: sem GROQ/GEMINI/CEREBRAS, o comportamento é o de antes (só OpenRouter).
+_KNOWN_AI_PROVIDERS = ("groq", "gemini", "cerebras", "openrouter")
+AI_PROVIDERS = [
+    name for name in (
+        p.strip().lower() for p in (os.getenv("AI_PROVIDERS") or "groq,gemini,cerebras,openrouter").split(",")
+    )
+    if name in _KNOWN_AI_PROVIDERS
+] or ["openrouter"]
+
+
+def _env_list(name: str, default: str) -> list[str]:
+    return [item.strip() for item in (os.getenv(name) or default).split(",") if item.strip()]
+
+
+# Groq (console.groq.com): rápido; não usa os dados para treino. Limite grátis por modelo:
+# ~1.000 pedidos/dia, 200 mil tokens/dia e 8 mil tokens/min (conferir no painel).
+GROQ_API_KEY = (os.getenv("GROQ_API_KEY") or "").strip()
+GROQ_BASE_URL = (os.getenv("GROQ_BASE_URL") or "https://api.groq.com/openai/v1").strip()
+GROQ_MODELS = _env_list("GROQ_MODELS", "openai/gpt-oss-120b,openai/gpt-oss-20b")
+
+# Google AI Studio (Gemini), pelo endereço compatível com a OpenAI. No plano gratuito o Google
+# USA o conteúdo enviado para melhorar os produtos dele (avisado em /privacidade).
+GEMINI_API_KEY = (
+    os.getenv("GEMINI_API_KEY")
+    or os.getenv("GOOGLE_API_KEY")
+    or os.getenv("GEMINI_KEY")
+    or os.getenv("GOOGLE_AI_KEY")
+    or ""
+).strip()
+GEMINI_BASE_URL = (
+    os.getenv("GEMINI_BASE_URL") or "https://generativelanguage.googleapis.com/v1beta/openai"
+).strip()
+# GEMINI_MODEL (nome antigo, um só modelo) ainda é aceito
+GEMINI_MODELS = _env_list("GEMINI_MODELS", os.getenv("GEMINI_MODEL") or "gemini-3.5-flash-lite,gemini-flash-lite-latest")
+
+# Cerebras (cloud.cerebras.ai): opcional. O teste grátis exige cartão, expira e tem contexto
+# menor (~8 mil tokens): arquivos grandes passam direto para o próximo provedor.
+CEREBRAS_API_KEY = (os.getenv("CEREBRAS_API_KEY") or "").strip()
+CEREBRAS_BASE_URL = (os.getenv("CEREBRAS_BASE_URL") or "https://api.cerebras.ai/v1").strip()
+CEREBRAS_MODELS = _env_list("CEREBRAS_MODELS", "gpt-oss-120b")
 
 # Autenticação e Segurança
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
@@ -153,6 +185,22 @@ AI_ATTEMPT_TIMEOUT = _env_int("AI_ATTEMPT_TIMEOUT", 20, 5, 120)
 # Pedidos de IA com identificador (request_id): recarregar a página não refaz nem cobra de novo.
 # Simulados por tema ficam guardados no banco (ai_cache) por este número de dias.
 AI_CACHE_TTL_DAYS = _env_int("AI_CACHE_TTL_DAYS", 7, 0, 90)
+
+
+def _provider_budget(name: str, requests_default: int, tokens_default: int) -> tuple[int, int]:
+    """Orçamento diário por modelo do provedor: (pedidos, tokens). 0 = sem controle.
+
+    Fica um pouco abaixo do limite grátis para o provedor ser pulado antes de responder 429.
+    """
+    return (
+        _env_int(f"{name}_DAILY_REQUESTS", requests_default, 0, 10_000_000),
+        _env_int(f"{name}_DAILY_TOKENS", tokens_default, 0, 1_000_000_000),
+    )
+
+
+GROQ_DAILY_REQUESTS, GROQ_DAILY_TOKENS = _provider_budget("GROQ", 950, 190_000)
+GEMINI_DAILY_REQUESTS, GEMINI_DAILY_TOKENS = _provider_budget("GEMINI", 450, 0)
+CEREBRAS_DAILY_REQUESTS, CEREBRAS_DAILY_TOKENS = _provider_budget("CEREBRAS", 0, 950_000)
 
 # Entrar com Google (OAuth). Vazio = botão escondido e rotas desligadas.
 # URI de redirecionamento a cadastrar no Google Cloud: <APP_URL>/api/auth/google/callback
