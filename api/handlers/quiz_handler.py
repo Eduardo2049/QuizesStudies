@@ -1,6 +1,7 @@
 """
 Handler HTTP Principal — Suporte a multipart/form-data para upload de arquivos
 """
+import hashlib
 import io
 import json
 import os
@@ -23,6 +24,7 @@ from api.services import google_auth_service as google_auth
 from api.middleware.http_middleware import HTTPMiddleware, ResponseFormatter
 from api.utils.validators import AnswerValidator
 from api.repositories.rate_limit_repository import rate_limit_repo, RateLimitRepository
+from api.repositories.ai_job_repository import ai_job_repo, is_valid_job_id, JobConflict
 
 # Extensões permitidas para upload
 ALLOWED_EXTENSIONS = {"txt", "pdf", "docx"}
@@ -461,6 +463,15 @@ class QuizHandler(BaseHTTPRequestHandler):
                 HTTPMiddleware.add_cache_headers(self, cache=False)
                 self.end_headers()
                 self.wfile.write(body)
+                return
+
+            # 0.19 API: Andamento de um pedido de IA (o navegador consulta depois de recarregar)
+            if request.path.startswith("/api/quiz/jobs/"):
+                allowed, retry_after = _rl_read.check_handler(self, "GET:/api/quiz/jobs")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
+                self._send_job_status(request.path[len("/api/quiz/jobs/"):])
                 return
 
             # 0.2 API: Situação do modo convidado e cota gratuita de IA
@@ -943,28 +954,37 @@ class QuizHandler(BaseHTTPRequestHandler):
                 is_public = requested_public and user and user.get("role") == "admin"
 
                 client_ip = HTTPMiddleware.get_client_ip(self)
-                reservation = self._reserve_guest_ai(guest_id, client_ip)
-                try:
-                    response = self.quiz_controller.generate_quiz_by_topic(
-                        topic=topic,
-                        num_questions=num_questions,
-                        difficulty=difficulty,
-                        context=context,
-                        language=language,
-                        user_id=user["id"] if user else None,
-                        is_public=bool(is_public),
-                        persist=bool(user),
-                        client_ip=client_ip,
-                    )
-                except Exception:
-                    if reservation:
+
+                def run_generate():
+                    reservation = self._reserve_guest_ai(guest_id, client_ip)
+                    try:
+                        response = self.quiz_controller.generate_quiz_by_topic(
+                            topic=topic,
+                            num_questions=num_questions,
+                            difficulty=difficulty,
+                            context=context,
+                            language=language,
+                            user_id=user["id"] if user else None,
+                            is_public=bool(is_public),
+                            persist=bool(user),
+                            client_ip=client_ip,
+                        )
+                    except Exception:
+                        if reservation:
+                            reservation.refund()
+                        raise
+                    if reservation and response["data"].get("cached"):
+                        # Veio do cache: a IA não foi chamada, então o uso volta para o convidado
                         reservation.refund()
-                    raise
-                if guest_id:
-                    response["data"]["guest_ai"] = guest_service.status(guest_id, client_ip)
-                status, data = ResponseFormatter.created(
-                    response["data"],
-                    response["data"].get("message")
+                    if guest_id:
+                        response["data"]["guest_ai"] = guest_service.status(guest_id, client_ip)
+                    return ResponseFormatter.created(response["data"], response["data"].get("message"))
+
+                status, data = self._run_ai_job(
+                    payload.get("request_id"), "generate", user, guest_id,
+                    {"topic": topic, "num_questions": num_questions, "difficulty": difficulty,
+                     "context": context, "language": language, "is_public": bool(is_public)},
+                    run_generate,
                 )
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
@@ -1001,7 +1021,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                     return
 
                 # Remix via IA exige conta ou sessão de convidado (com cota gratuita)
-                _user, guest_id = self._require_user_or_guest()
+                remix_user, guest_id = self._require_user_or_guest()
 
                 payload = self._read_json_body()
                 if payload is None:
@@ -1014,18 +1034,27 @@ class QuizHandler(BaseHTTPRequestHandler):
                     return
 
                 client_ip = HTTPMiddleware.get_client_ip(self)
-                reservation = self._reserve_guest_ai(guest_id, client_ip)
-                try:
-                    response = self.quiz_controller.remix_mistakes(
-                        questions, client_ip=client_ip, language=payload.get("language", "")
-                    )
-                except Exception:
-                    if reservation:
-                        reservation.refund()
-                    raise
-                if guest_id:
-                    response["data"]["guest_ai"] = guest_service.status(guest_id, client_ip)
-                status, data = ResponseFormatter.success(response["data"])
+                remix_language = payload.get("language", "")
+
+                def run_remix():
+                    reservation = self._reserve_guest_ai(guest_id, client_ip)
+                    try:
+                        response = self.quiz_controller.remix_mistakes(
+                            questions, client_ip=client_ip, language=remix_language
+                        )
+                    except Exception:
+                        if reservation:
+                            reservation.refund()
+                        raise
+                    if guest_id:
+                        response["data"]["guest_ai"] = guest_service.status(guest_id, client_ip)
+                    return ResponseFormatter.success(response["data"])
+
+                status, data = self._run_ai_job(
+                    payload.get("request_id"), "remix", remix_user, guest_id,
+                    {"questions": questions, "language": remix_language},
+                    run_remix,
+                )
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
@@ -1119,31 +1148,120 @@ class QuizHandler(BaseHTTPRequestHandler):
         language = fields.get("language", "")
         client_ip = HTTPMiddleware.get_client_ip(self)
         guest_id = HTTPMiddleware.get_guest_id(self) if guest else None
-        reservation = guest_service.reservation(guest_id, client_ip) if guest_id else None
-        try:
-            response = self.upload_controller.upload_file(
-                filename,
-                file_content,
-                ext,
-                user["id"] if user else None,
-                bool(is_public),
-                persist=not guest,
-                client_ip=client_ip,
-                num_questions=num_questions,
-                context=context,
-                language=language,
-                ai_gate=reservation.acquire if reservation else None,
-            )
-        except Exception:
-            if reservation:
-                reservation.refund()
-            raise
-        if guest_id:
-            response["data"]["guest_ai"] = guest_service.status(guest_id, client_ip)
-        status, data = ResponseFormatter.created(
-            response["data"],
-            response["data"].get("message")
+
+        def run_upload():
+            reservation = guest_service.reservation(guest_id, client_ip) if guest_id else None
+            try:
+                response = self.upload_controller.upload_file(
+                    filename,
+                    file_content,
+                    ext,
+                    user["id"] if user else None,
+                    bool(is_public),
+                    persist=not guest,
+                    client_ip=client_ip,
+                    num_questions=num_questions,
+                    context=context,
+                    language=language,
+                    ai_gate=reservation.acquire if reservation else None,
+                )
+            except Exception:
+                if reservation:
+                    reservation.refund()
+                raise
+            if guest_id:
+                response["data"]["guest_ai"] = guest_service.status(guest_id, client_ip)
+            return ResponseFormatter.created(response["data"], response["data"].get("message"))
+
+        # Visitante sem sessão não tem dono para o pedido: o upload roda direto (sem IA)
+        request_id = fields.get("request_id", "") if (user or guest_id) else ""
+        status, data = self._run_ai_job(
+            request_id, "upload", user, guest_id,
+            {"file_sha256": hashlib.sha256(file_content).hexdigest(), "filename": filename,
+             "num_questions": num_questions, "context": context, "language": language,
+             "is_public": bool(is_public)},
+            run_upload,
         )
+        HTTPMiddleware.send_json_response(self, status, data)
+
+    def _run_ai_job(self, raw_id, kind: str, user, guest_id, params: dict, run):
+        """Executa um pedido de IA uma vez só por request_id (docs/PLANO_ACELY.md, Fase 1).
+
+        `run()` faz o trabalho (reserva de cota incluída) e devolve (status, corpo). Com o
+        mesmo id de novo: pronto devolve o resultado guardado sem chamar a IA nem cobrar
+        cota; ainda rodando devolve 202 para o navegador consultar /api/quiz/jobs/<id>.
+        Sem id (clientes antigos), roda direto como antes.
+        """
+        if raw_id in (None, ""):
+            return run()
+        if not is_valid_job_id(raw_id):
+            return ResponseFormatter.bad_request("request_id inválido")
+        owner_kind, owner_id = ("user", str(user["id"])) if user else ("guest", str(guest_id))
+        params_hash = hashlib.sha256(
+            json.dumps(params, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
+        ).hexdigest()
+        try:
+            created, job = ai_job_repo.start(raw_id, owner_kind, owner_id, kind, params_hash)
+        except JobConflict:
+            return ResponseFormatter.error(
+                "Este pedido já foi usado com outros dados. Tente novamente.", "AI_JOB_CONFLICT", 409
+            )
+        if not created:
+            if job["status"] == "done":
+                return self._replay_job(job, guest_id)
+            return ResponseFormatter.success(
+                {"request_id": raw_id, "status": "running"}, "O pedido ainda está em andamento.", 202
+            )
+        try:
+            status, body = run()
+        except QuizAPIException as e:
+            ai_job_repo.fail(raw_id, e.message, e.error_code, e.status_code)
+            raise
+        except AIQuotaExceededError as e:
+            ai_job_repo.fail(raw_id, str(e), "RATE_LIMITED", 429)
+            raise
+        except Exception:
+            ai_job_repo.fail(raw_id, "Erro interno do servidor", "INTERNAL_ERROR", 500)
+            raise
+        if 200 <= status < 300:
+            ai_job_repo.finish(
+                raw_id, {"http_status": status, "data": body.get("data"), "message": body.get("message")}
+            )
+        else:
+            ai_job_repo.fail(raw_id, body.get("message") or "Erro", body.get("error") or "ERROR", status)
+        return status, body
+
+    def _replay_job(self, job: dict, guest_id: str | None):
+        """Resultado guardado de um pedido pronto, com a cota do convidado atualizada."""
+        stored = job.get("result") or {}
+        status = int(stored.get("http_status") or 200)
+        data = json.loads(json.dumps(stored.get("data") or {}))
+        if isinstance(data, dict):
+            data["replayed"] = True
+            if guest_id:
+                data["guest_ai"] = guest_service.status(guest_id, HTTPMiddleware.get_client_ip(self))
+        return ResponseFormatter.success(data, stored.get("message") or "OK", status)
+
+    def _send_job_status(self, job_id: str) -> None:
+        """GET /api/quiz/jobs/<id>: só o dono vê; para os outros o pedido não existe."""
+        user = self._get_current_user_or_none()
+        guest_id = None if user else HTTPMiddleware.get_guest_id(self)
+        job = ai_job_repo.get(job_id) if is_valid_job_id(job_id) else None
+        owner = ("user", str(user["id"])) if user else ("guest", str(guest_id)) if guest_id else None
+        if not job or not owner or (job["owner_kind"], job["owner_id"]) != owner:
+            status, data = ResponseFormatter.not_found("Pedido não encontrado")
+            HTTPMiddleware.send_json_response(self, status, data)
+            return
+        info = {"request_id": job_id, "kind": job["kind"], "status": job["status"]}
+        if job["status"] == "done":
+            _status, body = self._replay_job(job, guest_id)
+            info["result"] = body.get("data")
+            info["message"] = body.get("message")
+        elif job["status"] == "failed":
+            info["error"] = job.get("error_code") or "ERROR"
+            info["message"] = job.get("error") or "Não foi possível concluir o pedido."
+            info["http_status"] = job.get("error_status") or 422
+        status, data = ResponseFormatter.success(info)
         HTTPMiddleware.send_json_response(self, status, data)
 
     def _redirect(self, location: str, cookies: list[str] | None = None) -> None:
