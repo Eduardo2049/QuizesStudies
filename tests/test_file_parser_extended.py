@@ -100,7 +100,7 @@ Resposta: A
 class TestAIStructureAndUploadService(unittest.TestCase):
     """Testa o fallback para IA quando o arquivo não possui numeração/padrão rígido."""
 
-    @patch("api.services.ai_service._call_openrouter")
+    @patch("api.services.ai_service._call_ai")
     def test_parse_and_structure_questions_with_ai(self, mock_call):
         """Simula resposta da IA estruturando texto despadronizado."""
         mock_ai_json = """{

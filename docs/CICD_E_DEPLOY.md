@@ -75,7 +75,11 @@ Acesse **Settings > Environment Variables** no painel da Vercel e cadastre as va
 | `ADMIN_USERNAME` | Nome seguro do administrador | `admin` |
 | `ADMIN_PASSWORD` | Senha forte e exclusiva | Senha de homologação |
 | `OPENROUTER_API_KEY` | Chave do OpenRouter de produção (só modelos `:free`) | Chave de homolog/dev |
-| `AI_DAILY_CALL_LIMIT` | Abaixo do limite diário gratuito do OpenRouter (ex.: `40` sem créditos) | `40` |
+| `AI_DAILY_CALL_LIMIT` | Teto global de pedidos de IA por dia, somando os provedores (ex.: `1000` com Groq e Gemini; `40` só com o OpenRouter sem créditos) | `40` |
+| `GROQ_API_KEY` | (Opcional, recomendado) chave do Groq: primeiro provedor, o mais rápido | Chave de homolog/dev |
+| `GEMINI_API_KEY` | (Opcional) chave do Google AI Studio; no plano grátis o Google usa o conteúdo | Chave de homolog/dev |
+| `CEREBRAS_API_KEY` | (Opcional) chave da Cerebras | — |
+| `AI_PROVIDERS` | (Opcional) ordem de tentativa; padrão `groq,gemini,cerebras,openrouter` | Idem |
 | `COOKIE_SECURE` | `true` | `true` |
 | `DEBUG` | `false` | `false` |
 
