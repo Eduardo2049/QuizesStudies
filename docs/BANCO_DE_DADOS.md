@@ -108,8 +108,8 @@ não recebem `sslmode`.
 - Nunca commitar URLs com senha; valores reais só na Vercel, no GitHub Secrets ou no `.env` local.
 - Um banco (ou branch) por ambiente: Preview nunca aponta para produção.
 - Senha forte e exclusiva por ambiente; ao trocar de provedor, gere senhas novas.
-- Espaço: os planos gratuitos têm ~0,5 GB. Tabelas que crescem sem parar (como `rate_limits` e as
-  futuras `ai_jobs`/`ai_cache` do `docs/PLANO_ACELY.md`) precisam de limpeza dos registros antigos.
+- Espaço: os planos gratuitos têm ~0,5 GB. As tabelas que crescem sem parar se limpam sozinhas, de
+  vez em quando, ao gravar: `rate_limits` (24 h), `ai_jobs` (24 h) e `ai_cache` (`AI_CACHE_TTL_DAYS`).
 
 ## 6. Desempenho das conexões
 

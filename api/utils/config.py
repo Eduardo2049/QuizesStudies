@@ -145,6 +145,15 @@ AI_DAILY_CALL_LIMIT = _env_int("AI_DAILY_CALL_LIMIT", 1000, 0, 1_000_000)
 # conta no limite diário do OpenRouter).
 OPENROUTER_MAX_ATTEMPTS = _env_int("OPENROUTER_MAX_ATTEMPTS", 4, 1, 8)
 
+# Tempo máximo, em segundos, que um modelo pode ficar sem mandar nada (antes do primeiro
+# trecho da resposta ou entre dois trechos). A resposta vem em partes (streaming): um modelo
+# parado na fila é abandonado nesse tempo, e um que está escrevendo continua até o tempo total.
+AI_ATTEMPT_TIMEOUT = _env_int("AI_ATTEMPT_TIMEOUT", 20, 5, 120)
+
+# Pedidos de IA com identificador (request_id): recarregar a página não refaz nem cobra de novo.
+# Simulados por tema ficam guardados no banco (ai_cache) por este número de dias.
+AI_CACHE_TTL_DAYS = _env_int("AI_CACHE_TTL_DAYS", 7, 0, 90)
+
 # Entrar com Google (OAuth). Vazio = botão escondido e rotas desligadas.
 # URI de redirecionamento a cadastrar no Google Cloud: <APP_URL>/api/auth/google/callback
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()

@@ -3,7 +3,7 @@ import { initTheme, toggleTheme } from './modules/theme.js?v=9';
 import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js?v=5';
 import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=7';
 import { initTimerDrag } from './modules/timer-drag.js?v=1';
-import { getLanguage } from './modules/i18n.js?v=4';
+import { getLanguage } from './modules/i18n.js?v=5';
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 const quiz = document.querySelector('#quiz');
@@ -1235,15 +1235,15 @@ async function runRemixMistakes() {
   btnRemixMistakes.innerHTML = `${icon('hourglass')} Criando variações com IA…`;
 
   try {
-    const response = await fetch('/api/quiz/remix-mistakes', {
+    const requestId = newRequestId();
+    const { ok, raw } = await runAiRequest('/api/quiz/remix-mistakes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify({ questions: currentWrongQuestions, language: getLanguage() }),
-    });
+      body: JSON.stringify({ questions: currentWrongQuestions, language: getLanguage(), request_id: requestId }),
+    }, requestId);
 
-    const raw = await readJson(response);
-    if (!response.ok) {
+    if (!ok) {
       if (raw?.error === 'GUEST_AI_LIMIT_REACHED' || raw?.error === 'AUTH_REQUIRED') {
         closeResultModal();
         handleAccessError(raw, 'remix');
@@ -1481,6 +1481,13 @@ const UPLOAD_PROGRESS_STEPS = [
   [30, 'Os modelos gratuitos estão com fila. Ainda trabalhando, pode levar até um minuto…'],
   [60, 'Está demorando mais que o normal. Se der erro, o uso de IA não é descontado.'],
 ];
+// Volta depois de recarregar a página com o pedido ainda em andamento
+const RESUME_PROGRESS_STEPS = [
+  [0, 'Seu simulado ainda está sendo gerado. Continuando de onde parou…'],
+  [60, 'Está demorando mais que o normal. Se der erro, o uso de IA não é descontado.'],
+];
+const HINT_KEEP_PAGE = 'Não feche nem recarregue a página enquanto o simulado é preparado.';
+const HINT_RELOAD_OK = 'Pode recarregar a página: o simulado continua sendo preparado e aparece aqui.';
 let stopProgress = null;
 
 function confirmLeaveWhileBusy(event) {
@@ -1488,10 +1495,13 @@ function confirmLeaveWhileBusy(event) {
   event.returnValue = '';
 }
 
-/** Mostra as etapas no #uploadStatusText até `stopProgressMessages()`. */
-function startProgressMessages(steps) {
+/**
+ * Mostra as etapas no #uploadStatusText até `stopProgressMessages()`.
+ * `confirmLeave`: o navegador pergunta antes de sair (envio de arquivo, que não dá para
+ * retomar se o arquivo ainda não chegou ao servidor). A geração por tema pode ser retomada.
+ */
+function startProgressMessages(steps, { startedAt = Date.now(), confirmLeave = true } = {}) {
   stopProgressMessages();
-  const startedAt = Date.now();
   const render = () => {
     const elapsed = Math.floor((Date.now() - startedAt) / 1000);
     let text = steps[0][1];
@@ -1502,9 +1512,11 @@ function startProgressMessages(steps) {
   };
   render();
   const timer = setInterval(render, 1000);
-  if (uploadStatusHint) uploadStatusHint.hidden = false;
-  // Recarregar agora abandona o pedido: o navegador pergunta antes de sair
-  window.addEventListener('beforeunload', confirmLeaveWhileBusy);
+  if (uploadStatusHint) {
+    uploadStatusHint.textContent = confirmLeave ? HINT_KEEP_PAGE : HINT_RELOAD_OK;
+    uploadStatusHint.hidden = false;
+  }
+  if (confirmLeave) window.addEventListener('beforeunload', confirmLeaveWhileBusy);
   stopProgress = () => {
     clearInterval(timer);
     window.removeEventListener('beforeunload', confirmLeaveWhileBusy);
@@ -1515,6 +1527,86 @@ function startProgressMessages(steps) {
 function stopProgressMessages() {
   if (stopProgress) stopProgress();
   stopProgress = null;
+}
+
+// ─── Pedidos de IA que sobrevivem a recarregar a página ─────────────────────
+// Cada pedido leva um request_id. O servidor guarda o andamento e o resultado: repetir o
+// pedido com o mesmo id devolve o que já ficou pronto, sem gastar outra cota, e 202 quer
+// dizer "ainda rodando" (consulta /api/quiz/jobs/<id>). O pedido em andamento fica no
+// sessionStorage para ser retomado se a página for recarregada.
+const PENDING_JOB_KEY = 'quiz_pending_job';
+const PENDING_JOB_MAX_AGE_MS = 10 * 60 * 1000;
+const JOB_POLL_INTERVAL_MS = 3000;
+
+function newRequestId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  const bytes = window.crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function savePendingJob(job) {
+  try { sessionStorage.setItem(PENDING_JOB_KEY, JSON.stringify(job)); } catch (_) {}
+}
+
+function readPendingJob() {
+  try {
+    const job = JSON.parse(sessionStorage.getItem(PENDING_JOB_KEY) || 'null');
+    if (job?.id && job.kind && Date.now() - Number(job.startedAt || 0) < PENDING_JOB_MAX_AGE_MS) return job;
+  } catch (_) {}
+  clearPendingJob();
+  return null;
+}
+
+function clearPendingJob() {
+  try { sessionStorage.removeItem(PENDING_JOB_KEY); } catch (_) {}
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Consulta o andamento até ficar pronto ou falhar. Devolve { ok, data, raw, notFound }. */
+async function waitForJob(requestId, startedAt = Date.now()) {
+  for (;;) {
+    if (Date.now() - startedAt > PENDING_JOB_MAX_AGE_MS) {
+      return { ok: false, raw: { message: 'A geração demorou demais e foi cancelada. Tente novamente.' } };
+    }
+    await sleep(JOB_POLL_INTERVAL_MS);
+    let response;
+    try {
+      response = await fetch(`/api/quiz/jobs/${encodeURIComponent(requestId)}`, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      });
+    } catch (_) {
+      continue; // sem rede por um instante: tenta na próxima volta
+    }
+    if (response.status === 404) return { ok: false, notFound: true, raw: {} };
+    if (!response.ok) continue;
+    const info = (await readJson(response)).data || {};
+    if (info.status === 'done') return { ok: true, data: info.result || {}, raw: { data: info.result } };
+    if (info.status === 'failed') {
+      const raw = { error: info.error, message: info.message, data: { message: info.message } };
+      return { ok: false, raw, data: raw.data };
+    }
+  }
+}
+
+/** POST de IA com request_id: espera o resultado mesmo se a conexão cair no meio. */
+async function runAiRequest(url, init, requestId, startedAt = Date.now()) {
+  let response;
+  try {
+    response = await fetch(url, init);
+  } catch (_) {
+    // A conexão caiu, mas o servidor pode ter recebido o pedido e continuar trabalhando
+    const polled = await waitForJob(requestId, startedAt);
+    if (polled.notFound) throw new Error('network');
+    return polled;
+  }
+  const raw = await readJson(response);
+  if (response.status === 202) return waitForJob(requestId, startedAt);
+  return { ok: response.ok, data: raw.data || raw, raw };
 }
 const uploadError = document.querySelector('#uploadError');
 const uploadSuccess = document.querySelector('#uploadSuccess');
@@ -2179,7 +2271,10 @@ async function doUpload() {
   uploadSuccess.hidden = true;
   confirmUploadBtn.disabled = true;
 
+  const requestId = newRequestId();
+  const startedAt = Date.now();
   const formData = new FormData();
+  formData.append('request_id', requestId);
   formData.append('file', selectedFile, selectedFile.name);
   formData.append('is_public', document.querySelector('#isPublicQuiz')?.checked ? 'true' : 'false');
 
@@ -2195,50 +2290,58 @@ async function doUpload() {
     formData.append('context', userContext);
   }
 
+  // Só o andamento fica guardado (o arquivo não): ao recarregar, a página consulta o resultado
+  if (sessionKind() !== 'visitor') savePendingJob({ id: requestId, kind: 'upload', startedAt });
+
   try {
-    const response = await fetch('/api/upload', {
+    const result = await runAiRequest('/api/upload', {
       method: 'POST',
       credentials: 'same-origin',
       body: formData
-    });
-    const raw = await readJson(response);
-    const data = raw.data || raw;
+    }, requestId, startedAt);
+    clearPendingJob();
     stopProgressMessages();
 
-    if (!response.ok) {
+    if (!result.ok) {
       uploadStatus.hidden = true;
       confirmUploadBtn.disabled = false;
-      if (handleAccessError(raw, 'create')) return;
-      showUploadError(data.message || 'Não foi possível processar o arquivo. Tente novamente.');
+      if (handleAccessError(result.raw, 'create')) return;
+      showUploadError(result.data?.message || 'Não foi possível processar o arquivo. Tente novamente.');
       return;
     }
 
-    if (data.guest_ai) applyGuestStatus(data.guest_ai);
-    if (data.local_only || isGuestMode()) {
-      saveGuestQuiz(data);
-    }
-
-    uploadStatus.hidden = true;
-    uploadSuccess.textContent = `✓ ${data.message}`;
-    uploadSuccess.hidden = false;
-
-    // Recarregar lista e selecionar novo quiz
-    await loadQuizList();
-    selectedSource = data.name;
-    quizSelector.value = data.name;
-    syncCustomQuizSelector();
-    resetTimer();
-    closeResultModal();
-    quiz.innerHTML = '';
-    try { await loadQuiz(data.name); } catch (_) {}
-
-    setTimeout(closeModal, 1800);
+    await showCreatedQuiz(result.data, 1800);
   } catch (err) {
+    clearPendingJob();
     stopProgressMessages();
     showUploadError('Falha na conexão. Verifique o servidor e tente novamente.');
     uploadStatus.hidden = true;
     confirmUploadBtn.disabled = false;
   }
+}
+
+/** Mostra o simulado criado (upload ou tema): guarda o do convidado, recarrega a lista e abre. */
+async function showCreatedQuiz(data, closeDelayMs) {
+  if (data.guest_ai) applyGuestStatus(data.guest_ai);
+  if (data.local_only || isGuestMode()) {
+    saveGuestQuiz(data);
+  }
+
+  uploadStatus.hidden = true;
+  uploadSuccess.textContent = `✓ ${data.message || 'Simulado gerado.'}`;
+  uploadSuccess.hidden = false;
+
+  // Recarregar lista e selecionar novo quiz
+  await loadQuizList();
+  selectedSource = data.name;
+  quizSelector.value = data.name;
+  syncCustomQuizSelector();
+  resetTimer();
+  closeResultModal();
+  quiz.innerHTML = '';
+  try { await loadQuiz(data.name); } catch (_) {}
+
+  setTimeout(closeModal, closeDelayMs);
 }
 
 // ─── Geração por Tema com IA ───────────────────────────────────────────────
@@ -2257,7 +2360,7 @@ async function doGenerateTopic() {
   }
 
   uploadStatus.hidden = false;
-  startProgressMessages(TOPIC_PROGRESS_STEPS);
+  startProgressMessages(TOPIC_PROGRESS_STEPS, { confirmLeave: false });
   uploadError.hidden = true;
   uploadSuccess.hidden = true;
   confirmGenerateTopicBtn.disabled = true;
@@ -2274,54 +2377,80 @@ async function doGenerateTopic() {
     context: topicContext?.value.trim() || '',
     is_public: document.querySelector('#isPublicQuiz')?.checked || false,
     language: getLanguage(),
+    request_id: newRequestId(),
   };
+  const job = { id: payload.request_id, kind: 'generate', payload, startedAt: Date.now() };
+  savePendingJob(job);
+  await finishTopicJob(job);
+}
 
+/** Envia (ou reenvia, ao retomar) o pedido de tema e mostra o resultado. */
+async function finishTopicJob(job) {
   try {
-    const response = await fetch('/api/quiz/generate', {
+    const result = await runAiRequest('/api/quiz/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify(payload),
-    });
-
-    const raw = await readJson(response);
-    const data = raw.data || raw;
+      body: JSON.stringify(job.payload),
+    }, job.id, job.startedAt);
+    clearPendingJob();
     stopProgressMessages();
 
-    if (!response.ok) {
+    if (!result.ok) {
       uploadStatus.hidden = true;
       confirmGenerateTopicBtn.disabled = false;
-      if (handleAccessError(raw, 'create')) return;
-      showUploadError(data.message || 'Não foi possível gerar o simulado. Tente novamente.');
+      if (handleAccessError(result.raw, 'create')) return;
+      showUploadError(result.data?.message || 'Não foi possível gerar o simulado. Tente novamente.');
       return;
     }
 
-    if (data.guest_ai) applyGuestStatus(data.guest_ai);
-    if (data.local_only || isGuestMode()) {
-      saveGuestQuiz(data);
-    }
-
-    uploadStatus.hidden = true;
-    uploadSuccess.textContent = `✓ ${data.message || 'Simulado gerado.'}`;
-    uploadSuccess.hidden = false;
-
-    // Recarregar lista e selecionar novo quiz
-    await loadQuizList();
-    selectedSource = data.name;
-    quizSelector.value = data.name;
-    syncCustomQuizSelector();
-    resetTimer();
-    closeResultModal();
-    quiz.innerHTML = '';
-    try { await loadQuiz(data.name); } catch (_) {}
-
-    setTimeout(closeModal, 1400);
+    await showCreatedQuiz(result.data, 1400);
   } catch (err) {
+    clearPendingJob();
     stopProgressMessages();
     showUploadError('Falha na conexão. Verifique o servidor ou a chave de IA.');
     uploadStatus.hidden = true;
     confirmGenerateTopicBtn.disabled = false;
   }
+}
+
+/** Ao abrir a página: retoma o pedido de IA que estava em andamento antes de recarregar. */
+async function resumePendingJob() {
+  const job = readPendingJob();
+  if (!job) return;
+  if (sessionKind() === 'visitor' || (job.kind === 'generate' && !job.payload)) {
+    clearPendingJob();
+    return;
+  }
+
+  openModal();
+  switchModalTab(job.kind === 'upload' ? 'upload' : 'topic');
+  if (job.kind === 'generate' && topicInput) topicInput.value = job.payload.topic || '';
+  uploadStatus.hidden = false;
+  startProgressMessages(RESUME_PROGRESS_STEPS, { startedAt: job.startedAt, confirmLeave: false });
+  confirmGenerateTopicBtn.disabled = true;
+  confirmUploadBtn.disabled = true;
+
+  if (job.kind === 'generate') {
+    // Reenviar com o mesmo id é seguro: o servidor devolve o que já ficou pronto ou continua
+    await finishTopicJob(job);
+    return;
+  }
+
+  const result = await waitForJob(job.id, job.startedAt);
+  clearPendingJob();
+  stopProgressMessages();
+  if (result.ok) {
+    await showCreatedQuiz(result.data, 1800);
+    return;
+  }
+  uploadStatus.hidden = true;
+  if (handleAccessError(result.raw, 'create')) return;
+  showUploadError(
+    result.notFound
+      ? 'O envio do arquivo foi interrompido antes de chegar. Escolha o arquivo e envie de novo.'
+      : (result.data?.message || 'Não foi possível processar o arquivo. Tente novamente.')
+  );
 }
 
 // Eventos do modal de upload / geração
@@ -2489,6 +2618,8 @@ async function init() {
       showNotice('Muitas tentativas seguidas. Aguarde alguns minutos.', 'Confirmação de e-mail', 'info');
     }
   }
+
+  resumePendingJob();
 
   if (importedGuestQuizzes > 0) {
     const plural = importedGuestQuizzes === 1 ? 'simulado do modo convidado foi salvo' : 'simulados do modo convidado foram salvos';

@@ -203,6 +203,7 @@ class QuizController:
                     "usage": usage,
                     "model": model,
                     "provider": provider,
+                    "cached": bool(generated.get("cached")),
                     "message": f"Simulado '{title}' gerado com {len(questions)} questões. Ele fica salvo só neste navegador.",
                 }
             }
@@ -248,6 +249,7 @@ class QuizController:
                 "usage": usage,
                 "model": model,
                 "provider": provider,
+                "cached": bool(generated.get("cached")),
                 "message": f"Simulado '{title}' criado e salvo na sua conta com {len(questions)} questões.",
             }
         }
