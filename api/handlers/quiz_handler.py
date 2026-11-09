@@ -619,10 +619,12 @@ class QuizHandler(BaseHTTPRequestHandler):
                     HTTPMiddleware.send_json_response(self, status, data)
                 return
 
-            # 3.2.2 Páginas institucionais (termos e privacidade)
+            # 3.2.2 Páginas institucionais (termos, privacidade e produto)
             static_pages = {
                 "/termos": "termos.html", "/termos.html": "termos.html",
                 "/privacidade": "privacidade.html", "/privacidade.html": "privacidade.html",
+                # Página de produto e planos (/planos abre a mesma página já nos planos)
+                "/produto": "produto.html", "/produto.html": "produto.html", "/planos": "produto.html",
             }
             if request.path in static_pages:
                 self._send_html_file(WEB_DIR / static_pages[request.path], 200)

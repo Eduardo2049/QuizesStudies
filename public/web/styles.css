@@ -4336,3 +4336,7 @@ a.access-cta.primary:hover { color: var(--btn-primary-text); }
   color: var(--muted);
 }
 .upload-status-hint[hidden] { display: none; }
+
+/* Link "Planos" no topo da home (mesma aparência dos botões fantasma) */
+.btn-plans { text-decoration: none; }
+.btn-plans:hover { text-decoration: none; }

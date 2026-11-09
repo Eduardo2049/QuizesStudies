@@ -22,6 +22,8 @@
     { "source": "/reset-password", "destination": "/web/reset-password.html" },
     { "source": "/termos", "destination": "/web/termos.html" },
     { "source": "/privacidade", "destination": "/web/privacidade.html" },
+    { "source": "/produto", "destination": "/web/produto.html" },
+    { "source": "/planos", "destination": "/web/produto.html" },
     { "source": "/guest", "destination": "/web/index.html" },
     { "source": "/", "destination": "/web/index.html" },
     { "source": "/api/(.*)", "destination": "/api/index.py?__path=/api/$1" }

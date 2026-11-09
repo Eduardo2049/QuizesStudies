@@ -416,3 +416,10 @@ CREATE TABLE quiz_attempts (
 CREATE INDEX idx_quiz_attempts_user_id ON quiz_attempts(user_id);
 CREATE INDEX idx_quiz_attempts_quiz_id ON quiz_attempts(quiz_id);
 ```
+
+---
+
+## Licença
+
+Software proprietário. © 2024–2026 Eduardo Felipe Alves de Sousa. Todos os direitos reservados.
+Veja [`LICENSE`](LICENSE). Planos e roadmap do produto: [`docs/PLANO_SAAS.md`](docs/PLANO_SAAS.md).
