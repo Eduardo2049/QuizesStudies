@@ -5,6 +5,7 @@ Usa CREATE TABLE IF NOT EXISTS para ser idempotente.
 import json
 from api.database.connection import get_direct_cursor
 from api.utils.config import DEBUG
+from api.utils.plans import DEFAULT_PLANS
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS quizzes (
@@ -142,6 +143,77 @@ CREATE TABLE IF NOT EXISTS ai_cache (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ai_cache_created ON ai_cache(created_at);
+
+-- Planos, workspaces e uso mensal (docs/PLANO_SAAS.md, Fase S1). Os limites de cada plano
+-- ficam em `plans.limits` para mudar sem deploy; as linhas iniciais vêm de api/utils/plans.py.
+CREATE TABLE IF NOT EXISTS plans (
+    id          VARCHAR(20) PRIMARY KEY,           -- 'free', 'pro', 'team', 'institution'
+    name        VARCHAR(60) NOT NULL,
+    limits      JSONB NOT NULL DEFAULT '{}'::jsonb,
+    active      BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Todo usuário tem um workspace pessoal; os de equipe ('class', 'company') vêm na Fase S2
+CREATE TABLE IF NOT EXISTS workspaces (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name          VARCHAR(120) NOT NULL,
+    kind          VARCHAR(10) NOT NULL DEFAULT 'personal',   -- 'personal', 'class', 'company'
+    plan_id       VARCHAR(20) NOT NULL DEFAULT 'free' REFERENCES plans(id),
+    seats         INTEGER NOT NULL DEFAULT 1,
+    owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at    TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_workspaces_personal_owner
+    ON workspaces(owner_user_id) WHERE kind = 'personal';
+
+CREATE TABLE IF NOT EXISTS workspace_members (
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role         VARCHAR(10) NOT NULL DEFAULT 'member',      -- 'owner', 'manager', 'member'
+    status       VARCHAR(10) NOT NULL DEFAULT 'active',
+    joined_at    TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (workspace_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_members_user ON workspace_members(user_id);
+
+-- Uso por mês (período 'AAAA-MM', horário de Brasília) e por pessoa dentro do workspace
+CREATE TABLE IF NOT EXISTS usage_counters (
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    metric       VARCHAR(30) NOT NULL,                       -- 'ai_generation', 'ai_remix'
+    period       CHAR(7) NOT NULL,
+    amount       INTEGER NOT NULL DEFAULT 0,
+    updated_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (workspace_id, user_id, metric, period)
+);
+"""
+
+# Linhas iniciais dos planos: ON CONFLICT DO NOTHING mantém ajustes feitos depois no banco
+PLANS_SEED_SQL = """
+INSERT INTO plans (id, name, limits) VALUES (%s, %s, %s::jsonb)
+ON CONFLICT (id) DO NOTHING;
+"""
+
+# Workspace pessoal para quem ainda não tem (contas criadas antes da Fase S1)
+PERSONAL_WORKSPACES_SQL = """
+INSERT INTO workspaces (name, kind, plan_id, owner_user_id)
+SELECT 'Pessoal', 'personal', 'free', u.id
+FROM users u
+WHERE NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_user_id = u.id AND w.kind = 'personal')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO workspace_members (workspace_id, user_id, role)
+SELECT w.id, w.owner_user_id, 'owner'
+FROM workspaces w
+WHERE w.kind = 'personal'
+  AND NOT EXISTS (
+      SELECT 1 FROM workspace_members m WHERE m.workspace_id = w.id AND m.user_id = w.owner_user_id
+  )
+ON CONFLICT DO NOTHING;
 """
 
 
@@ -154,6 +226,9 @@ def run_migrations():
         # Conexão sem pooler (DATABASE_URL_DIRECT, ou a própria DATABASE_URL se não houver)
         with get_direct_cursor() as cur:
             cur.execute(SCHEMA_SQL)
+            for plan_id, plan in DEFAULT_PLANS.items():
+                cur.execute(PLANS_SEED_SQL, (plan_id, plan["name"], json.dumps(plan["limits"])))
+            cur.execute(PERSONAL_WORKSPACES_SQL)
         
         # Criar admin padrão se não houver usuários
         from api.services.auth_service import AuthService

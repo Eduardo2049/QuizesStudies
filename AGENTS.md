@@ -27,6 +27,7 @@ Este documento é a referência primária e fixa de arquitetura, permissões, li
 | **Banco de dados, tabelas, consultas SQL, migrations** | `api/database/migrations.py`<br>`api/database/connection.py` (URL, pooler, TLS)<br>`api/repositories/quiz_repository.py`<br>`api/repositories/user_repository.py`<br>`docs/BANCO_DE_DADOS.md` (Neon, Supabase, credenciais) | Toda a pasta `public/web/` |
 | **Configuração de ambiente, portas, chaves de API** | `api/utils/config.py`<br>`.env.example` | Código de regras de negócio |
 | **Pipelines CI/CD, deploy e Gitflow** | `.github/workflows/`<br>`vercel.json`<br>`docs/CICD_E_DEPLOY.md` | Código de backend `api/` |
+| **Planos, limites e cota mensal de quem tem conta (`GET /api/me/plan`, `PLAN_LIMIT_REACHED`)** | `api/utils/plans.py` (planos e limites iniciais)<br>`api/services/entitlements_service.py`<br>`api/repositories/plan_repository.py`<br>`tests/test_planos_limites.py` | `public/web/styles.css`<br>`api/services/ai_service.py` |
 | **Página de produto e planos (/produto, /planos), plano SaaS** | `public/web/produto.html`<br>`public/web/produto.css`<br>`public/web/modules/produto.js`<br>`docs/PLANO_SAAS.md` (fases: planos, equipes, cobrança) | `public/web/app.js`<br>`api/repositories/` |
 | **Plano em andamento (marca Acely, IA mais rápida e multiprovedor)** | `docs/PLANO_ACELY.md` (ler antes de começar uma fase) | Código fora da fase em execução |
 | **Arquitetura detalhada (camadas, rotas, decisões de segurança)** | `docs/ARQUITETURA.md` | Código, quando a dúvida for só de localização |
@@ -68,7 +69,7 @@ O agente tem total liberdade para:
    - No Python, utilize a biblioteca padrão sempre que possível antes de sugerir novos pacotes no `requirements.txt`.
 5. **Bypass de Segurança:**
    - **NUNCA** desativar rate limits (`RateLimiter`), hashing seguro de senhas (PBKDF2), verificação de permissões de administrador (`role == 'admin'`) ou proteção contra CSRF/CORS.
-   - **NUNCA** liberar endpoints de IA para quem não tem conta nem sessão de convidado, nem mover a contagem da cota do convidado (`GuestService`) para o navegador. O cliente só exibe a cota; quem decide é o servidor.
+   - **NUNCA** liberar endpoints de IA para quem não tem conta nem sessão de convidado, nem mover a contagem da cota do convidado (`GuestService`) ou do plano (`EntitlementsService`) para o navegador. O cliente só exibe a cota; quem decide é o servidor.
 6. **Protocolo JSON e arquivos de deploy:**
    - Todo endpoint sob `/api/` responde `{"status": "success", "data": ...}` ou `{"status": "error", "error": ...}`.
    - `Dockerfile`, `docker-compose.yml`, `Procfile` e `vercel.json` só mudam em tarefas de DevOps/deploy.

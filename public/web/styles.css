@@ -4340,3 +4340,24 @@ a.access-cta.primary:hover { color: var(--btn-primary-text); }
 /* Link "Planos" no topo da home (mesma aparência dos botões fantasma) */
 .btn-plans { text-decoration: none; }
 .btn-plans:hover { text-decoration: none; }
+
+/* Minha conta: uso do plano no mês (docs/PLANO_SAAS.md, Fase S1) */
+.usage-meter { display: grid; gap: var(--space-1); }
+.usage-meter[hidden] { display: none; }
+.usage-meter-head { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--text-sm); line-height: 20px; }
+.usage-meter-count { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+.usage-meter-track { height: 8px; border-radius: var(--radius-sm); background: var(--line); overflow: hidden; }
+.usage-meter-track span {
+  display: block;
+  height: 100%;
+  background: var(--teal);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 500ms var(--ease-out);
+}
+.usage-meter-track--full span { background: var(--coral); }
+@media (prefers-reduced-motion: reduce) {
+  .usage-meter-track span { transition: none; }
+}
+/* "Minha conta" passou da altura da tela: o cartão rola por dentro em vez de cortar o topo */
+.modal--access-compact { max-height: calc(100dvh - 2 * var(--space-5)); overflow-y: auto; overscroll-behavior: contain; }

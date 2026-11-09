@@ -52,3 +52,35 @@ class InvalidMarkdownFormat(QuizAPIException):
             "Nenhuma questão encontrada no arquivo"
         )
         super().__init__(msg, 400)
+
+
+_MONTHS_PT = (
+    "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+)
+
+
+class PlanLimitReached(QuizAPIException):
+    """A conta usou toda a cota mensal do plano para esta ação (docs/PLANO_SAAS.md, Fase S1)."""
+    def __init__(self, metric: str, limit: int, plan_name: str, renews_on):
+        self.metric = metric
+        self.limit = limit
+        self.renews_on = renews_on
+        what = "gerações com IA" if metric == "ai_generation" else "rodadas de variações com IA"
+        when = f"1º de {_MONTHS_PT[renews_on.month - 1]}"
+        message = (
+            f"Você usou as {limit} {what} do plano {plan_name} deste mês. "
+            f"A cota renova em {when}. Enviar um arquivo que já tem gabarito continua liberado."
+        )
+        super().__init__(message, 403, "PLAN_LIMIT_REACHED")
+
+
+class PlanQuestionLimit(QuizAPIException):
+    """Pedido com mais questões do que o plano permite."""
+    def __init__(self, maximum: int, plan_name: str):
+        self.maximum = maximum
+        super().__init__(
+            f"O plano {plan_name} gera até {maximum} questões por simulado. Escolha uma quantidade menor.",
+            400,
+            "PLAN_QUESTION_LIMIT",
+        )

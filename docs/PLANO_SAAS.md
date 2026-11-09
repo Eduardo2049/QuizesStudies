@@ -156,6 +156,24 @@ Branch sugerida: `feature/saas-planos-limites`
 **Pronto quando** um usuário Grátis recebe erro claro ao passar da cota e um usuário marcado como
 Pro no banco (manualmente) não recebe.
 
+**✅ Concluída em 09/11/2026** (branch `feature/saas-planos-limites`). Como ficou:
+- Planos e limites iniciais em `api/utils/plans.py`; a tabela `plans` é a fonte em produção
+  (ajustes no banco não são desfeitos no deploy). Grátis: **30 gerações e 10 rodadas de variações
+  por mês**, até 30 questões e arquivos de 20 MB. Os valores da seção 2 (20 gerações, 10 questões,
+  5 MB) ficaram de fora para não contradizer a página `/produto` nem cortar quem já usa; mudar com
+  `UPDATE plans` (ver `docs/BANCO_DE_DADOS.md`, seção 4.1).
+- O mês vira à meia-noite de Brasília (offset fixo de -3 h, sem depender de tzdata).
+- `EntitlementsService` reserva o uso **antes** da IA (UPSERT atômico que não passa do limite) e
+  devolve se a IA falhar ou se o resultado vier do cache; no upload, só gasta se o arquivo precisar
+  de IA (mesmo `ai_gate` do convidado). Admin da plataforma não tem cota.
+- Erros: `PLAN_LIMIT_REACHED` (403, com a data da renovação) e `PLAN_QUESTION_LIMIT` (400, antes de
+  chamar a IA). As respostas de IA trazem `data.plan` com o uso atualizado.
+- Interface: chip "IA restante/limite" no topo para quem tem conta; seção **Plano e uso** em Minha
+  conta com barras de uso e data da renovação; a cópia de dados (LGPD) inclui workspaces e uso.
+- Teto técnico continua 30 questões e 20 MB (`HARD_MAX_*`); a Instituição com 50 questões fica para
+  quando o gerador aceitar mais.
+- Testes: `tests/test_planos_limites.py` (incluindo concorrência contra PostgreSQL real no CI).
+
 ### Fase S2: Workspaces de equipe
 Branch sugerida: `feature/saas-equipes`
 1. Criar equipe (nome, tipo `class` ou `company`), seletor de workspace no topo.

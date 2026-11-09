@@ -56,6 +56,7 @@ graph TD
   - `GET /api/account/export`, `POST /api/account/delete` (LGPD), `POST /api/quizzes/import` (simulados do convidado)
   - `GET /api/user/attempts` (histórico e caderno de erros)
   - `POST /api/guest/start`, `POST /api/guest/end`, `GET /api/guest/status` (sessão de convidado e cota de IA)
+  - `GET /api/me/plan` (plano da conta, limites e uso do mês; `api/services/entitlements_service.py`)
   - `GET /api/quizzes`, `GET /api/quiz/{name}`
   - `POST /api/upload` (processamento de arquivos multipart)
   - `POST /api/quiz/generate` (geração de simulado por tema via IA; aceita `language`)
