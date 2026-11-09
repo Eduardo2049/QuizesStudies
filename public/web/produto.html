@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acely · Simulados com IA para estudar e treinar equipes</title>
+  <meta name="description" content="Transforme PDF, DOCX, TXT ou um tema em simulado com cronômetro e gabarito comentado. Planos para estudar sozinho, acompanhar turmas e treinar equipes.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Acely">
+  <meta property="og:title" content="Acely · Produto e planos">
+  <meta property="og:description" content="Simulados com IA a partir do seu material, para estudantes, turmas e empresas. Comece grátis, sem cartão.">
+  <meta property="og:url" content="https://acely.com.br/produto">
+  <meta property="og:image" content="https://acely.com.br/web/icons/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Logo da Acely: simulados com IA a partir do seu material">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d3f3d">
+  <link rel="canonical" href="https://acely.com.br/produto">
+  <link rel="icon" type="image/svg+xml" href="/web/icons/favicon.svg?v=3">
+  <link rel="icon" type="image/png" sizes="32x32" href="/web/icons/favicon-32x32.png?v=3">
+  <link rel="icon" type="image/png" sizes="16x16" href="/web/icons/favicon-16x16.png?v=3">
+  <link rel="apple-touch-icon" sizes="180x180" href="/web/icons/apple-touch-icon.png?v=3">
+  <link rel="shortcut icon" href="/web/icons/favicon.ico?v=3">
+  <link rel="manifest" href="/site.webmanifest">
+  <!-- Perguntas frequentes em dados estruturados (bloco de dados, não executa) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      { "@type": "Question", "name": "Preciso criar conta para testar?", "acceptedAnswer": { "@type": "Answer", "text": "Não. Você resolve os simulados públicos sem cadastro e, como convidado, gera até 3 simulados com IA a cada 24 horas. A conta grátis guarda seus simulados e o histórico." } },
+      { "@type": "Question", "name": "Quais arquivos posso enviar?", "acceptedAnswer": { "@type": "Answer", "text": "PDF, DOCX e TXT de até 20 MB. Se o arquivo já tem questões e gabarito, ele vira simulado na hora e não gasta usos de IA." } },
+      { "@type": "Question", "name": "A IA pode errar o gabarito?", "acceptedAnswer": { "@type": "Answer", "text": "Pode. Por isso cada questão vem com explicação para você conferir. Nos planos pagos, um segundo modelo responde a questão sem ver o gabarito e as que divergem são refeitas." } },
+      { "@type": "Question", "name": "O que acontece com o material que eu envio?", "acceptedAnswer": { "@type": "Answer", "text": "O texto é enviado ao provedor de IA só para gerar o simulado. Você pode exportar ou apagar seus dados em Minha conta. Os detalhes estão na política de privacidade." } }
+    ]
+  }
+  </script>
+  <link rel="stylesheet" href="/web/styles.css?v=27">
+  <link rel="stylesheet" href="/web/produto.css?v=1">
+  <link rel="preload" href="/web/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="modulepreload" href="/web/modules/produto.js?v=1">
+  <script src="/web/modules/theme-boot.js"></script>
+  <script src="/web/modules/i18n-boot.js?v=1"></script>
+  <script src="/web/modules/analytics-boot.js"></script>
+  <script defer src="/_vercel/insights/script.js"></script>
+  <script defer src="/_vercel/speed-insights/script.js"></script>
+</head>
+<body class="lp-body">
+  <a href="#conteudo" class="skip-link">Pular para o conteúdo</a>
+
+  <!-- ── Navegação ─────────────────────────────────────────────────────── -->
+  <header class="lp-nav-wrap">
+    <nav class="lp-nav" aria-label="Principal">
+      <a href="/produto" class="lp-logo" aria-current="page">
+        <img src="/web/icons/favicon.svg?v=3" alt="" width="24" height="24">
+        <span translate="no">Acely</span>
+      </a>
+      <ul class="lp-nav-links" id="lpNavLinks">
+        <li><a href="#como-funciona" data-nav-link>Como funciona</a></li>
+        <li><a href="#modelos" data-nav-link>Modelos de IA</a></li>
+        <li><a href="#para-quem" data-nav-link>Para equipes</a></li>
+        <li><a href="#planos" data-nav-link>Planos</a></li>
+        <li><a href="#perguntas" data-nav-link>Perguntas</a></li>
+      </ul>
+      <div class="lp-nav-tools">
+        <button id="themeToggle" class="lp-icon-btn" type="button" title="Alternar tema (Sistema / Escuro / Claro)">
+          <span class="theme-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 21h8M12 16v5"/></svg></span>
+          <span class="theme-label sr-only">Tema</span>
+        </button>
+        <button id="langToggle" class="lp-icon-btn" type="button" data-lang-toggle translate="no">
+          <span class="lang-code">PT</span>
+        </button>
+        <a href="/login" class="lp-link-quiet lp-hide-mobile">Entrar</a>
+        <a href="/" class="lp-btn lp-btn--primary lp-btn--sm lp-hide-mobile">Começar grátis</a>
+        <button class="lp-menu-toggle" id="lpMenuToggle" type="button" aria-expanded="false" aria-controls="lpMenu" aria-label="Abrir menu">
+          <span class="lp-menu-line" aria-hidden="true"></span>
+          <span class="lp-menu-line" aria-hidden="true"></span>
+        </button>
+      </div>
+    </nav>
+    <!-- Menu do celular: painel de altura total -->
+    <div class="lp-menu" id="lpMenu" hidden>
+      <ul>
+        <li><a href="#como-funciona" data-menu-link>Como funciona</a></li>
+        <li><a href="#modelos" data-menu-link>Modelos de IA</a></li>
+        <li><a href="#para-quem" data-menu-link>Para equipes</a></li>
+        <li><a href="#planos" data-menu-link>Planos</a></li>
+        <li><a href="#perguntas" data-menu-link>Perguntas</a></li>
+        <li><a href="/login" data-menu-link>Entrar</a></li>
+      </ul>
+      <a href="/" class="lp-btn lp-btn--primary lp-btn--block" data-menu-link>Começar grátis</a>
+    </div>
+  </header>
+
+  <main id="conteudo">
+    <!-- ── Hero ────────────────────────────────────────────────────────── -->
+    <section class="lp-hero" aria-labelledby="lpHeroTitle">
+      <div class="lp-container lp-hero-grid">
+        <div class="lp-hero-copy">
+          <p class="lp-eyebrow">Simulados com IA para estudar e treinar equipes</p>
+          <h1 id="lpHeroTitle" class="lp-hero-title">Do seu material ao simulado, <br class="lp-br-desktop">com gabarito comentado</h1>
+          <p class="lp-hero-sub">Envie um PDF, DOCX ou TXT, ou digite um tema. O Acely monta o simulado com cronômetro, corrige e mostra onde você errou. Para estudar sozinho, acompanhar uma turma ou treinar uma equipe.</p>
+          <div class="lp-hero-actions">
+            <a href="/" class="lp-btn lp-btn--primary">Criar meu primeiro simulado</a>
+            <a href="#planos" class="lp-link-quiet">Ver planos</a>
+          </div>
+          <p class="lp-proof">Grátis <span aria-hidden="true">·</span> sem cartão <span aria-hidden="true">·</span> 3 gerações com IA sem cadastro</p>
+        </div>
+
+        <!-- Ilustração do produto: uma questão resolvida (HTML, não é captura de tela) -->
+        <figure class="lp-demo" aria-label="Exemplo de questão resolvida no Acely">
+          <div class="lp-demo-bar">
+            <span class="lp-demo-chip">Juros compostos</span>
+            <span class="lp-demo-meta">Questão 3 de 10</span>
+            <span class="lp-demo-timer lp-mono">18:42</span>
+          </div>
+          <div class="lp-demo-track" aria-hidden="true"><span></span></div>
+          <p class="lp-demo-question">Um capital de R$ 1.000 rende 10% ao mês em juros compostos. Quanto rende de juros em 2 meses?</p>
+          <ul class="lp-demo-options">
+            <li><span class="lp-demo-letter">A</span> R$ 200</li>
+            <li class="is-correct"><span class="lp-demo-letter">B</span> R$ 210
+              <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+            </li>
+            <li><span class="lp-demo-letter">C</span> R$ 220</li>
+            <li><span class="lp-demo-letter">D</span> R$ 100</li>
+          </ul>
+          <figcaption class="lp-demo-explain">
+            <strong>Por que B:</strong> juros sobre juros. 1.000 × 1,1² = 1.210, então os juros são R$ 210.
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ── Como funciona ───────────────────────────────────────────────── -->
+    <section class="lp-section" id="como-funciona" aria-labelledby="lpHowTitle">
+      <div class="lp-container">
+        <p class="lp-eyebrow">Como funciona</p>
+        <h2 id="lpHowTitle" class="lp-h2">Três passos entre a apostila e o treino</h2>
+        <ol class="lp-steps">
+          <li class="lp-card lp-reveal">
+            <span class="lp-step-num lp-mono">01</span>
+            <h3 class="lp-h3">Envie o material ou um tema</h3>
+            <p>PDF, DOCX ou TXT de até 20 MB, ou só o assunto. Arquivo que já tem questões e gabarito vira simulado na hora, sem gastar IA.</p>
+          </li>
+          <li class="lp-card lp-reveal">
+            <span class="lp-step-num lp-mono">02</span>
+            <h3 class="lp-h3">Resolva com cronômetro</h3>
+            <p>Modo foco com uma questão por vez ou lista completa, atalhos de teclado e tempo definido por você. O gabarito só aparece no fim.</p>
+          </li>
+          <li class="lp-card lp-reveal">
+            <span class="lp-step-num lp-mono">03</span>
+            <h3 class="lp-h3">Entenda cada erro</h3>
+            <p>Explicação em cada questão, estatísticas por tema e variações inéditas das questões que você errou, para treinar o conceito e não a letra.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ── Tagline com revelação palavra por palavra ───────────────────── -->
+    <section class="lp-tagline" aria-label="Proposta do Acely">
+      <div class="lp-container">
+        <p class="lp-tagline-text" data-word-reveal>Menos tempo montando questões. Mais tempo treinando o raciocínio que a prova cobra.</p>
+      </div>
+    </section>
+
+    <!-- ── Modelos de IA ───────────────────────────────────────────────── -->
+    <section class="lp-section" id="modelos" aria-labelledby="lpModelsTitle">
+      <div class="lp-container">
+        <p class="lp-eyebrow">Modelos de IA</p>
+        <h2 id="lpModelsTitle" class="lp-h2">Três formas de gerar, cada uma com o seu custo</h2>
+        <p class="lp-lead">Você escolhe o caminho pelo que precisa. O servidor decide qual modelo atende e passa para o próximo se um deles estiver lento ou fora do ar.</p>
+        <div class="lp-models">
+          <article class="lp-card lp-model lp-reveal">
+            <div class="lp-model-head">
+              <span class="lp-model-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 14l2 2 4-4"/></svg></span>
+              <h3 class="lp-h3">Sem IA</h3>
+            </div>
+            <p>Seu arquivo já tem questões e gabarito: o Acely lê, organiza e monta o simulado. Não usa cota.</p>
+            <ul class="lp-checks">
+              <li>Todos os planos</li>
+              <li>Resultado na hora</li>
+            </ul>
+          </article>
+          <article class="lp-card lp-model lp-reveal">
+            <div class="lp-model-head">
+              <span class="lp-model-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></span>
+              <h3 class="lp-h3">Rápido</h3>
+            </div>
+            <p>Modelos abertos em provedores gratuitos, tentados em sequência até um responder. Ideal para começar e para temas do dia a dia.</p>
+            <ul class="lp-checks">
+              <li>Plano Grátis e convidado</li>
+              <li>Português e inglês</li>
+              <li>Provedores gratuitos podem usar o texto para melhorar os modelos deles</li>
+            </ul>
+          </article>
+          <article class="lp-card lp-model lp-model--accent lp-reveal">
+            <div class="lp-model-head">
+              <span class="lp-model-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+              <h3 class="lp-h3">Preciso</h3>
+              <span class="lp-badge">Em breve</span>
+            </div>
+            <p>API paga, sem uso do seu material para treinar modelos. Um segundo modelo responde cada questão sem ver o gabarito; as que divergem são refeitas.</p>
+            <ul class="lp-checks">
+              <li>Planos Pro, Equipe e Instituição</li>
+              <li>Gabarito conferido em cada questão</li>
+              <li>Simulados de até 30 questões</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Para quem ───────────────────────────────────────────────────── -->
+    <section class="lp-section" id="para-quem" aria-labelledby="lpAudienceTitle">
+      <div class="lp-container">
+        <p class="lp-eyebrow">Para quem</p>
+        <h2 id="lpAudienceTitle" class="lp-h2">Do estudo individual ao treinamento da empresa</h2>
+        <div class="lp-tabs" role="tablist" aria-label="Públicos">
+          <button type="button" role="tab" class="lp-tab" id="tabIndividual" aria-controls="panelIndividual" aria-selected="true">Individual</button>
+          <button type="button" role="tab" class="lp-tab" id="tabTurmas" aria-controls="panelTurmas" aria-selected="false" tabindex="-1">Turmas</button>
+          <button type="button" role="tab" class="lp-tab" id="tabEmpresas" aria-controls="panelEmpresas" aria-selected="false" tabindex="-1">Empresas</button>
+        </div>
+
+        <div class="lp-panel lp-card" role="tabpanel" id="panelIndividual" aria-labelledby="tabIndividual">
+          <div>
+            <h3 class="lp-h3">Concursos, vestibulares e certificações</h3>
+            <p>Treine sobre o seu próprio resumo, livro ou apostila, não só sobre provas antigas. O caderno de erros gera variações para você não decorar a letra certa.</p>
+          </div>
+          <ul class="lp-checks">
+            <li>Simulados por arquivo ou por tema</li>
+            <li>Cronômetro, modo foco e atalhos</li>
+            <li>Estatísticas por tema e histórico</li>
+            <li>Exportar ou apagar seus dados quando quiser</li>
+          </ul>
+        </div>
+
+        <div class="lp-panel lp-card" role="tabpanel" id="panelTurmas" aria-labelledby="tabTurmas" hidden>
+          <div>
+            <h3 class="lp-h3">Professores, cursinhos e escolas <span class="lp-badge">Em breve</span></h3>
+            <p>Monte o simulado a partir da sua aula, distribua para a turma com prazo e veja quem fez, a nota de cada aluno e as questões que a turma mais errou.</p>
+          </div>
+          <ul class="lp-checks">
+            <li>Turmas com convite por link ou e-mail</li>
+            <li>Atribuição de simulado com prazo</li>
+            <li>Painel por aluno e por questão</li>
+            <li>Banco de questões da turma</li>
+          </ul>
+        </div>
+
+        <div class="lp-panel lp-card" role="tabpanel" id="panelEmpresas" aria-labelledby="tabEmpresas" hidden>
+          <div>
+            <h3 class="lp-h3">Treinamento e certificações internas <span class="lp-badge">Em breve</span></h3>
+            <p>Transforme manuais, políticas e materiais de produto em avaliações. Acompanhe a equipe por área e prove a capacitação com relatórios exportáveis.</p>
+          </div>
+          <ul class="lp-checks">
+            <li>Workspace da empresa com papéis de dono, gestor e membro</li>
+            <li>Relatórios por colaborador e exportação em CSV</li>
+            <li>Material da empresa fora do treino dos modelos</li>
+            <li>Contrato de tratamento de dados (LGPD)</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Planos ──────────────────────────────────────────────────────── -->
+    <section class="lp-section" id="planos" aria-labelledby="lpPlansTitle">
+      <div class="lp-container">
+        <p class="lp-eyebrow">Planos</p>
+        <h2 id="lpPlansTitle" class="lp-h2">Comece grátis e mude de plano quando precisar</h2>
+        <p class="lp-lead">Os planos pagos estão em preparação. O Grátis já está no ar com tudo o que aparece abaixo.</p>
+        <div class="lp-plans">
+          <article class="lp-card lp-plan lp-plan--featured lp-reveal" aria-labelledby="planFree">
+            <h3 id="planFree" class="lp-h3">Grátis</h3>
+            <p class="lp-plan-for">Para experimentar e estudar sozinho</p>
+            <p class="lp-plan-price">R$ 0</p>
+            <a href="/" class="lp-btn lp-btn--primary lp-btn--block">Começar grátis</a>
+            <ul class="lp-checks">
+              <li>Simulados por arquivo ou por tema</li>
+              <li>Até 30 questões por simulado</li>
+              <li>Arquivos de até 20 MB</li>
+              <li>Modelos de IA Rápido</li>
+              <li>Caderno de erros com variações</li>
+              <li>Estatísticas e histórico</li>
+            </ul>
+          </article>
+
+          <article class="lp-card lp-plan lp-reveal" aria-labelledby="planPro">
+            <h3 id="planPro" class="lp-h3">Pro <span class="lp-badge">Em breve</span></h3>
+            <p class="lp-plan-for">Para quem estuda todo dia</p>
+            <p class="lp-plan-price lp-plan-price--soon">Preço no lançamento</p>
+            <button type="button" class="lp-btn lp-btn--outline lp-btn--block" disabled>Disponível em breve</button>
+            <ul class="lp-checks">
+              <li>Tudo do Grátis</li>
+              <li>Modelos de IA Preciso</li>
+              <li>Gabarito conferido por um segundo modelo</li>
+              <li>Cota mensal maior de gerações</li>
+              <li>Relatórios completos e exportação</li>
+              <li>Suporte por e-mail</li>
+            </ul>
+          </article>
+
+          <article class="lp-card lp-plan lp-reveal" aria-labelledby="planTeam">
+            <h3 id="planTeam" class="lp-h3">Equipe <span class="lp-badge">Em breve</span></h3>
+            <p class="lp-plan-for">Para turmas e times, cobrado por membro</p>
+            <p class="lp-plan-price lp-plan-price--soon">Preço no lançamento</p>
+            <button type="button" class="lp-btn lp-btn--outline lp-btn--block" disabled>Disponível em breve</button>
+            <ul class="lp-checks">
+              <li>Tudo do Pro para cada membro</li>
+              <li>Workspace com convites e papéis</li>
+              <li>Simulados atribuídos com prazo</li>
+              <li>Painel do professor ou gestor</li>
+              <li>Banco de questões compartilhado</li>
+            </ul>
+          </article>
+
+          <article class="lp-card lp-plan lp-reveal" aria-labelledby="planInstitution">
+            <h3 id="planInstitution" class="lp-h3">Instituição</h3>
+            <p class="lp-plan-for">Para escolas, redes e empresas</p>
+            <p class="lp-plan-price lp-plan-price--soon">Sob consulta</p>
+            <a href="mailto:edudev2049@gmail.com?subject=Acely%20para%20institui%C3%A7%C3%B5es" class="lp-btn lp-btn--outline lp-btn--block">Falar com a equipe</a>
+            <ul class="lp-checks">
+              <li>Tudo do Equipe</li>
+              <li>Limites e volume sob contrato</li>
+              <li>Contrato de tratamento de dados (LGPD)</li>
+              <li>Cobrança por boleto ou nota fiscal</li>
+              <li>Suporte dedicado</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Perguntas frequentes ────────────────────────────────────────── -->
+    <section class="lp-section" id="perguntas" aria-labelledby="lpFaqTitle">
+      <div class="lp-container lp-container--narrow">
+        <p class="lp-eyebrow">Perguntas</p>
+        <h2 id="lpFaqTitle" class="lp-h2">Perguntas frequentes</h2>
+        <div class="lp-faq">
+          <details>
+            <summary>Preciso criar conta para testar?</summary>
+            <p>Não. Você resolve os simulados públicos sem cadastro e, como convidado, gera até 3 simulados com IA a cada 24 horas. A conta grátis guarda seus simulados e o histórico.</p>
+          </details>
+          <details>
+            <summary>Quais arquivos posso enviar?</summary>
+            <p>PDF, DOCX e TXT de até 20 MB. Se o arquivo já tem questões e gabarito, ele vira simulado na hora e não gasta usos de IA.</p>
+          </details>
+          <details>
+            <summary>A IA pode errar o gabarito?</summary>
+            <p>Pode. Por isso cada questão vem com explicação para você conferir. Nos planos pagos, um segundo modelo responde a questão sem ver o gabarito e as que divergem são refeitas.</p>
+          </details>
+          <details>
+            <summary>O que acontece com o material que eu envio?</summary>
+            <p>O texto é enviado ao provedor de IA só para gerar o simulado. Você pode exportar ou apagar seus dados em Minha conta. Os detalhes estão na <a href="/privacidade">política de privacidade</a>.</p>
+          </details>
+          <details>
+            <summary>Quando os planos pagos ficam disponíveis?</summary>
+            <p>Estão em preparação. Os preços e a data de lançamento vão aparecer nesta página. Até lá, o plano Grátis segue com tudo o que está listado acima.</p>
+          </details>
+          <details>
+            <summary>Funciona para turmas e equipes?</summary>
+            <p>O plano Equipe traz workspace, convites, simulados com prazo e painel de resultados. Para escolas e empresas com muitos membros, fale com a equipe pelo plano Instituição.</p>
+          </details>
+          <details>
+            <summary>Funciona no celular?</summary>
+            <p>Sim. O Acely roda no navegador do celular, do tablet e do computador, sem instalar nada.</p>
+          </details>
+          <details>
+            <summary>Tem em inglês?</summary>
+            <p>Sim. A interface tem português e inglês, e a IA gera o simulado no idioma escolhido.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Chamada final ───────────────────────────────────────────────── -->
+    <section class="lp-final" aria-labelledby="lpFinalTitle">
+      <div class="lp-container lp-container--narrow lp-final-inner">
+        <h2 id="lpFinalTitle" class="lp-h2">Seu próximo simulado começa com o material que você já tem</h2>
+        <a href="/" class="lp-btn lp-btn--primary">Criar meu primeiro simulado</a>
+        <p class="lp-proof">Grátis <span aria-hidden="true">·</span> sem cartão <span aria-hidden="true">·</span> 3 gerações com IA sem cadastro</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <a href="/">Simulados</a>
+    <span aria-hidden="true">·</span>
+    <a href="/produto">Produto e planos</a>
+    <span aria-hidden="true">·</span>
+    <a href="/termos">Termos de uso</a>
+    <span aria-hidden="true">·</span>
+    <a href="/privacidade">Privacidade</a>
+  </footer>
+
+  <script type="module" src="/web/modules/produto.js?v=1"></script>
+</body>
+</html>

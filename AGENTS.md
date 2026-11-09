@@ -27,6 +27,7 @@ Este documento é a referência primária e fixa de arquitetura, permissões, li
 | **Banco de dados, tabelas, consultas SQL, migrations** | `api/database/migrations.py`<br>`api/database/connection.py` (URL, pooler, TLS)<br>`api/repositories/quiz_repository.py`<br>`api/repositories/user_repository.py`<br>`docs/BANCO_DE_DADOS.md` (Neon, Supabase, credenciais) | Toda a pasta `public/web/` |
 | **Configuração de ambiente, portas, chaves de API** | `api/utils/config.py`<br>`.env.example` | Código de regras de negócio |
 | **Pipelines CI/CD, deploy e Gitflow** | `.github/workflows/`<br>`vercel.json`<br>`docs/CICD_E_DEPLOY.md` | Código de backend `api/` |
+| **Página de produto e planos (/produto, /planos), plano SaaS** | `public/web/produto.html`<br>`public/web/produto.css`<br>`public/web/modules/produto.js`<br>`docs/PLANO_SAAS.md` (fases: planos, equipes, cobrança) | `public/web/app.js`<br>`api/repositories/` |
 | **Plano em andamento (marca Acely, IA mais rápida e multiprovedor)** | `docs/PLANO_ACELY.md` (ler antes de começar uma fase) | Código fora da fase em execução |
 | **Arquitetura detalhada (camadas, rotas, decisões de segurança)** | `docs/ARQUITETURA.md` | Código, quando a dúvida for só de localização |
 | **Scripts de manutenção e teste de carga** | `scripts/` | `public/web/` |

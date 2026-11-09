@@ -52,6 +52,8 @@ SCREENS = {
     "home-upload": ("/guest", "document.querySelector('#addQuizBtn')?.click()"),
     "home-about": ("/guest", "document.querySelector('#btnOpenAboutModal')?.click()"),
     "home-timer": ("/guest", "document.querySelector('#btnSetTimer')?.click()"),
+    "produto": ("/produto", None),
+    "produto-menu": ("/produto", "document.querySelector('#lpMenuToggle')?.click()"),
 }
 
 # Conferência de layout executada em cada tela, depois da ação e antes da captura
