@@ -672,4 +672,44 @@ export default {
   "Produto e planos": "Product and plans",
   "Conheça os planos e o que vem para turmas e empresas":
     "See the plans and what is coming for classes and companies",
+
+  // ── Plano e uso (Minha conta, chip de cota, erros de limite) ──────────────────
+  "Plano e uso": "Plan and usage",
+  "Carregando seu plano…": "Loading your plan…",
+  "Gerações com IA": "AI generations",
+  "Variações do caderno de erros": "Mistakes notebook variations",
+  "Não foi possível carregar seu plano agora.": "Could not load your plan right now.",
+  "Conta de administrador: sem cota de IA.": "Administrator account: no AI quota.",
+  "Plano {0} · até {1} questões por simulado e arquivos de até {2} MB.":
+    "{0} plan · up to {1} questions per test and files up to {2} MB.",
+  "A cota renova em {0}.": "The quota renews on {0}.",
+  "{0} de {1}": "{0} of {1}",
+  "{0} · sem limite": "{0} · no limit",
+  "{0} usados, sem limite": "{0} used, no limit",
+  "Você usou as {0} gerações com IA do plano {1} deste mês. Renova em {2}.":
+    "You used the {0} AI generations in the {1} plan this month. It renews on {2}.",
+  "Plano {0}: {1} de {2} gerações com IA restantes este mês. Renova em {3}.":
+    "{0} plan: {1} of {2} AI generations left this month. It renews on {3}.",
+  "Cota do mês usada": "Monthly quota used",
+  "Você usou a cota de IA do seu plano neste mês.": "You used your plan's AI quota for this month.",
+  "Você usou as {0} gerações com IA do plano {1} deste mês. A cota renova em 1º de {2}. Enviar um arquivo que já tem gabarito continua liberado.":
+    "You used the {0} AI generations in the {1} plan this month. The quota renews on {2} 1. Uploading a file that already has an answer key still works.",
+  "Você usou as {0} rodadas de variações com IA do plano {1} deste mês. A cota renova em 1º de {2}. Enviar um arquivo que já tem gabarito continua liberado.":
+    "You used the {0} AI variation rounds in the {1} plan this month. The quota renews on {2} 1. Uploading a file that already has an answer key still works.",
+  "O plano {0} gera até {1} questões por simulado. Escolha uma quantidade menor.":
+    "The {0} plan generates up to {1} questions per test. Choose a smaller number.",
+  "Arquivo excede o limite máximo permitido de {0} MB no seu plano.":
+    "The file is over the {0} MB limit for your plan.",
+  "janeiro": "January",
+  "fevereiro": "February",
+  "março": "March",
+  "abril": "April",
+  "maio": "May",
+  "junho": "June",
+  "julho": "July",
+  "agosto": "August",
+  "setembro": "September",
+  "outubro": "October",
+  "novembro": "November",
+  "dezembro": "December",
 };

@@ -33,18 +33,18 @@
     ]
   }
   </script>
-  <link rel="stylesheet" href="/web/styles.css?v=27">
+  <link rel="stylesheet" href="/web/styles.css?v=28">
   <!-- Desempenho: a fonte do texto e os módulos do app.js começam a baixar junto com o CSS,
        em vez de em cascata depois do app.js (manter os ?v= iguais aos dos imports) -->
   <link rel="preload" href="/web/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="modulepreload" href="/web/app.js?v=22">
+  <link rel="modulepreload" href="/web/app.js?v=23">
   <link rel="modulepreload" href="/web/modules/icons.js?v=6">
   <link rel="modulepreload" href="/web/modules/theme.js?v=9">
   <link rel="modulepreload" href="/web/modules/shortcuts.js?v=5">
   <link rel="modulepreload" href="/web/modules/stats.js?v=7">
   <link rel="modulepreload" href="/web/modules/timer-drag.js?v=1">
-  <link rel="modulepreload" href="/web/modules/i18n.js?v=6">
-  <link rel="modulepreload" href="/web/modules/i18n/en.js?v=6">
+  <link rel="modulepreload" href="/web/modules/i18n.js?v=7">
+  <link rel="modulepreload" href="/web/modules/i18n/en.js?v=7">
   <!-- Script de prevenção de FOUC de tema (execução imediata, bloqueante) -->
   <script src="/web/modules/theme-boot.js"></script>
   <script src="/web/modules/i18n-boot.js?v=1"></script>
@@ -586,6 +586,27 @@
         <button type="button" class="secondary access-cta" id="accountResendVerification" hidden>Reenviar link de confirmação</button>
       </section>
 
+      <section class="account-section" aria-labelledby="accountPlanTitle">
+        <h3 id="accountPlanTitle" class="access-option-title">Plano e uso</h3>
+        <p class="account-hint" id="accountPlanSummary" aria-live="polite">Carregando seu plano…</p>
+        <div class="usage-meter" id="accountUsageGeneration" hidden>
+          <div class="usage-meter-head">
+            <span id="accountUsageGenerationLabel">Gerações com IA</span>
+            <span class="usage-meter-count" id="accountUsageGenerationCount"></span>
+          </div>
+          <div class="usage-meter-track" role="progressbar" aria-labelledby="accountUsageGenerationLabel" aria-valuemin="0" id="accountUsageGenerationBar"><span></span></div>
+        </div>
+        <div class="usage-meter" id="accountUsageRemix" hidden>
+          <div class="usage-meter-head">
+            <span id="accountUsageRemixLabel">Variações do caderno de erros</span>
+            <span class="usage-meter-count" id="accountUsageRemixCount"></span>
+          </div>
+          <div class="usage-meter-track" role="progressbar" aria-labelledby="accountUsageRemixLabel" aria-valuemin="0" id="accountUsageRemixBar"><span></span></div>
+        </div>
+        <p class="account-hint" id="accountPlanRenews" hidden></p>
+        <a href="/planos" class="secondary access-cta" id="accountPlansLink">Ver planos</a>
+      </section>
+
       <section class="account-section" aria-labelledby="accountDataTitle">
         <h3 id="accountDataTitle" class="access-option-title">Seus dados</h3>
         <p class="account-hint">Baixe uma cópia em JSON de tudo o que guardamos sobre você: conta, simulados e histórico.</p>
@@ -658,6 +679,6 @@
   </div>
 
   <script type="module" src="/web/modules/backdrop.js?v=8"></script>
-  <script type="module" src="/web/app.js?v=22"></script>
+  <script type="module" src="/web/app.js?v=23"></script>
 </body>
 </html>

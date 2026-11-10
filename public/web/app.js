@@ -3,7 +3,7 @@ import { initTheme, toggleTheme } from './modules/theme.js?v=9';
 import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js?v=5';
 import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=7';
 import { initTimerDrag } from './modules/timer-drag.js?v=1';
-import { getLanguage } from './modules/i18n.js?v=6';
+import { getLanguage } from './modules/i18n.js?v=7';
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 const quiz = document.querySelector('#quiz');
@@ -1244,7 +1244,7 @@ async function runRemixMistakes() {
     }, requestId);
 
     if (!ok) {
-      if (raw?.error === 'GUEST_AI_LIMIT_REACHED' || raw?.error === 'AUTH_REQUIRED') {
+      if (['GUEST_AI_LIMIT_REACHED', 'AUTH_REQUIRED', 'PLAN_LIMIT_REACHED'].includes(raw?.error)) {
         closeResultModal();
         handleAccessError(raw, 'remix');
         return;
@@ -1253,6 +1253,7 @@ async function runRemixMistakes() {
     }
 
     if (raw.data?.guest_ai) applyGuestStatus(raw.data.guest_ai);
+    if (raw.data?.plan) applyPlanStatus(raw.data.plan);
     const remixedQuestions = raw.data?.questions || [];
     if (!remixedQuestions.length) {
       throw new Error('Nenhuma questão gerada.');
@@ -1782,6 +1783,107 @@ function guestAiDescription() {
   return `Modo convidado: ${guestAI.remaining} de ${guestAI.limit} ${usos} de IA restantes nas próximas ${hours} horas. Os simulados ficam só neste navegador.`;
 }
 
+// ─── Plano da conta (docs/PLANO_SAAS.md, Fase S1) ────────────────────────────
+// O servidor decide a cota; aqui só mostramos o que GET /api/me/plan devolve.
+let planStatus = null;
+
+function formatRenewDate(isoDate) {
+  if (!isoDate) return '';
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const locale = getLanguage() === 'en' ? 'en-US' : 'pt-BR';
+  return new Date(year, month - 1, day).toLocaleDateString(locale, { day: 'numeric', month: 'long' });
+}
+
+function planGenerationUsage() {
+  return planStatus?.usage?.ai_generation || null;
+}
+
+function planAiLabel() {
+  const usage = planGenerationUsage();
+  if (!usage || usage.limit == null) return '';
+  return `IA ${usage.remaining}/${usage.limit}`;
+}
+
+function planAiDescription() {
+  const usage = planGenerationUsage();
+  if (!usage || usage.limit == null) return '';
+  const renews = formatRenewDate(planStatus.renews_on);
+  if (usage.remaining <= 0) {
+    return `Você usou as ${usage.limit} gerações com IA do plano ${planStatus.plan.name} deste mês. Renova em ${renews}.`;
+  }
+  return `Plano ${planStatus.plan.name}: ${usage.remaining} de ${usage.limit} gerações com IA restantes este mês. Renova em ${renews}.`;
+}
+
+function renderUsageMeter(prefix, usage) {
+  const wrap = document.querySelector(`#${prefix}`);
+  const count = document.querySelector(`#${prefix}Count`);
+  const bar = document.querySelector(`#${prefix}Bar`);
+  if (!wrap || !usage) return;
+  wrap.hidden = false;
+  if (usage.limit == null) {
+    if (count) count.textContent = `${usage.used} · sem limite`;
+    if (bar) {
+      bar.removeAttribute('aria-valuemax');
+      bar.setAttribute('aria-valuenow', String(usage.used));
+      bar.setAttribute('aria-valuetext', `${usage.used} usados, sem limite`);
+      bar.querySelector('span').style.transform = 'scaleX(0)';
+    }
+    return;
+  }
+  if (count) count.textContent = `${usage.used} de ${usage.limit}`;
+  if (bar) {
+    const ratio = usage.limit > 0 ? Math.min(1, usage.used / usage.limit) : 1;
+    bar.setAttribute('aria-valuemax', String(usage.limit));
+    bar.setAttribute('aria-valuenow', String(usage.used));
+    bar.setAttribute('aria-valuetext', `${usage.used} de ${usage.limit}`);
+    bar.classList.toggle('usage-meter-track--full', usage.remaining <= 0);
+    bar.querySelector('span').style.transform = `scaleX(${ratio})`;
+  }
+}
+
+function renderAccountPlan() {
+  const summary = document.querySelector('#accountPlanSummary');
+  const renewsEl = document.querySelector('#accountPlanRenews');
+  if (!summary) return;
+  if (!planStatus) {
+    summary.textContent = 'Não foi possível carregar seu plano agora.';
+    if (renewsEl) renewsEl.hidden = true;
+    return;
+  }
+  summary.textContent = planStatus.unlimited
+    ? 'Conta de administrador: sem cota de IA.'
+    : `Plano ${planStatus.plan.name} · até ${planStatus.limits.max_questions} questões por simulado e arquivos de até ${planStatus.limits.max_upload_mb} MB.`;
+  renderUsageMeter('accountUsageGeneration', planStatus.usage?.ai_generation);
+  renderUsageMeter('accountUsageRemix', planStatus.usage?.ai_remix);
+  if (renewsEl) {
+    renewsEl.textContent = `A cota renova em ${formatRenewDate(planStatus.renews_on)}.`;
+    renewsEl.hidden = Boolean(planStatus.unlimited);
+  }
+}
+
+function applyPlanStatus(plan) {
+  if (!plan) return;
+  planStatus = plan;
+  updateAuthUI();
+  if (accountModal && !accountModal.hidden) renderAccountPlan();
+}
+
+async function loadPlanStatus() {
+  if (sessionKind() !== 'user') {
+    planStatus = null;
+    return null;
+  }
+  try {
+    const res = await fetch('/api/me/plan', { cache: 'no-store', credentials: 'same-origin' });
+    if (!res.ok) return null;
+    const raw = await readJson(res);
+    applyPlanStatus(raw.data || null);
+    return planStatus;
+  } catch (_) {
+    return null;
+  }
+}
+
 function updateAuthUI() {
   const kind = sessionKind();
   const isGuest = kind === 'guest';
@@ -1824,11 +1926,17 @@ function updateAuthUI() {
   }
 
   if (guestAiChip) {
-    guestAiChip.hidden = !isGuest || !guestAI;
-    guestAiChip.textContent = guestAiLabel();
-    guestAiChip.title = guestAiDescription();
-    guestAiChip.setAttribute('aria-label', guestAiDescription());
-    guestAiChip.classList.toggle('guest-ai-chip--empty', Boolean(guestAI && guestAI.remaining <= 0));
+    // Convidado: cota de 24 h. Conta: cota mensal do plano (sem chip quando não há limite).
+    const planUsage = kind === 'user' ? planGenerationUsage() : null;
+    const showPlan = Boolean(planUsage && planUsage.limit != null);
+    guestAiChip.hidden = isGuest ? !guestAI : !showPlan;
+    const label = isGuest ? guestAiLabel() : planAiLabel();
+    const description = isGuest ? guestAiDescription() : planAiDescription();
+    guestAiChip.textContent = label;
+    guestAiChip.title = description;
+    guestAiChip.setAttribute('aria-label', description);
+    const empty = isGuest ? Boolean(guestAI && guestAI.remaining <= 0) : Boolean(showPlan && planUsage.remaining <= 0);
+    guestAiChip.classList.toggle('guest-ai-chip--empty', empty);
   }
   if (guestAiNotice) {
     guestAiNotice.hidden = !isGuest;
@@ -2087,6 +2195,16 @@ function requireAiAccess(action, reason = 'create') {
 /** Trata respostas de erro dos endpoints de IA. Retorna true se já cuidou da situação. */
 function handleAccessError(raw, reason = 'create') {
   const code = raw?.error;
+  if (code === 'PLAN_LIMIT_REACHED') {
+    closeModal();
+    loadPlanStatus();
+    showNotice(
+      raw?.message || 'Você usou a cota de IA do seu plano neste mês.',
+      'Cota do mês usada',
+      'info',
+    );
+    return true;
+  }
   if (code === 'GUEST_AI_LIMIT_REACHED') {
     if (guestAI) guestAI = { ...guestAI, remaining: 0, used: guestAI.limit };
     updateAuthUI();
@@ -2190,6 +2308,8 @@ function openAccountModal() {
   const nameEl = document.querySelector('#accountUsername');
   if (nameEl) nameEl.textContent = currentUser.username;
   renderAccountEmail();
+  renderAccountPlan();
+  loadPlanStatus().then(renderAccountPlan);
   if (deleteAccountPassword) deleteAccountPassword.value = '';
   if (deleteAccountFeedback) deleteAccountFeedback.hidden = true;
   accountModal.hidden = false;
@@ -2323,6 +2443,7 @@ async function doUpload() {
 /** Mostra o simulado criado (upload ou tema): guarda o do convidado, recarrega a lista e abre. */
 async function showCreatedQuiz(data, closeDelayMs) {
   if (data.guest_ai) applyGuestStatus(data.guest_ai);
+  if (data.plan) applyPlanStatus(data.plan);
   if (data.local_only || isGuestMode()) {
     saveGuestQuiz(data);
   }
@@ -2588,6 +2709,8 @@ async function init() {
   const authPromise = checkAuth();
   const dataPromise = Promise.all([loadQuiz(), loadQuizList()]);
   await authPromise;
+  // Cota mensal do plano no chip do topo (só para quem tem conta; não segura o resto)
+  loadPlanStatus();
 
   // Volta do login/cadastro com intenção de criar simulado (?abrir=criar):
   // abre assim que a sessão é conhecida, sem esperar a lista de simulados

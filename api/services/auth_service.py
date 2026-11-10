@@ -217,6 +217,10 @@ class AuthService:
         data = self.repo.export_user_data(user_id)
         if not data:
             raise QuizAPIException("Conta não encontrada", 404)
+        # Workspaces e uso mensal (Fase S1 do PLANO_SAAS.md)
+        from api.repositories.plan_repository import plan_repo
+
+        data.update(plan_repo.export_for_user(user_id))
         return data
 
     def delete_account(self, user: dict, password: str) -> None:
