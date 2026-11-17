@@ -451,10 +451,10 @@ class TestVerifyEmailRoute(_LiveServer):
     def test_redirects_with_result(self):
         with patch.object(AuthService, "verify_email", return_value=True):
             resp = self._raw("GET", "/api/auth/verify-email?token=bom")
-        self.assertEqual((resp.status, resp.getheader("Location")), (302, "/?email=confirmado"))
+        self.assertEqual((resp.status, resp.getheader("Location")), (302, "/app?email=confirmado"))
         with patch.object(AuthService, "verify_email", return_value=False):
             resp = self._raw("GET", "/api/auth/verify-email?token=ruim")
-        self.assertEqual(resp.getheader("Location"), "/?email=link_invalido")
+        self.assertEqual(resp.getheader("Location"), "/app?email=link_invalido")
 
 
 class TestForgotPasswordMinimumTime(_LiveServer):

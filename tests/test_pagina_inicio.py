@@ -1,9 +1,10 @@
 """
-Página inicial protótipo (/inicio) e links diretos para o app.
+Página inicial (raiz /, apelido /inicio), simulados em /app e links diretos para o app.
 
 Valida:
-1. O servidor local e o vercel.json servem a página em /inicio.
-2. A página fica fora dos buscadores enquanto é protótipo (noindex, fora do sitemap).
+1. O servidor local e o vercel.json servem a página inicial em / e em /inicio, os simulados
+   em /app, e links antigos na raiz (?abrir=, ?simulado=, ?email=) continuam abrindo o app.
+2. A página inicial é indexável (sem noindex) e a raiz e /app estão no sitemap.
 3. Todo texto visível tem tradução exata em en.js (padrões genéricos como "{0} de {1}"
    trocariam "Caderno de erros" por "Caderno of erros"; por isso a chave tem de ser exata).
 4. Respeita a CSP 'self': sem atributo style e sem script executável inline.
@@ -48,11 +49,21 @@ class TestInicioRoutes(unittest.TestCase):
         self.addCleanup(self.server.server_close)
         self.addCleanup(self.server.shutdown)
 
-    def test_local_server_serves_page(self):
-        with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/inicio", timeout=5) as resp:
+    def _get(self, path):
+        with urllib.request.urlopen(f"http://127.0.0.1:{self.port}{path}", timeout=5) as resp:
             self.assertEqual(resp.status, 200)
             self.assertTrue(resp.headers["Content-Type"].startswith("text/html"))
-            self.assertIn('id="inMuralCanvas"', resp.read().decode("utf-8"))
+            return resp.read().decode("utf-8")
+
+    def test_root_is_the_landing_and_app_lives_in_app(self):
+        for path in ("/", "/inicio"):
+            with self.subTest(path=path):
+                self.assertIn('id="inMuralCanvas"', self._get(path))
+        for path in ("/app", "/guest", "/?abrir=criar", "/?simulado=algum", "/?email=confirmado"):
+            with self.subTest(path=path):
+                html = self._get(path)
+                self.assertIn('id="accessModal"', html)
+                self.assertNotIn('id="inMuralCanvas"', html)
 
     def test_static_assets_are_served(self):
         for path, kind in (("/web/inicio.css", "text/css"), ("/web/modules/inicio.js", "javascript"),
@@ -61,16 +72,39 @@ class TestInicioRoutes(unittest.TestCase):
                 self.assertEqual(resp.status, 200)
                 self.assertIn(kind, resp.headers["Content-Type"])
 
-    def test_vercel_rewrite(self):
-        rewrites = {r["source"]: r["destination"] for r in json.loads((ROOT / "vercel.json").read_text())["rewrites"]}
-        self.assertEqual(rewrites.get("/inicio"), "/web/inicio.html")
+    def test_vercel_rewrites(self):
+        rewrites = json.loads((ROOT / "vercel.json").read_text())["rewrites"]
+        plain = {r["source"]: r["destination"] for r in rewrites if "has" not in r}
+        self.assertEqual(plain.get("/inicio"), "/web/inicio.html")
+        self.assertEqual(plain.get("/app"), "/web/index.html")
+        self.assertEqual(plain.get("/"), "/web/inicio.html")
+        # A Vercel usa a primeira regra que casa: as de ?abrir/?simulado/?email vêm antes da raiz
+        root_rules = [r for r in rewrites if r["source"] == "/"]
+        self.assertEqual(root_rules[-1], {"source": "/", "destination": "/web/inicio.html"})
+        legacy = {h["key"] for r in root_rules[:-1] for h in r["has"] if h["type"] == "query"}
+        self.assertEqual(legacy, {"abrir", "simulado", "email"})
+        self.assertTrue(all(r["destination"] == "/web/index.html" for r in root_rules[:-1]))
 
 
 class TestInicioContent(unittest.TestCase):
-    def test_prototype_is_not_indexed(self):
+    def test_landing_is_indexed_at_root(self):
         html = PAGE.read_text(encoding="utf-8")
-        self.assertIn('<meta name="robots" content="noindex">', html)
-        self.assertNotIn("/inicio", (WEB_DIR / "sitemap.xml").read_text(encoding="utf-8"))
+        self.assertNotIn("noindex", html)
+        self.assertIn('<link rel="canonical" href="https://acely.com.br/">', html)
+        sitemap = (WEB_DIR / "sitemap.xml").read_text(encoding="utf-8")
+        self.assertIn("<loc>https://acely.com.br/</loc>", sitemap)
+        self.assertIn("<loc>https://acely.com.br/app</loc>", sitemap)
+        self.assertNotIn("/inicio", sitemap)  # apelido: a canônica é a raiz
+
+    def test_links_to_the_app_use_app_path(self):
+        # Na raiz sem parâmetros fica a página inicial: atalhos para os simulados vão para /app
+        for page in ("inicio.html", "produto.html", "login.html", "register.html", "termos.html", "privacidade.html"):
+            with self.subTest(page=page):
+                html = (WEB_DIR / page).read_text(encoding="utf-8")
+                self.assertNotRegex(html, r'href="/\?', "link para o app sem /app")
+                self.assertNotIn('href="/" class="auth-back-link"', html)
+        self.assertIn("const DEFAULT_NEXT = '/app';", (WEB_DIR / "modules" / "auth_page.js").read_text(encoding="utf-8"))
+        self.assertNotIn("next: '/?abrir", (WEB_DIR / "app.js").read_text(encoding="utf-8"))
 
     def test_every_visible_text_has_exact_translation(self):
         keys = _dictionary_keys()
@@ -116,7 +150,7 @@ class TestDeepLinks(unittest.TestCase):
         used = set()
         for href in _collect().hrefs:
             parsed = urlparse(href)
-            if parsed.path == "/" and "abrir" in parse_qs(parsed.query):
+            if parsed.path == "/app" and "abrir" in parse_qs(parsed.query):
                 used.update(parse_qs(parsed.query)["abrir"])
         self.assertTrue(used, "a página deveria ter atalhos para o app")
         self.assertLessEqual(used, handled, f"ações sem tratamento no app.js: {used - handled}")

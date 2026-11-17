@@ -26,7 +26,11 @@
     { "source": "/planos", "destination": "/web/produto.html" },
     { "source": "/inicio", "destination": "/web/inicio.html" },
     { "source": "/guest", "destination": "/web/index.html" },
-    { "source": "/", "destination": "/web/index.html" },
+    { "source": "/app", "destination": "/web/index.html" },
+    { "source": "/", "has": [{ "type": "query", "key": "abrir" }], "destination": "/web/index.html" },
+    { "source": "/", "has": [{ "type": "query", "key": "simulado" }], "destination": "/web/index.html" },
+    { "source": "/", "has": [{ "type": "query", "key": "email" }], "destination": "/web/index.html" },
+    { "source": "/", "destination": "/web/inicio.html" },
     { "source": "/api/(.*)", "destination": "/api/index.py?__path=/api/$1" }
   ],
   "headers": [

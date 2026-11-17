@@ -210,7 +210,8 @@ class TestGuestAccessHTTP(unittest.TestCase):
 
     # ── home aberta ──────────────────────────────────────────────────────────
     def test_home_is_served_without_login(self):
-        status, headers, content = self._request("/")
+        # Os simulados ficam em /app; a raiz é a página inicial (inicio.html)
+        status, headers, content = self._request("/app")
         self.assertEqual(status, 200)
         self.assertIn("text/html", headers.get("Content-Type", ""))
         self.assertIn(b'id="accessModal"', content)
