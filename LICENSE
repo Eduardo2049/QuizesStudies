@@ -1,21 +1,33 @@
-MIT License
+Acely — Licença proprietária / Proprietary license
 
-Copyright (c) 2024–2026 Eduardo Sousa
+Copyright (c) 2024–2026 Eduardo Felipe Alves de Sousa. Todos os direitos reservados.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Este software, incluindo código-fonte, código compilado, interface, textos, marca
+"Acely", logotipo e documentação (o "Software"), é propriedade exclusiva do titular
+acima. Nenhuma licença é concedida por este arquivo.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Sem autorização prévia e por escrito do titular, é proibido: copiar, modificar,
+distribuir, sublicenciar, vender, publicar, hospedar para terceiros, fazer engenharia
+reversa ou criar obras derivadas do Software, no todo ou em parte.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+O uso do serviço on-line Acely (https://acely.com.br) é regido pelos Termos de uso
+publicados em https://acely.com.br/termos, e não por este arquivo.
+
+Versões do Software publicadas antes de 9 de novembro de 2026 sob a licença MIT
+continuam sujeitas àquela licença apenas nas cópias obtidas antes dessa data. Todo
+código, alteração e versão posteriores estão sob esta licença proprietária.
+
+O Software é fornecido "no estado em que se encontra", sem garantias de qualquer tipo.
+
+Componentes de terceiros mantêm suas próprias licenças (por exemplo, as fontes em
+public/web/fonts/ e a skill em .claude/skills/landing-page-design/LICENSE).
+
+Contato para licenciamento: edudev2049@gmail.com
+
+---
+
+Copyright (c) 2024–2026 Eduardo Felipe Alves de Sousa. All rights reserved.
+This software is proprietary and confidential. No license is granted. Copying,
+modification, distribution or use of this software, in whole or in part, without
+prior written permission from the copyright holder is prohibited. Copies of versions
+obtained under the MIT license before November 9, 2026 remain subject to that license.

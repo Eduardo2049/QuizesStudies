@@ -112,6 +112,10 @@ class UserRepository:
         recuperação e histórico de tentativas caem em cascata com o usuário.
         """
         with get_cursor() as cur:
+            # Códigos por e-mail não têm chave estrangeira (são ligados ao endereço): saem aqui
+            cur.execute(
+                "DELETE FROM email_codes WHERE email = (SELECT LOWER(email) FROM users WHERE id = %s)", (user_id,)
+            )
             cur.execute("DELETE FROM quizzes WHERE created_by = %s AND is_public = FALSE", (user_id,))
             cur.execute("UPDATE quizzes SET created_by = NULL WHERE created_by = %s", (user_id,))
             cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
@@ -226,6 +230,77 @@ class UserRepository:
                 return None
             cur.execute("UPDATE users SET email_verified = TRUE WHERE id = %s", (row["user_id"],))
             return row["user_id"]
+
+    # ─── Códigos de 6 dígitos por e-mail (login sem senha, exclusão da conta) ──
+    # O e-mail chega aqui já em minúsculas (AuthService normaliza). Os horários usam o
+    # NOW() do banco, como a comparação de validade, para não depender do fuso do servidor.
+
+    def create_email_code(self, email: str, purpose: str, code_hash: str, ttl_minutes: int) -> dict:
+        """Grava um código novo e invalida os anteriores ainda não usados do mesmo e-mail e finalidade."""
+        with get_cursor() as cur:
+            # Limpeza oportunista: códigos vencidos há mais de um dia não servem nem para contar envios
+            cur.execute("DELETE FROM email_codes WHERE expires_at <= NOW() - INTERVAL '1 day'")
+            cur.execute(
+                "UPDATE email_codes SET used = TRUE WHERE email = %s AND purpose = %s AND used = FALSE",
+                (email, purpose),
+            )
+            cur.execute("""
+                INSERT INTO email_codes (email, purpose, code_hash, expires_at)
+                VALUES (%s, %s, %s, NOW() + (%s * INTERVAL '1 minute'))
+                RETURNING id, email, purpose, expires_at, created_at
+            """, (email, purpose, code_hash, int(ttl_minutes)))
+            return dict(cur.fetchone())
+
+    def email_code_send_stats(self, email: str, purpose: str) -> dict:
+        """Quantos códigos saíram na última hora e há quantos segundos saiu o último."""
+        with get_cursor() as cur:
+            cur.execute("""
+                SELECT COUNT(*) AS sent_last_hour,
+                       EXTRACT(EPOCH FROM (NOW() - MAX(created_at))) AS seconds_since_last
+                FROM email_codes
+                WHERE email = %s AND purpose = %s AND created_at > NOW() - INTERVAL '1 hour'
+            """, (email, purpose))
+            row = dict(cur.fetchone() or {})
+        since = row.get("seconds_since_last")
+        return {
+            "sent_last_hour": int(row.get("sent_last_hour") or 0),
+            "seconds_since_last": float(since) if since is not None else None,
+        }
+
+    def take_email_code_attempt(self, email: str, purpose: str, max_attempts: int) -> dict | None:
+        """Conta um palpite no código válido mais recente e devolve o hash guardado.
+
+        O UPDATE é atômico: palpites simultâneos não passam do limite de tentativas.
+        Devolve None se não há código válido ou se as tentativas acabaram.
+        """
+        with get_cursor() as cur:
+            cur.execute("""
+                UPDATE email_codes SET attempts = attempts + 1
+                WHERE id = (
+                    SELECT id FROM email_codes
+                    WHERE email = %s AND purpose = %s AND used = FALSE AND expires_at > NOW()
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT 1
+                ) AND attempts < %s
+                RETURNING id, code_hash, attempts
+            """, (email, purpose, int(max_attempts)))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def consume_email_code(self, code_id: int) -> bool:
+        """Queima o código (uma vez só): dois envios simultâneos do código certo geram uma sessão."""
+        with get_cursor() as cur:
+            cur.execute(
+                "UPDATE email_codes SET used = TRUE WHERE id = %s AND used = FALSE RETURNING id",
+                (code_id,),
+            )
+            return cur.fetchone() is not None
+
+    def delete_email_codes(self, email: str) -> int:
+        """Apaga os códigos de um e-mail (exclusão da conta)."""
+        with get_cursor() as cur:
+            cur.execute("DELETE FROM email_codes WHERE email = %s", ((email or "").lower(),))
+            return cur.rowcount
 
     def cleanup_expired_resets(self) -> int:
         """Remove solicitações expiradas ou já utilizadas com mais de 7 dias."""

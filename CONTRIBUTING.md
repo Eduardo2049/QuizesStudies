@@ -70,4 +70,4 @@ Use os [templates de issue](.github/ISSUE_TEMPLATE/) para reportar bugs ou suger
 
 ## Licença
 
-Ao contribuir, você concorda que sua contribuição será licenciada sob a mesma licença do projeto (MIT).
+O Acely é software proprietário (veja `LICENSE`). Contribuições só são aceitas de pessoas autorizadas pelo titular; ao contribuir, você cede ao titular os direitos patrimoniais sobre o que enviar.
