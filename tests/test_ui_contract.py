@@ -18,6 +18,7 @@ PAGE_SCRIPTS = {
     "app.js": ["index.html"],
     "modules/auth_page.js": ["login.html", "register.html"],
     "modules/reset_password_page.js": ["reset-password.html"],
+    "modules/inicio.js": ["inicio.html"],
 }
 # Módulos compartilhados: o ID precisa existir em pelo menos uma página
 SHARED_SCRIPTS = [
@@ -28,7 +29,7 @@ SHARED_SCRIPTS = [
     "modules/timer-drag.js",
     "modules/i18n.js",
 ]
-PAGES = ["index.html", "login.html", "register.html", "reset-password.html"]
+PAGES = ["index.html", "login.html", "register.html", "reset-password.html", "inicio.html"]
 
 ID_LOOKUP = re.compile(
     r"""getElementById\(\s*['"]([A-Za-z][\w-]*)['"]\s*\)"""

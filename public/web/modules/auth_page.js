@@ -11,7 +11,7 @@
  *
  * A sessão fica num cookie HttpOnly definido pelo servidor; nada de token no JavaScript.
  */
-import { getLanguage } from './i18n.js?v=8';
+import { getLanguage } from './i18n.js?v=9';
 
 // Limpeza de resquícios antigos (versões anteriores guardavam o convidado no localStorage).
 // Os simulados do convidado da aba atual (sessionStorage) são mantidos até o login dar certo:
