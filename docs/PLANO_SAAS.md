@@ -209,7 +209,7 @@ Junto com as Fases 3 e 4 do `PLANO_ACELY.md`.
 
 ### Fase S6: Promoção da página de produto para a raiz
 
-> **17/11/2026:** protótipo de página inicial em `/inicio` (branch `feature/pagina-inicio`), com `noindex` e fora do sitemap. É candidata a substituir a raiz para visitantes nesta fase; os atalhos dela já abrem o app no ponto certo (`/?abrir=...`, `/?simulado=...`).
+> **✅ 17/11/2026 (branch `feature/inicio-na-raiz`):** a página inicial (`inicio.html`, estilo estúdio) passou para a raiz `/` para todos e os simulados para `/app`. Links antigos na raiz com `?abrir=`, `?simulado=` ou `?email=` continuam abrindo o app (regras `has` no `vercel.json`). O login sem `?next=`, a confirmação de e-mail, o `start_url` do manifesto e os links "Voltar aos simulados" vão para `/app`; sair da conta volta para a raiz. Quem já entrou vê "Meus simulados" no topo da página inicial. A página de produto continua em `/produto`.
 Branch sugerida: `feature/saas-raiz`
 Quando a página de produto estiver validada: `/` vira a página de produto para quem não tem
 sessão e o app passa para `/app`. Tocar com cuidado: `safe_next` (padrão `/`), redirecionamentos

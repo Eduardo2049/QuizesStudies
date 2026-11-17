@@ -847,6 +847,7 @@ export default {
   'Sim. O Acely roda no navegador do celular, do tablet e do computador, e a interface e as questões saem em português ou inglês.':
     'Yes. Acely runs in the browser on phones, tablets and computers, and the interface and questions come in Portuguese or English.',
   'Rodapé': 'Footer',
+  'Meus simulados': 'My quizzes',
   // Link direto ?simulado= (app.js)
   'Não encontramos esse simulado. Abrimos o primeiro da lista.': 'We could not find that quiz. We opened the first one on the list.',
   'Simulado não encontrado': 'Quiz not found',
