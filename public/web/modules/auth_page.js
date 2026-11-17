@@ -11,7 +11,7 @@
  *
  * A sessão fica num cookie HttpOnly definido pelo servidor; nada de token no JavaScript.
  */
-import { getLanguage } from './i18n.js?v=9';
+import { getLanguage } from './i18n.js?v=10';
 
 // Limpeza de resquícios antigos (versões anteriores guardavam o convidado no localStorage).
 // Os simulados do convidado da aba atual (sessionStorage) são mantidos até o login dar certo:
@@ -30,16 +30,18 @@ function clearGuestSession() {
  * Destino depois de entrar (?next=). Só aceita caminhos internos para não virar
  * um redirecionamento aberto (ex.: ?next=https://site-falso.com ou //site-falso.com).
  */
+// Sem ?next=, quem entra vai para os simulados (/app); a raiz é a página inicial.
+const DEFAULT_NEXT = '/app';
 function safeNext() {
-  const raw = new URLSearchParams(window.location.search).get('next') || '/';
-  if (!raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return '/';
+  const raw = new URLSearchParams(window.location.search).get('next') || DEFAULT_NEXT;
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return DEFAULT_NEXT;
   try {
     const url = new URL(raw, window.location.origin);
-    if (url.origin !== window.location.origin) return '/';
-    if (['/login', '/register', '/reset-password'].includes(url.pathname)) return '/';
+    if (url.origin !== window.location.origin) return DEFAULT_NEXT;
+    if (['/login', '/register', '/reset-password'].includes(url.pathname)) return DEFAULT_NEXT;
     return url.pathname + url.search + url.hash;
   } catch (_) {
-    return '/';
+    return DEFAULT_NEXT;
   }
 }
 

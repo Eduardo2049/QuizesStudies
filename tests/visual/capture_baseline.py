@@ -45,8 +45,8 @@ SCREENS = {
     "login": ("/login", None),
     "register": ("/register", None),
     "reset-password": ("/reset-password", None),
-    "home-visitor": ("/", None),
-    "home-access": ("/", "document.querySelector('#addQuizBtn')?.click()"),
+    "home-visitor": ("/app", None),
+    "home-access": ("/app", "document.querySelector('#addQuizBtn')?.click()"),
     "home": ("/guest", None),
     "home-catalog": ("/guest", "document.querySelector('#btnOpenCatalog')?.click()"),
     "home-upload": ("/guest", "document.querySelector('#addQuizBtn')?.click()"),
@@ -54,8 +54,8 @@ SCREENS = {
     "home-timer": ("/guest", "document.querySelector('#btnSetTimer')?.click()"),
     "produto": ("/produto", None),
     "produto-menu": ("/produto", "document.querySelector('#lpMenuToggle')?.click()"),
-    "inicio": ("/inicio", None),
-    "inicio-menu": ("/inicio", "document.querySelector('#inMenuToggle')?.click()"),
+    "inicio": ("/", None),
+    "inicio-menu": ("/", "document.querySelector('#inMenuToggle')?.click()"),
     "login-codigo": ("/login", "(() => { const i = document.querySelector('#codeEmail'); i.value = 'visual@exemplo.com';"
                                " document.querySelector('#codeEmailForm').requestSubmit(); })()"),
 }

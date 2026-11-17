@@ -3,7 +3,7 @@
   "short_name": "Acely",
   "description": "Simulados com IA a partir do seu material, com cronômetro e gabarito comentado.",
   "lang": "pt-BR",
-  "start_url": "/",
+  "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f4f0e8",
