@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title id="pageTitle">Cadastrar — Acely</title>
-  <meta name="description" content="Crie sua conta no Acely para realizar simulados interativos e acompanhar seu desempenho.">
+  <meta name="description" content="Crie sua conta no Acely com o seu e-mail para realizar simulados interativos e acompanhar seu desempenho.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Acely">
   <meta property="og:title" content="Criar conta — Acely">
@@ -19,7 +19,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/web/icons/favicon-16x16.png?v=3">
   <link rel="apple-touch-icon" sizes="180x180" href="/web/icons/apple-touch-icon.png?v=3">
   <link rel="shortcut icon" href="/web/icons/favicon.ico?v=3">
-  <link rel="stylesheet" href="/web/styles.css?v=26">
+  <link rel="stylesheet" href="/web/styles.css?v=29">
   <!-- Script de prevenção de FOUC de tema (execução imediata, bloqueante) -->
   <script src="/web/modules/theme-boot.js"></script>
   <script src="/web/modules/i18n-boot.js?v=1"></script>
@@ -41,16 +41,67 @@
         </div>
         <p class="eyebrow" id="headerEyebrow">Acely · crie sua conta</p>
         <h1 class="login-title" id="headerTitle">Crie sua<br><em>conta grátis</em></h1>
-        <p class="login-subtitle" id="headerSubtitle">Seus simulados e seu histórico ficam salvos e acessíveis em qualquer dispositivo. Sem cartão de crédito.</p>
+        <p class="login-subtitle" id="headerSubtitle">Digite seu e-mail e enviamos um código de 6 dígitos. A conta é criada no primeiro acesso, sem senha e sem cartão de crédito.</p>
       </header>
 
-      <!-- Alternador de Telas: Login / Cadastro -->
-      <nav class="login-tabs" aria-label="Navegação entre login e cadastro">
-        <a href="/login" id="tabLogin" class="tab-btn">Entrar</a>
-        <a href="/register" id="tabRegister" class="tab-btn active" aria-current="page">Cadastrar</a>
-      </nav>
+      <!-- ═══ Entrar com código por e-mail (fluxo principal) ═══════════════════
+           1) a pessoa digita o e-mail; 2) recebe 6 dígitos que vencem em 10 minutos;
+           3) digita o código e entra. Sem conta com o e-mail, ela é criada no código certo. -->
+      <form id="codeEmailForm" class="auth-form-card" novalidate>
+        <div class="form-group">
+          <label for="codeEmail">E-mail</label>
+          <input type="email" id="codeEmail" name="email" placeholder="seuemail@exemplo.com" required autocomplete="email" inputmode="email" autocapitalize="off" spellcheck="false" autofocus>
+        </div>
 
-      <!-- Formulário de Login (Oculto inicialmente na rota /register) -->
+        <div id="codeEmailFeedback" class="form-feedback" role="alert" hidden></div>
+
+        <p class="auth-consent">Sem conta ainda? Ela é criada no primeiro acesso. Ao continuar, você concorda com os <a href="/termos" class="auth-link">Termos de uso</a> e a <a href="/privacidade" class="auth-link">Política de privacidade</a>.</p>
+
+        <button id="btnSendCode" class="primary auth-submit-btn" type="submit">
+          <span>Receber código</span>
+          <span class="btn-arrow">→</span>
+        </button>
+      </form>
+
+      <form id="codeVerifyForm" class="auth-form-card" hidden novalidate>
+        <p class="code-sent-to">Enviamos um código de 6 dígitos para <strong id="codeSentEmail" translate="no"></strong></p>
+
+        <fieldset class="code-fieldset">
+          <legend class="code-legend">Código de acesso</legend>
+          <div class="code-inputs" id="codeInputs">
+            <input class="code-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" aria-label="Dígito 1 de 6">
+            <input class="code-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" aria-label="Dígito 2 de 6">
+            <input class="code-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" aria-label="Dígito 3 de 6">
+            <span class="code-sep" aria-hidden="true"></span>
+            <input class="code-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" aria-label="Dígito 4 de 6">
+            <input class="code-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" aria-label="Dígito 5 de 6">
+            <input class="code-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" aria-label="Dígito 6 de 6">
+          </div>
+        </fieldset>
+
+        <p class="code-timer" id="codeTimer">
+          <span id="codeTimerLabel">O código vence em</span>
+          <span class="code-mono" id="codeCountdown" translate="no">10:00</span>
+        </p>
+
+        <div id="codeVerifyFeedback" class="form-feedback" role="alert" hidden></div>
+
+        <button id="btnVerifyCode" class="primary auth-submit-btn" type="submit">
+          <span>Entrar</span>
+          <span class="btn-arrow">→</span>
+        </button>
+
+        <div class="code-actions">
+          <button type="button" class="code-link-btn" id="btnResendCode" disabled>
+            <span>Reenviar código</span>
+            <span class="code-mono" id="codeResendIn" translate="no"></span>
+          </button>
+          <button type="button" class="code-link-btn" id="btnChangeEmail">Trocar e-mail</button>
+        </div>
+      </form>
+
+      <!-- Acesso com usuário e senha: só para a conta de administrador, em /login?senha=1.
+           O admin não entra por código nem pelo Google (a senha vem de ADMIN_PASSWORD). -->
       <form id="pageLoginForm" class="auth-form-card" hidden novalidate>
         <div class="form-group">
           <label for="loginUsername">Usuário</label>
@@ -58,10 +109,8 @@
         </div>
 
         <div class="form-group">
-          <div class="form-label-row">
-            <label for="loginPassword">Senha</label>
-            <a href="/reset-password" class="auth-sublink">Esqueci minha senha</a>
-          </div>
+          <!-- DESATIVADO: <a href="/reset-password" class="auth-sublink">Esqueci minha senha</a> -->
+          <label for="loginPassword">Senha</label>
           <input type="password" id="loginPassword" name="password" placeholder="Digite sua senha" required autocomplete="current-password">
         </div>
 
@@ -71,13 +120,22 @@
           <span>Entrar na conta</span>
           <span class="btn-arrow">→</span>
         </button>
+        <a href="/login" class="auth-sublink auth-sublink--center" id="linkBackToCode">Entrar com código por e-mail</a>
       </form>
 
-      <!-- Formulário de Cadastro (Ativo inicialmente na rota /register) -->
-      <form id="pageRegisterForm" class="auth-form-card" novalidate>
+      <!-- ═══ DESATIVADO: abas Entrar/Cadastrar e cadastro com usuário e senha ═══
+           O código por e-mail entra e cria a conta no mesmo fluxo. Para voltar ao cadastro por
+           senha, descomente este bloco e o bloco "DESATIVADO" de modules/auth_page.js.
+
+      <nav class="login-tabs" aria-label="Navegação entre login e cadastro">
+        <a href="/login" id="tabLogin" class="tab-btn">Entrar</a>
+        <a href="/register" id="tabRegister" class="tab-btn active" aria-current="page">Cadastrar</a>
+      </nav>
+
+      <form id="pageRegisterForm" class="auth-form-card" hidden novalidate>
         <div class="form-group">
           <label for="regUsername">Usuário</label>
-          <input type="text" id="regUsername" name="username" placeholder="Escolha um nome de usuário" required autocomplete="username" autofocus>
+          <input type="text" id="regUsername" name="username" placeholder="Escolha um nome de usuário" required autocomplete="username">
         </div>
 
         <div class="form-group">
@@ -99,6 +157,7 @@
           <span class="btn-arrow">→</span>
         </button>
       </form>
+      ═══ fim do bloco DESATIVADO ═══ -->
 
       <div class="auth-divider" aria-hidden="true"><span>ou</span></div>
 
@@ -113,21 +172,26 @@
       </button>
 
       <footer class="login-footer">
+        <!-- DESATIVADO junto com o cadastro por senha:
         <p class="login-footer-hint" id="footerHint">
-          Já possui uma conta? <a href="/login" id="linkToggle" class="auth-link">Entre aqui</a>
+          Não possui uma conta? <a href="/register" id="linkToggle" class="auth-link">Cadastre-se aqui</a>
         </p>
+        -->
+        <p class="login-footer-hint" id="codeFooterHint">Já tinha conta com usuário e senha? Use o mesmo e-mail: o código abre a conta que você já tem.</p>
       </footer>
     </div>
   </div>
 
   <footer class="site-footer">
+    <a href="/produto">Produto e planos</a>
+    <span aria-hidden="true">·</span>
     <a href="/termos">Termos de uso</a>
     <span aria-hidden="true">·</span>
     <a href="/privacidade">Privacidade</a>
   </footer>
 
-  <script type="module" src="/web/modules/i18n.js?v=5"></script>
+  <script type="module" src="/web/modules/i18n.js?v=8"></script>
   <script type="module" src="/web/modules/backdrop.js?v=8"></script>
-  <script type="module" src="/web/modules/auth_page.js?v=10"></script>
+  <script type="module" src="/web/modules/auth_page.js?v=11"></script>
 </body>
 </html>

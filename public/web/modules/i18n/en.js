@@ -517,4 +517,262 @@ export default {
   "✓ Quiz '{0}' carregado somente neste dispositivo. Gabarito lido do arquivo, sem gastar usos de IA.":
     "✓ Quiz '{0}' loaded on this device only. Answer key read from the file, no AI used.",
   "✓ Quiz '{0}' carregado somente neste dispositivo.": "✓ Quiz '{0}' loaded on this device only.",
+
+  // ── Página de produto e planos (/produto) ──────────────────────────────────
+  "Acely · Simulados com IA para estudar e treinar equipes":
+    "Acely · AI practice tests for studying and team training",
+  "Pular para o conteúdo": "Skip to content",
+  "Principal": "Main",
+  "Como funciona": "How it works",
+  "Modelos de IA": "AI models",
+  "Para equipes": "For teams",
+  "Planos": "Plans",
+  "Perguntas": "Questions",
+  "Começar grátis": "Start free",
+  "Abrir menu": "Open menu",
+  "Fechar menu": "Close menu",
+  "Simulados com IA para estudar e treinar equipes": "AI practice tests for studying and team training",
+  "Do seu material ao simulado,": "From your study material to a practice test,",
+  "com gabarito comentado": "with an explained answer key",
+  "Envie um PDF, DOCX ou TXT, ou digite um tema. O Acely monta o simulado com cronômetro, corrige e mostra onde você errou. Para estudar sozinho, acompanhar uma turma ou treinar uma equipe.":
+    "Upload a PDF, DOCX or TXT, or type a topic. Acely builds a timed practice test, grades it and shows where you went wrong. For studying on your own, following a class or training a team.",
+  "Criar meu primeiro simulado": "Create my first practice test",
+  "Ver planos": "See plans",
+  "3 gerações com IA sem cadastro": "3 AI generations without signing up",
+  "Exemplo de questão resolvida no Acely": "Example of a solved question in Acely",
+  "Um capital de R$ 1.000 rende 10% ao mês em juros compostos. Quanto rende de juros em 2 meses?":
+    "R$ 1,000 earns 10% a month in compound interest. How much interest does it earn in 2 months?",
+  "Por que B:": "Why B:",
+  "juros sobre juros. 1.000 × 1,1² = 1.210, então os juros são R$ 210.":
+    "interest on interest. 1,000 × 1.1² = 1,210, so the interest is R$ 210.",
+  "Três passos entre a apostila e o treino": "Three steps from your notes to practice",
+  "Envie o material ou um tema": "Upload your material or a topic",
+  "PDF, DOCX ou TXT de até 20 MB, ou só o assunto. Arquivo que já tem questões e gabarito vira simulado na hora, sem gastar IA.":
+    "PDF, DOCX or TXT up to 20 MB, or just the subject. A file that already has questions and an answer key becomes a test right away, with no AI used.",
+  "Resolva com cronômetro": "Answer against the clock",
+  "Modo foco com uma questão por vez ou lista completa, atalhos de teclado e tempo definido por você. O gabarito só aparece no fim.":
+    "Focus mode with one question at a time or the full list, keyboard shortcuts and a time limit you choose. The answer key only shows at the end.",
+  "Entenda cada erro": "Understand every mistake",
+  "Explicação em cada questão, estatísticas por tema e variações inéditas das questões que você errou, para treinar o conceito e não a letra.":
+    "An explanation for each question, stats by topic and new variations of the questions you missed, so you practice the concept instead of memorizing the letter.",
+  "Proposta do Acely": "What Acely is for",
+  "Menos tempo montando questões. Mais tempo treinando o raciocínio que a prova cobra.":
+    "Less time writing questions. More time practicing the reasoning the exam asks for.",
+  "Três formas de gerar, cada uma com o seu custo": "Three ways to generate, each with its own cost",
+  "Você escolhe o caminho pelo que precisa. O servidor decide qual modelo atende e passa para o próximo se um deles estiver lento ou fora do ar.":
+    "You pick the path that fits. The server decides which model answers and moves on to the next one if a model is slow or down.",
+  "Sem IA": "No AI",
+  "Seu arquivo já tem questões e gabarito: o Acely lê, organiza e monta o simulado. Não usa cota.":
+    "Your file already has questions and an answer key: Acely reads it, organizes it and builds the test. No quota used.",
+  "Todos os planos": "Every plan",
+  "Resultado na hora": "Ready right away",
+  "Rápido": "Fast",
+  "Modelos abertos em provedores gratuitos, tentados em sequência até um responder. Ideal para começar e para temas do dia a dia.":
+    "Open models on free providers, tried in order until one answers. Good for getting started and for everyday topics.",
+  "Plano Grátis e convidado": "Free plan and guests",
+  "Português e inglês": "Portuguese and English",
+  "Provedores gratuitos podem usar o texto para melhorar os modelos deles":
+    "Free providers may use the text to improve their models",
+  "Preciso": "Accurate",
+  "Em breve": "Coming soon",
+  "API paga, sem uso do seu material para treinar modelos. Um segundo modelo responde cada questão sem ver o gabarito; as que divergem são refeitas.":
+    "Paid API, and your material is not used to train models. A second model answers each question without seeing the key; questions where they disagree are redone.",
+  "Planos Pro, Equipe e Instituição": "Pro, Team and Institution plans",
+  "Gabarito conferido em cada questão": "Answer key checked on every question",
+  "Simulados de até 30 questões": "Tests with up to 30 questions",
+  "Para quem": "Who it is for",
+  "Do estudo individual ao treinamento da empresa": "From solo study to company training",
+  "Públicos": "Audiences",
+  "Individual": "Individual",
+  "Turmas": "Classes",
+  "Empresas": "Companies",
+  "Concursos, vestibulares e certificações": "Public exams, entrance exams and certifications",
+  "Treine sobre o seu próprio resumo, livro ou apostila, não só sobre provas antigas. O caderno de erros gera variações para você não decorar a letra certa.":
+    "Practice on your own notes, book or handout, not only on past exams. The mistakes notebook creates variations so you do not just memorize the right letter.",
+  "Simulados por arquivo ou por tema": "Tests from a file or a topic",
+  "Cronômetro, modo foco e atalhos": "Timer, focus mode and shortcuts",
+  "Estatísticas por tema e histórico": "Stats by topic and history",
+  "Exportar ou apagar seus dados quando quiser": "Export or delete your data whenever you want",
+  "Professores, cursinhos e escolas": "Teachers, prep courses and schools",
+  "Monte o simulado a partir da sua aula, distribua para a turma com prazo e veja quem fez, a nota de cada aluno e as questões que a turma mais errou.":
+    "Build the test from your lesson, assign it to the class with a due date and see who took it, each student's score and the questions the class missed most.",
+  "Turmas com convite por link ou e-mail": "Classes with invites by link or email",
+  "Atribuição de simulado com prazo": "Tests assigned with a due date",
+  "Painel por aluno e por questão": "Dashboard by student and by question",
+  "Banco de questões da turma": "Class question bank",
+  "Treinamento e certificações internas": "Training and internal certifications",
+  "Transforme manuais, políticas e materiais de produto em avaliações. Acompanhe a equipe por área e prove a capacitação com relatórios exportáveis.":
+    "Turn manuals, policies and product material into assessments. Follow the team by department and prove the training with exportable reports.",
+  "Workspace da empresa com papéis de dono, gestor e membro":
+    "Company workspace with owner, manager and member roles",
+  "Relatórios por colaborador e exportação em CSV": "Reports per employee and CSV export",
+  "Material da empresa fora do treino dos modelos": "Company material kept out of model training",
+  "Contrato de tratamento de dados (LGPD)": "Data processing agreement (LGPD)",
+  "Comece grátis e mude de plano quando precisar": "Start free and change plans when you need to",
+  "Os planos pagos estão em preparação. O Grátis já está no ar com tudo o que aparece abaixo.":
+    "Paid plans are in the works. Free is live today with everything listed below.",
+  "Para experimentar e estudar sozinho": "For trying it out and studying on your own",
+  "Até 30 questões por simulado": "Up to 30 questions per test",
+  "Modelos de IA Rápido": "Fast AI models",
+  "Caderno de erros com variações": "Mistakes notebook with variations",
+  "Estatísticas e histórico": "Stats and history",
+  "Para quem estuda todo dia": "For people who study every day",
+  "Preço no lançamento": "Price at launch",
+  "Disponível em breve": "Available soon",
+  "Tudo do Grátis": "Everything in Free",
+  "Modelos de IA Preciso": "Accurate AI models",
+  "Gabarito conferido por um segundo modelo": "Answer key checked by a second model",
+  "Cota mensal maior de gerações": "Larger monthly generation quota",
+  "Relatórios completos e exportação": "Full reports and export",
+  "Suporte por e-mail": "Email support",
+  "Equipe": "Team",
+  "Para turmas e times, cobrado por membro": "For classes and teams, billed per member",
+  "Tudo do Pro para cada membro": "Everything in Pro for each member",
+  "Workspace com convites e papéis": "Workspace with invites and roles",
+  "Simulados atribuídos com prazo": "Tests assigned with due dates",
+  "Painel do professor ou gestor": "Teacher or manager dashboard",
+  "Banco de questões compartilhado": "Shared question bank",
+  "Instituição": "Institution",
+  "Para escolas, redes e empresas": "For schools, networks and companies",
+  "Sob consulta": "Contact us",
+  "Falar com a equipe": "Talk to the team",
+  "Tudo do Equipe": "Everything in Team",
+  "Limites e volume sob contrato": "Limits and volume by contract",
+  "Cobrança por boleto ou nota fiscal": "Billing by bank slip or invoice",
+  "Suporte dedicado": "Dedicated support",
+  "Perguntas frequentes": "Frequently asked questions",
+  "Preciso criar conta para testar?": "Do I need an account to try it?",
+  "Não. Você resolve os simulados públicos sem cadastro e, como convidado, gera até 3 simulados com IA a cada 24 horas. A conta grátis guarda seus simulados e o histórico.":
+    "No. You can take the public tests without signing up and, as a guest, generate up to 3 tests with AI every 24 hours. A free account keeps your tests and history.",
+  "Quais arquivos posso enviar?": "Which files can I upload?",
+  "PDF, DOCX e TXT de até 20 MB. Se o arquivo já tem questões e gabarito, ele vira simulado na hora e não gasta usos de IA.":
+    "PDF, DOCX and TXT up to 20 MB. If the file already has questions and an answer key, it becomes a test right away and uses no AI.",
+  "A IA pode errar o gabarito?": "Can the AI get the answer key wrong?",
+  "Pode. Por isso cada questão vem com explicação para você conferir. Nos planos pagos, um segundo modelo responde a questão sem ver o gabarito e as que divergem são refeitas.":
+    "It can. That is why every question comes with an explanation you can check. On paid plans, a second model answers the question without seeing the key, and questions where they disagree are redone.",
+  "O que acontece com o material que eu envio?": "What happens to the material I upload?",
+  "O texto é enviado ao provedor de IA só para gerar o simulado. Você pode exportar ou apagar seus dados em Minha conta. Os detalhes estão na":
+    "The text is sent to the AI provider only to generate the test. You can export or delete your data in My account. The details are in the",
+  "política de privacidade": "privacy policy",
+  "Quando os planos pagos ficam disponíveis?": "When will paid plans be available?",
+  "Estão em preparação. Os preços e a data de lançamento vão aparecer nesta página. Até lá, o plano Grátis segue com tudo o que está listado acima.":
+    "They are in the works. Prices and the launch date will be posted on this page. Until then, the Free plan keeps everything listed above.",
+  "Funciona para turmas e equipes?": "Does it work for classes and teams?",
+  "O plano Equipe traz workspace, convites, simulados com prazo e painel de resultados. Para escolas e empresas com muitos membros, fale com a equipe pelo plano Instituição.":
+    "The Team plan brings a workspace, invites, tests with due dates and a results dashboard. For schools and companies with many members, talk to us about the Institution plan.",
+  "Funciona no celular?": "Does it work on my phone?",
+  "Sim. O Acely roda no navegador do celular, do tablet e do computador, sem instalar nada.":
+    "Yes. Acely runs in the browser on your phone, tablet and computer, with nothing to install.",
+  "Tem em inglês?": "Is it available in English?",
+  "Sim. A interface tem português e inglês, e a IA gera o simulado no idioma escolhido.":
+    "Yes. The interface is in Portuguese and English, and the AI writes the test in the language you choose.",
+  "Seu próximo simulado começa com o material que você já tem":
+    "Your next practice test starts with the material you already have",
+  "Simulados": "Practice tests",
+  "Produto e planos": "Product and plans",
+  "Conheça os planos e o que vem para turmas e empresas":
+    "See the plans and what is coming for classes and companies",
+
+  // ── Plano e uso (Minha conta, chip de cota, erros de limite) ──────────────────
+  "Plano e uso": "Plan and usage",
+  "Carregando seu plano…": "Loading your plan…",
+  "Gerações com IA": "AI generations",
+  "Variações do caderno de erros": "Mistakes notebook variations",
+  "Não foi possível carregar seu plano agora.": "Could not load your plan right now.",
+  "Conta de administrador: sem cota de IA.": "Administrator account: no AI quota.",
+  "Plano {0} · até {1} questões por simulado e arquivos de até {2} MB.":
+    "{0} plan · up to {1} questions per test and files up to {2} MB.",
+  "A cota renova em {0}.": "The quota renews on {0}.",
+  "{0} de {1}": "{0} of {1}",
+  "{0} · sem limite": "{0} · no limit",
+  "{0} usados, sem limite": "{0} used, no limit",
+  "Você usou as {0} gerações com IA do plano {1} deste mês. Renova em {2}.":
+    "You used the {0} AI generations in the {1} plan this month. It renews on {2}.",
+  "Plano {0}: {1} de {2} gerações com IA restantes este mês. Renova em {3}.":
+    "{0} plan: {1} of {2} AI generations left this month. It renews on {3}.",
+  "Cota do mês usada": "Monthly quota used",
+  "Você usou a cota de IA do seu plano neste mês.": "You used your plan's AI quota for this month.",
+  "Você usou as {0} gerações com IA do plano {1} deste mês. A cota renova em 1º de {2}. Enviar um arquivo que já tem gabarito continua liberado.":
+    "You used the {0} AI generations in the {1} plan this month. The quota renews on {2} 1. Uploading a file that already has an answer key still works.",
+  "Você usou as {0} rodadas de variações com IA do plano {1} deste mês. A cota renova em 1º de {2}. Enviar um arquivo que já tem gabarito continua liberado.":
+    "You used the {0} AI variation rounds in the {1} plan this month. The quota renews on {2} 1. Uploading a file that already has an answer key still works.",
+  "O plano {0} gera até {1} questões por simulado. Escolha uma quantidade menor.":
+    "The {0} plan generates up to {1} questions per test. Choose a smaller number.",
+  "Arquivo excede o limite máximo permitido de {0} MB no seu plano.":
+    "The file is over the {0} MB limit for your plan.",
+  "janeiro": "January",
+  "fevereiro": "February",
+  "março": "March",
+  "abril": "April",
+  "maio": "May",
+  "junho": "June",
+  "julho": "July",
+  "agosto": "August",
+  "setembro": "September",
+  "outubro": "October",
+  "novembro": "November",
+  "dezembro": "December",
+  // ── Entrar com código de 6 dígitos por e-mail (login.html, register.html) ──
+  'Receber código': 'Get my code',
+  'e a': 'and the',
+  'Sem conta ainda? Ela é criada no primeiro acesso. Ao continuar, você concorda com os':
+    'No account yet? It is created the first time you sign in. By continuing, you agree to the',
+  'Enviamos um código de 6 dígitos para': 'We sent a code with 6 digits to',
+  'Código de acesso': 'Access code',
+  'Dígito {0} de 6': 'Digit {0} of 6',
+  'O código vence em': 'The code expires in',
+  'O código venceu. Peça um novo.': 'The code expired. Ask for a new one.',
+  'Reenviar código': 'Resend code',
+  'Trocar e-mail': 'Change email',
+  'Entrar com código por e-mail': 'Sign in with an email code',
+  'Digite seu e-mail e enviamos um código de 6 dígitos. Sem senha para lembrar.':
+    'Enter your email and we send you a code with 6 digits. No password to remember.',
+  'Digite seu e-mail e enviamos um código de 6 dígitos. A conta é criada no primeiro acesso, sem senha e sem cartão de crédito.':
+    'Enter your email and we send you a code with 6 digits. Your account is created the first time you sign in, with no password and no credit card.',
+  'Já tinha conta com usuário e senha? Use o mesmo e-mail: o código abre a conta que você já tem.':
+    'Had an account with a username and password? Use the same email: the code opens the account you already have.',
+  'Acesso com usuário e senha, usado pela conta de administrador.':
+    'Username and password access, used by the administrator account.',
+  'O login com Google não está disponível agora. Entre com o código por e-mail.':
+    'Signing in with Google is not available right now. Use the email code instead.',
+  'O Google não confirmou o login. Tente de novo ou entre com o código por e-mail.':
+    'Google did not confirm your login. Try again or use the email code.',
+  'Enviando código…': 'Sending code…',
+  'Não foi possível enviar o código. Tente novamente.': 'Could not send the code. Try again.',
+  'Modo de desenvolvimento: o código é {0}': 'Development mode: the code is {0}',
+  'Digite os 6 números do código.': 'Enter the 6 numbers of the code.',
+  'Conferindo o código…': 'Checking the code…',
+  'Código incorreto. Confira o e-mail e tente de novo.': 'Wrong code. Check your email and try again.',
+  'Conta criada. Abrindo seus simulados…': 'Account created. Opening your quizzes…',
+  'Enviamos um novo código. O anterior deixou de valer.': 'We sent a new code. The previous one no longer works.',
+  // Mensagens do servidor (api/services/auth_service.py)
+  'Enviamos um código de 6 dígitos para o seu e-mail.': 'We sent a code with 6 digits to your email.',
+  'O envio de códigos por e-mail está indisponível agora. Entre com o Google ou continue como convidado.':
+    'Email codes are unavailable right now. Sign in with Google or continue as a guest.',
+  'Aguarde {0} segundos para pedir outro código.': 'Wait {0} seconds to ask for another code.',
+  'Muitos códigos pedidos para este e-mail. Tente de novo em 15 minutos.':
+    'Too many codes were requested for this email. Try again in 15 minutes.',
+  'Não foi possível enviar o código agora. Tente de novo em alguns minutos.':
+    'Could not send the code now. Try again in a few minutes.',
+  'Este código venceu ou já foi usado. Peça um novo código.': 'This code expired or was already used. Ask for a new code.',
+  'Código incorreto. Você ainda tem {0} tentativa(s) com este código.':
+    'Wrong code. You have {0} attempt(s) left with this code.',
+  'Conta criada. Boas-vindas ao Acely.': 'Account created. Welcome to Acely.',
+  // Minha conta: exclusão confirmada com código
+  'Para confirmar, enviamos um código de 6 dígitos para o seu e-mail.': 'To confirm, we send a code with 6 digits to your email.',
+  'Enviar código de confirmação': 'Send confirmation code',
+  'Enviar outro código': 'Send another code',
+  'Código recebido por e-mail': 'Code from your email',
+  'Digite os 6 números do código enviado para o seu e-mail.': 'Enter the 6 numbers of the code sent to your email.',
+  'Não foi possível enviar o código agora. Tente novamente em alguns minutos.':
+    'Could not send the code now. Try again in a few minutes.',
+  'Enviamos um código para o seu e-mail. Digite-o abaixo para confirmar.': 'We sent a code to your email. Enter it below to confirm.',
+  'Confirme com o código enviado para o seu e-mail.': 'Confirm with the code sent to your email.',
+  'Código incorreto. Você ainda tem {0} tentativa(s) com este código. A conta não foi excluída.':
+    'Wrong code. You have {0} attempt(s) left with this code. The account was not deleted.',
+  'Este código venceu ou já foi usado. Peça um novo código. A conta não foi excluída.':
+    'This code expired or was already used. Ask for a new code. The account was not deleted.',
+  'Digite os 6 números do código. A conta não foi excluída.': 'Enter the 6 numbers of the code. The account was not deleted.',
+  'Seu e-mail ainda não foi confirmado. Ele fica confirmado no próximo acesso com código ou pelo link que enviamos.':
+    'Your email is not confirmed yet. It is confirmed the next time you sign in with a code or through the link we sent.',
 };

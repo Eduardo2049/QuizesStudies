@@ -236,6 +236,7 @@ c) Opção C
 | `GET` | `/api/auth/providers` | Pública | Informa se o login com Google está ligado |
 | `GET` | `/api/auth/google/start` e `/api/auth/google/callback` | Pública | Login com Google (OAuth, `state` em cookie) |
 | `POST` | `/api/guest/start`, `/api/guest/end` · `GET` `/api/guest/status` | Pública | Sessão de convidado e cota gratuita de IA |
+| `GET` | `/api/me/plan` | Conta | Plano, limites e uso de IA do mês (`PLAN_LIMIT_REACHED` ao passar da cota) |
 | `POST` | `/api/quizzes/import` | Autenticado | Salva na conta os simulados criados como convidado |
 | `GET` | `/api/account/export` | Autenticado | Cópia dos dados da conta em JSON (LGPD) |
 | `POST` | `/api/account/delete` | Autenticado (com senha) | Exclui a conta e os dados |
@@ -416,3 +417,10 @@ CREATE TABLE quiz_attempts (
 CREATE INDEX idx_quiz_attempts_user_id ON quiz_attempts(user_id);
 CREATE INDEX idx_quiz_attempts_quiz_id ON quiz_attempts(quiz_id);
 ```
+
+---
+
+## Licença
+
+Software proprietário. © 2024–2026 Eduardo Felipe Alves de Sousa. Todos os direitos reservados.
+Veja [`LICENSE`](LICENSE). Planos e roadmap do produto: [`docs/PLANO_SAAS.md`](docs/PLANO_SAAS.md).

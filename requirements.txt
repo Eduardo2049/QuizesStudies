@@ -17,4 +17,4 @@ requests==2.34.2
 
 # Autoridades certificadoras para sslmode=verify-full do banco (já vinha com o requests;
 # fixado porque api/database/connection.py usa direto)
-certifi==2026.10.18
+certifi==2026.10.23

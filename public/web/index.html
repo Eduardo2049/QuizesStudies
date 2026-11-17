@@ -33,18 +33,18 @@
     ]
   }
   </script>
-  <link rel="stylesheet" href="/web/styles.css?v=26">
+  <link rel="stylesheet" href="/web/styles.css?v=29">
   <!-- Desempenho: a fonte do texto e os módulos do app.js começam a baixar junto com o CSS,
        em vez de em cascata depois do app.js (manter os ?v= iguais aos dos imports) -->
   <link rel="preload" href="/web/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="modulepreload" href="/web/app.js?v=21">
+  <link rel="modulepreload" href="/web/app.js?v=24">
   <link rel="modulepreload" href="/web/modules/icons.js?v=6">
   <link rel="modulepreload" href="/web/modules/theme.js?v=9">
   <link rel="modulepreload" href="/web/modules/shortcuts.js?v=5">
   <link rel="modulepreload" href="/web/modules/stats.js?v=7">
   <link rel="modulepreload" href="/web/modules/timer-drag.js?v=1">
-  <link rel="modulepreload" href="/web/modules/i18n.js?v=5">
-  <link rel="modulepreload" href="/web/modules/i18n/en.js?v=5">
+  <link rel="modulepreload" href="/web/modules/i18n.js?v=8">
+  <link rel="modulepreload" href="/web/modules/i18n/en.js?v=8">
   <!-- Script de prevenção de FOUC de tema (execução imediata, bloqueante) -->
   <script src="/web/modules/theme-boot.js"></script>
   <script src="/web/modules/i18n-boot.js?v=1"></script>
@@ -74,6 +74,9 @@
             <span class="theme-icon"></span>
             <span class="theme-label">Animação do fundo</span>
           </button>
+          <a href="/planos" id="plansLink" class="btn-about btn-ghost btn-plans" title="Conheça os planos e o que vem para turmas e empresas">
+            <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12V4h8l9 9-8 8z"/><path d="M7.5 7.5h.01"/></svg> <span class="btn-label">Planos</span>
+          </a>
           <button id="btnOpenAboutModal" class="btn-about btn-ghost" type="button" title="Conheça o propósito e diferenciais do Acely">
             <svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg> <span class="btn-label">Por que o Acely?</span>
           </button>
@@ -198,6 +201,8 @@
   </main>
 
   <footer class="site-footer">
+    <a href="/produto">Produto e planos</a>
+    <span aria-hidden="true">·</span>
     <a href="/termos">Termos de uso</a>
     <span aria-hidden="true">·</span>
     <a href="/privacidade">Privacidade</a>
@@ -581,6 +586,27 @@
         <button type="button" class="secondary access-cta" id="accountResendVerification" hidden>Reenviar link de confirmação</button>
       </section>
 
+      <section class="account-section" aria-labelledby="accountPlanTitle">
+        <h3 id="accountPlanTitle" class="access-option-title">Plano e uso</h3>
+        <p class="account-hint" id="accountPlanSummary" aria-live="polite">Carregando seu plano…</p>
+        <div class="usage-meter" id="accountUsageGeneration" hidden>
+          <div class="usage-meter-head">
+            <span id="accountUsageGenerationLabel">Gerações com IA</span>
+            <span class="usage-meter-count" id="accountUsageGenerationCount"></span>
+          </div>
+          <div class="usage-meter-track" role="progressbar" aria-labelledby="accountUsageGenerationLabel" aria-valuemin="0" id="accountUsageGenerationBar"><span></span></div>
+        </div>
+        <div class="usage-meter" id="accountUsageRemix" hidden>
+          <div class="usage-meter-head">
+            <span id="accountUsageRemixLabel">Variações do caderno de erros</span>
+            <span class="usage-meter-count" id="accountUsageRemixCount"></span>
+          </div>
+          <div class="usage-meter-track" role="progressbar" aria-labelledby="accountUsageRemixLabel" aria-valuemin="0" id="accountUsageRemixBar"><span></span></div>
+        </div>
+        <p class="account-hint" id="accountPlanRenews" hidden></p>
+        <a href="/planos" class="secondary access-cta" id="accountPlansLink">Ver planos</a>
+      </section>
+
       <section class="account-section" aria-labelledby="accountDataTitle">
         <h3 id="accountDataTitle" class="access-option-title">Seus dados</h3>
         <p class="account-hint">Baixe uma cópia em JSON de tudo o que guardamos sobre você: conta, simulados e histórico.</p>
@@ -591,10 +617,18 @@
         <h3 id="accountDeleteTitle" class="access-option-title">Excluir conta</h3>
         <p class="account-hint">Apaga a conta, os simulados privados e o histórico. Não é possível desfazer.</p>
         <form id="deleteAccountForm" class="account-delete-form" novalidate>
+          <!-- DESATIVADO: confirmação por senha (contas que entram por código ou pelo Google não têm senha).
           <label for="deleteAccountPassword">Confirme sua senha</label>
           <input type="password" id="deleteAccountPassword" autocomplete="current-password" required>
+          -->
+          <p class="account-hint">Para confirmar, enviamos um código de 6 dígitos para o seu e-mail.</p>
+          <button type="button" class="secondary access-cta" id="deleteAccountSendCode">Enviar código de confirmação</button>
+          <div class="account-delete-code" id="deleteAccountCodeGroup" hidden>
+            <label for="deleteAccountCode">Código recebido por e-mail</label>
+            <input type="text" id="deleteAccountCode" class="code-digit-single" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" autocomplete="one-time-code" required>
+          </div>
           <p id="deleteAccountFeedback" class="form-feedback feedback-error" role="alert" hidden></p>
-          <button type="submit" class="access-cta btn-danger" id="deleteAccountBtn">Excluir minha conta</button>
+          <button type="submit" class="access-cta btn-danger" id="deleteAccountBtn" hidden>Excluir minha conta</button>
         </form>
       </section>
     </div>
@@ -653,6 +687,6 @@
   </div>
 
   <script type="module" src="/web/modules/backdrop.js?v=8"></script>
-  <script type="module" src="/web/app.js?v=21"></script>
+  <script type="module" src="/web/app.js?v=24"></script>
 </body>
 </html>

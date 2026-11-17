@@ -49,6 +49,31 @@ class AuthController:
 
     @timing_decorator
     @error_handler_decorator
+    def request_email_code(self, payload: dict) -> dict:
+        """POST /api/auth/email-code - Envia o código de 6 dígitos para entrar"""
+        if not isinstance(payload, dict):
+            raise QuizAPIException("Payload inválido", 400)
+        result = self.service.request_email_code(
+            str(payload.get("email") or ""),
+            purpose="login",
+            language=str(payload.get("language") or "pt-BR"),
+        )
+        return {"status": "success", "message": result["message"], "data": result}
+
+    @timing_decorator
+    @error_handler_decorator
+    def verify_email_code(self, payload: dict) -> dict:
+        """POST /api/auth/email-code/verify - Entra (ou cria a conta) com o código recebido"""
+        if not isinstance(payload, dict):
+            raise QuizAPIException("Payload inválido", 400)
+        result = self.service.login_with_email_code(
+            str(payload.get("email") or ""), str(payload.get("code") or "")
+        )
+        message = "Conta criada. Boas-vindas ao Acely." if result.get("created") else "Login realizado com sucesso"
+        return {"status": "success", "message": message, "data": result}
+
+    @timing_decorator
+    @error_handler_decorator
     def get_me(self, token: str) -> dict:
         """GET /api/auth/me - Retorna os dados do usuário autenticado"""
         if not token:

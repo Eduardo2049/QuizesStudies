@@ -40,6 +40,7 @@ PAGES = [
     "public/web/reset-password.html",
     "public/web/termos.html",
     "public/web/privacidade.html",
+    "public/web/produto.html",
     "404.html",
 ]
 CANONICAL = {
@@ -48,6 +49,7 @@ CANONICAL = {
     "public/web/register.html": f"{DOMAIN}/register",
     "public/web/termos.html": f"{DOMAIN}/termos",
     "public/web/privacidade.html": f"{DOMAIN}/privacidade",
+    "public/web/produto.html": f"{DOMAIN}/produto",
 }
 
 

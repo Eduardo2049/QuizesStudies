@@ -103,6 +103,28 @@ Atenção ao plano gratuito: projetos sem uso por uma semana são pausados e pre
 mantido de propósito; trocar aponta o contêiner para um banco vazio). Conexões em `localhost`
 não recebem `sslmode`.
 
+## 4.1 Planos e uso mensal (Fase S1 do PLANO_SAAS.md)
+
+| Tabela | O que guarda |
+|---|---|
+| `plans` | Um registro por plano (`free`, `pro`, `team`, `institution`) com os limites em `limits` (JSONB). |
+| `workspaces` | O workspace pessoal de cada conta (`kind = 'personal'`) e, na Fase S2, os de equipe. `plan_id` diz o plano. |
+| `workspace_members` | Quem participa de cada workspace e com que papel (`owner`, `manager`, `member`). |
+| `usage_counters` | Uso por pessoa, métrica (`ai_generation`, `ai_remix`) e mês (`AAAA-MM`, horário de Brasília). |
+
+- As linhas de `plans` nascem de `api/utils/plans.py` com `ON CONFLICT DO NOTHING`: um ajuste feito
+  direto no banco **não** é desfeito no próximo deploy. Para mudar um limite:
+  ```sql
+  UPDATE plans SET limits = jsonb_set(limits, '{ai_generations_per_month}', '50'), updated_at = NOW()
+  WHERE id = 'free';
+  ```
+- Para pôr uma conta em outro plano (até a cobrança da Fase S4 existir):
+  ```sql
+  UPDATE workspaces SET plan_id = 'pro'
+  WHERE kind = 'personal' AND owner_user_id = (SELECT id FROM users WHERE username = 'fulano');
+  ```
+- Excluir a conta apaga em cascata o workspace pessoal, os vínculos e os contadores de uso.
+
 ## 5. Boas práticas
 
 - Nunca commitar URLs com senha; valores reais só na Vercel, no GitHub Secrets ou no `.env` local.

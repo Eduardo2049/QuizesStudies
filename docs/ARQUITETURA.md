@@ -50,12 +50,14 @@ graph TD
 
 ### 2. Camada de Roteamento e Handlers (Backend HTTP)
 - **`api/handlers/quiz_handler.py`**: O roteador central HTTP (`BaseHTTPRequestHandler`). Trata:
-  - `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/logout`, `GET /api/auth/me`
+  - `POST /api/auth/email-code` (envia o código de 6 dígitos; 429 com `retry_after` no reenvio cedo demais), `POST /api/auth/email-code/verify` (entra ou cria a conta com o código; cookie HttpOnly como no login)
+  - `POST /api/auth/login` (tela só em `/login?senha=1`, usada pelo admin), `POST /api/auth/register` (sem tela: o cadastro é pelo código), `POST /api/auth/logout`, `GET /api/auth/me`
   - `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`, `GET /api/auth/verify-reset-token`
   - `GET /api/auth/providers`, `GET /api/auth/google/start`, `GET /api/auth/google/callback` (login com Google)
-  - `GET /api/account/export`, `POST /api/account/delete` (LGPD), `POST /api/quizzes/import` (simulados do convidado)
+  - `GET /api/account/export`, `POST /api/account/delete-code` (código para confirmar a exclusão), `POST /api/account/delete` (LGPD; confirma com `code`, ou `password` em clientes antigos), `POST /api/quizzes/import` (simulados do convidado)
   - `GET /api/user/attempts` (histórico e caderno de erros)
   - `POST /api/guest/start`, `POST /api/guest/end`, `GET /api/guest/status` (sessão de convidado e cota de IA)
+  - `GET /api/me/plan` (plano da conta, limites e uso do mês; `api/services/entitlements_service.py`)
   - `GET /api/quizzes`, `GET /api/quiz/{name}`
   - `POST /api/upload` (processamento de arquivos multipart)
   - `POST /api/quiz/generate` (geração de simulado por tema via IA; aceita `language`)
@@ -80,6 +82,7 @@ graph TD
 - **`api/services/import_service.py`**: Salva na conta os simulados criados como convidado, ao entrar ou se cadastrar.
 - **`api/services/email_service.py`**: Envio do e-mail de redefinição de senha.
 - **`api/services/auth_service.py`**: Criação de hash seguro de senhas com PBKDF2 (600k iterações), geração e validação de tokens de sessão opacos (armazenados como hash SHA-256 no banco).
+  - **Entrar com código por e-mail** (`request_email_code`, `login_with_email_code`): 6 dígitos de `secrets`, guardados na tabela `email_codes` só como HMAC-SHA256 (chave `AUTH_CODE_SECRET`, ligada ao e-mail e à finalidade `login`/`delete_account`). Vale `LOGIN_CODE_TTL_MINUTES` (10), aceita `LOGIN_CODE_MAX_ATTEMPTS` (5) palpites, reenvio após `LOGIN_CODE_RESEND_SECONDS` (60) e no máximo `LOGIN_CODE_MAX_PER_HOUR` (5) por e-mail. O código certo cria a conta (e-mail confirmado) se ela não existir; conta antiga sem e-mail confirmado tem a senha trocada por uma aleatória e as sessões derrubadas, como no Google. O admin não recebe código (resposta igual à de qualquer e-mail) e entra só com usuário e senha.
 
 ### 4. Camada de Dados e Persistência (Repositories & Database)
 - **`api/database/migrations.py`**: Migrações do schema PostgreSQL (tabelas `users`, `quizzes`, `sessions`) com fallback em memória SQLite.

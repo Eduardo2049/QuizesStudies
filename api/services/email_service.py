@@ -18,6 +18,7 @@ from api.utils.config import (
     SMTP_USE_TLS,
     SMTP_USE_SSL,
     DEBUG,
+    APP_URL,
 )
 
 
@@ -119,6 +120,31 @@ class EmailService:
             closing="Se você não criou uma conta no Acely, pode ignorar este e-mail.",
         )
         return self._deliver("Confirme seu e-mail — Acely", to_email, text_content, html_content, "confirmação")
+
+    def send_email_code(
+        self,
+        to_email: str,
+        code: str,
+        minutes: int,
+        purpose: str = "login",
+        language: str = "pt-BR",
+    ) -> tuple[bool, str]:
+        """Envia o código de 6 dígitos (entrar sem senha ou confirmar a exclusão da conta)."""
+        if not self.is_configured():
+            # O código só vai para o log em DEBUG, pelo mesmo motivo dos links (ver _log_unsent)
+            if DEBUG:
+                print(f"[auth:simulated] Código de {purpose} para <{to_email}>: {code}")
+            else:
+                print(f"[auth] SMTP não configurado: código de {purpose} não enviado (defina SMTP_HOST)")
+            return True, "simulated"
+
+        copy = _CODE_EMAIL_COPY["en" if str(language).lower().startswith("en") else "pt"][
+            "delete_account" if purpose == "delete_account" else "login"
+        ]
+        subject = copy["subject"].format(code=code)
+        text_content = copy["text"].format(code=code, minutes=minutes)
+        html_content = _render_code_email(code=code, minutes=minutes, copy=copy)
+        return self._deliver(subject, to_email, text_content, html_content, f"código ({purpose})")
 
     def _deliver(self, subject: str, to_email: str, text_content: str, html_content: str, kind: str) -> tuple[bool, str]:
         msg = MIMEMultipart("alternative")
@@ -230,6 +256,118 @@ def _render_email(username: str, url: str, intro: str, button: str, expiry: str,
     <div class="footer">
       Acely · Treinamento e simulados com IA ·
       <a href="{site_url}" style="color: #176b67;" target="_blank" rel="noopener">{site_label}</a>
+    </div>
+  </div>
+</body>
+</html>
+"""
+
+
+# Textos do e-mail com código. Ficam aqui (e não no dicionário do navegador) porque o
+# e-mail é montado no servidor; o idioma vem do campo `language` do pedido.
+_CODE_EMAIL_COPY = {
+    "pt": {
+        "login": {
+            "subject": "Seu código do Acely: {code}",
+            "title": "Seu código de acesso",
+            "intro": "Use o código abaixo para entrar no Acely. Se ainda não tem conta, ela é criada agora, de graça.",
+            "expiry": "O código vale por <strong>{minutes} minutos</strong> e só pode ser usado uma vez.",
+            "closing": "Se você não pediu este código, pode ignorar este e-mail. Ninguém entra na sua conta sem ele.",
+            "text": (
+                "Seu código de acesso ao Acely: {code}\n\n"
+                "Ele vale por {minutes} minutos e só pode ser usado uma vez.\n"
+                "Se você não pediu este código, pode ignorar este e-mail.\n\n"
+                "Equipe Acely"
+            ),
+            "footer": "Acely · Simulados com IA",
+            "lang": "pt-BR",
+        },
+        "delete_account": {
+            "subject": "Código para excluir sua conta no Acely",
+            "title": "Confirme a exclusão da conta",
+            "intro": "Recebemos um pedido para excluir sua conta no Acely com os simulados privados e o histórico. "
+            "Digite o código abaixo em Minha conta para confirmar.",
+            "expiry": "O código vale por <strong>{minutes} minutos</strong>. A exclusão não pode ser desfeita.",
+            "closing": "Se não foi você, ignore este e-mail: sem o código a conta continua como está.",
+            "text": (
+                "Código para confirmar a exclusão da sua conta no Acely: {code}\n\n"
+                "Ele vale por {minutes} minutos. A exclusão não pode ser desfeita.\n"
+                "Se não foi você, ignore este e-mail.\n\n"
+                "Equipe Acely"
+            ),
+            "footer": "Acely · Simulados com IA",
+            "lang": "pt-BR",
+        },
+    },
+    "en": {
+        "login": {
+            "subject": "Your Acely code: {code}",
+            "title": "Your sign in code",
+            "intro": "Use the code below to sign in to Acely. If you do not have an account yet, a free one is created now.",
+            "expiry": "The code is valid for <strong>{minutes} minutes</strong> and works only once.",
+            "closing": "If you did not ask for this code, you can ignore this email. No one gets into your account without it.",
+            "text": (
+                "Your Acely sign in code: {code}\n\n"
+                "It is valid for {minutes} minutes and works only once.\n"
+                "If you did not ask for this code, you can ignore this email.\n\n"
+                "The Acely team"
+            ),
+            "footer": "Acely · AI practice tests",
+            "lang": "en",
+        },
+        "delete_account": {
+            "subject": "Code to delete your Acely account",
+            "title": "Confirm account deletion",
+            "intro": "We received a request to delete your Acely account with its private tests and history. "
+            "Enter the code below in My account to confirm.",
+            "expiry": "The code is valid for <strong>{minutes} minutes</strong>. Deletion cannot be undone.",
+            "closing": "If this was not you, ignore this email: without the code the account stays as it is.",
+            "text": (
+                "Code to confirm deleting your Acely account: {code}\n\n"
+                "It is valid for {minutes} minutes. Deletion cannot be undone.\n"
+                "If this was not you, ignore this email.\n\n"
+                "The Acely team"
+            ),
+            "footer": "Acely · AI practice tests",
+            "lang": "en",
+        },
+    },
+}
+
+
+def _render_code_email(code: str, minutes: int, copy: dict) -> str:
+    """Modelo HTML do e-mail com código. O código é gerado no servidor (só dígitos) e os
+    textos são fixos; ainda assim tudo passa por escape antes de entrar no HTML."""
+    site_url = (APP_URL or "https://acely.com.br").rstrip("/")
+    logo_url = f"{site_url}/web/icons/favicon-192.png"
+    site_label = urlparse(site_url).netloc or "acely.com.br"
+    digits = escape(code)
+    # Três + três dígitos, mais fáceis de ler e de digitar
+    spaced = f"{digits[:3]}&nbsp;{digits[3:]}" if len(digits) == 6 else digits
+    expiry = copy["expiry"].format(minutes=int(minutes))
+    return f"""<!DOCTYPE html>
+<html lang="{copy['lang']}">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="light only">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f0e8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#182326;">
+  <div style="max-width:520px;margin:32px auto;background-color:#ffffff;border:1px solid #d8d0c3;border-radius:16px;overflow:hidden;">
+    <div style="padding:24px 32px;background-color:#0d3f3d;text-align:center;">
+      <img src="{escape(logo_url, quote=True)}" alt="Acely" width="40" height="40" style="display:block;margin:0 auto;border:0;">
+    </div>
+    <div style="padding:32px;font-size:16px;line-height:24px;">
+      <h1 style="margin:0 0 12px;font-size:24px;line-height:32px;color:#182326;">{escape(copy['title'])}</h1>
+      <p style="margin:0 0 24px;color:#3d4744;">{escape(copy['intro'])}</p>
+      <div style="margin:0 0 24px;padding:24px 16px;background-color:#f4f0e8;border:1px solid #d8d0c3;border-radius:12px;text-align:center;">
+        <span style="font-family:'DM Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:36px;line-height:40px;letter-spacing:6px;font-weight:700;color:#0d3f3d;">{spaced}</span>
+      </div>
+      <p style="margin:0 0 16px;font-size:14px;line-height:20px;color:#5b635e;">{expiry}</p>
+      <p style="margin:0;font-size:14px;line-height:20px;color:#5b635e;">{escape(copy['closing'])}</p>
+    </div>
+    <div style="padding:16px 32px;background-color:#f4f0e8;border-top:1px solid #d8d0c3;font-size:12px;line-height:16px;color:#5b635e;text-align:center;">
+      {escape(copy['footer'])} ·
+      <a href="{escape(site_url, quote=True)}" style="color:#176b67;" target="_blank" rel="noopener">{escape(site_label)}</a>
     </div>
   </div>
 </body>
