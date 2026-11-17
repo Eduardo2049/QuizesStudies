@@ -4361,3 +4361,74 @@ a.access-cta.primary:hover { color: var(--btn-primary-text); }
 }
 /* "Minha conta" passou da altura da tela: o cartão rola por dentro em vez de cortar o topo */
 .modal--access-compact { max-height: calc(100dvh - 2 * var(--space-5)); overflow-y: auto; overscroll-behavior: contain; }
+
+/* ─── Entrar com código de 6 dígitos (login e cadastro sem senha) ─────────────
+   Seis casas com DM Mono (é número), separadas 3 + 3. Ver modules/auth_page.js. */
+.code-sent-to { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: 20px; text-wrap: pretty; }
+.code-sent-to strong { color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+.code-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.code-legend { margin-bottom: var(--space-2); padding: 0; color: var(--ink); font: 600 var(--text-sm)/20px var(--font-sans); }
+.code-inputs { display: flex; align-items: center; gap: var(--space-2); }
+.code-sep { flex: 0 0 var(--space-2); height: 2px; border-radius: 2px; background: var(--line); }
+.code-digit {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 56px;
+  padding: 0;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  color: var(--ink);
+  caret-color: var(--coral);
+  text-align: center;
+  font: 500 var(--text-2xl, 24px)/32px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  transition: border-color 300ms var(--ease-out), box-shadow 300ms var(--ease-out), transform 300ms var(--ease-out);
+}
+.code-digit:focus { outline: 0; border-color: var(--teal); box-shadow: 0 0 0 3px var(--focus-ring); transform: translateY(-1px); }
+.code-digit.is-filled { border-color: var(--teal); }
+.code-inputs.is-error .code-digit { border-color: var(--error); }
+.code-inputs.is-error { animation: codeShake 400ms var(--ease-out); }
+@keyframes codeShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  50% { transform: translateX(4px); }
+  75% { transform: translateX(-2px); }
+}
+.code-timer { display: flex; align-items: baseline; gap: var(--space-1); margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: 20px; }
+.code-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.code-mono:empty, .code-mono[hidden] { display: none; }
+.code-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-2); }
+.code-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-1);
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font: 600 var(--text-sm)/20px var(--font-sans);
+  cursor: pointer;
+  transition: opacity 300ms var(--ease-out), transform 300ms var(--ease-out);
+}
+.code-link-btn:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 3px; }
+.code-link-btn:active:not(:disabled) { transform: scale(0.98); }
+.code-link-btn:focus-visible { outline: 2px solid var(--line-focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+.code-link-btn:disabled { color: var(--muted); cursor: default; }
+.code-link-btn .code-mono { color: inherit; }
+.auth-sublink--center { align-self: center; display: inline-flex; align-items: center; min-height: 44px; }
+.login-footer-hint[hidden] { display: none; }
+@media (max-width: 380px) {
+  .code-inputs { gap: var(--space-1); }
+  .code-digit { height: 52px; font-size: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .code-inputs.is-error { animation: none; }
+  .code-digit, .code-digit:focus { transform: none; }
+}
+
+/* Minha conta: exclusão confirmada com código enviado ao e-mail */
+.account-delete-form .code-digit-single { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: 4px; }
+.account-delete-code { display: flex; flex-direction: column; gap: var(--space-2); }
+.account-delete-code[hidden], .account-delete-form .btn-danger[hidden] { display: none; }

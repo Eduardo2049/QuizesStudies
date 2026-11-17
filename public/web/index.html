@@ -33,18 +33,18 @@
     ]
   }
   </script>
-  <link rel="stylesheet" href="/web/styles.css?v=28">
+  <link rel="stylesheet" href="/web/styles.css?v=29">
   <!-- Desempenho: a fonte do texto e os módulos do app.js começam a baixar junto com o CSS,
        em vez de em cascata depois do app.js (manter os ?v= iguais aos dos imports) -->
   <link rel="preload" href="/web/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="modulepreload" href="/web/app.js?v=23">
+  <link rel="modulepreload" href="/web/app.js?v=24">
   <link rel="modulepreload" href="/web/modules/icons.js?v=6">
   <link rel="modulepreload" href="/web/modules/theme.js?v=9">
   <link rel="modulepreload" href="/web/modules/shortcuts.js?v=5">
   <link rel="modulepreload" href="/web/modules/stats.js?v=7">
   <link rel="modulepreload" href="/web/modules/timer-drag.js?v=1">
-  <link rel="modulepreload" href="/web/modules/i18n.js?v=7">
-  <link rel="modulepreload" href="/web/modules/i18n/en.js?v=7">
+  <link rel="modulepreload" href="/web/modules/i18n.js?v=8">
+  <link rel="modulepreload" href="/web/modules/i18n/en.js?v=8">
   <!-- Script de prevenção de FOUC de tema (execução imediata, bloqueante) -->
   <script src="/web/modules/theme-boot.js"></script>
   <script src="/web/modules/i18n-boot.js?v=1"></script>
@@ -617,10 +617,18 @@
         <h3 id="accountDeleteTitle" class="access-option-title">Excluir conta</h3>
         <p class="account-hint">Apaga a conta, os simulados privados e o histórico. Não é possível desfazer.</p>
         <form id="deleteAccountForm" class="account-delete-form" novalidate>
+          <!-- DESATIVADO: confirmação por senha (contas que entram por código ou pelo Google não têm senha).
           <label for="deleteAccountPassword">Confirme sua senha</label>
           <input type="password" id="deleteAccountPassword" autocomplete="current-password" required>
+          -->
+          <p class="account-hint">Para confirmar, enviamos um código de 6 dígitos para o seu e-mail.</p>
+          <button type="button" class="secondary access-cta" id="deleteAccountSendCode">Enviar código de confirmação</button>
+          <div class="account-delete-code" id="deleteAccountCodeGroup" hidden>
+            <label for="deleteAccountCode">Código recebido por e-mail</label>
+            <input type="text" id="deleteAccountCode" class="code-digit-single" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" autocomplete="one-time-code" required>
+          </div>
           <p id="deleteAccountFeedback" class="form-feedback feedback-error" role="alert" hidden></p>
-          <button type="submit" class="access-cta btn-danger" id="deleteAccountBtn">Excluir minha conta</button>
+          <button type="submit" class="access-cta btn-danger" id="deleteAccountBtn" hidden>Excluir minha conta</button>
         </form>
       </section>
     </div>
@@ -679,6 +687,6 @@
   </div>
 
   <script type="module" src="/web/modules/backdrop.js?v=8"></script>
-  <script type="module" src="/web/app.js?v=23"></script>
+  <script type="module" src="/web/app.js?v=24"></script>
 </body>
 </html>

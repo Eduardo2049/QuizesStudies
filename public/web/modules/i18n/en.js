@@ -712,4 +712,67 @@ export default {
   "outubro": "October",
   "novembro": "November",
   "dezembro": "December",
+  // ── Entrar com código de 6 dígitos por e-mail (login.html, register.html) ──
+  'Receber código': 'Get my code',
+  'e a': 'and the',
+  'Sem conta ainda? Ela é criada no primeiro acesso. Ao continuar, você concorda com os':
+    'No account yet? It is created the first time you sign in. By continuing, you agree to the',
+  'Enviamos um código de 6 dígitos para': 'We sent a code with 6 digits to',
+  'Código de acesso': 'Access code',
+  'Dígito {0} de 6': 'Digit {0} of 6',
+  'O código vence em': 'The code expires in',
+  'O código venceu. Peça um novo.': 'The code expired. Ask for a new one.',
+  'Reenviar código': 'Resend code',
+  'Trocar e-mail': 'Change email',
+  'Entrar com código por e-mail': 'Sign in with an email code',
+  'Digite seu e-mail e enviamos um código de 6 dígitos. Sem senha para lembrar.':
+    'Enter your email and we send you a code with 6 digits. No password to remember.',
+  'Digite seu e-mail e enviamos um código de 6 dígitos. A conta é criada no primeiro acesso, sem senha e sem cartão de crédito.':
+    'Enter your email and we send you a code with 6 digits. Your account is created the first time you sign in, with no password and no credit card.',
+  'Já tinha conta com usuário e senha? Use o mesmo e-mail: o código abre a conta que você já tem.':
+    'Had an account with a username and password? Use the same email: the code opens the account you already have.',
+  'Acesso com usuário e senha, usado pela conta de administrador.':
+    'Username and password access, used by the administrator account.',
+  'O login com Google não está disponível agora. Entre com o código por e-mail.':
+    'Signing in with Google is not available right now. Use the email code instead.',
+  'O Google não confirmou o login. Tente de novo ou entre com o código por e-mail.':
+    'Google did not confirm your login. Try again or use the email code.',
+  'Enviando código…': 'Sending code…',
+  'Não foi possível enviar o código. Tente novamente.': 'Could not send the code. Try again.',
+  'Modo de desenvolvimento: o código é {0}': 'Development mode: the code is {0}',
+  'Digite os 6 números do código.': 'Enter the 6 numbers of the code.',
+  'Conferindo o código…': 'Checking the code…',
+  'Código incorreto. Confira o e-mail e tente de novo.': 'Wrong code. Check your email and try again.',
+  'Conta criada. Abrindo seus simulados…': 'Account created. Opening your quizzes…',
+  'Enviamos um novo código. O anterior deixou de valer.': 'We sent a new code. The previous one no longer works.',
+  // Mensagens do servidor (api/services/auth_service.py)
+  'Enviamos um código de 6 dígitos para o seu e-mail.': 'We sent a code with 6 digits to your email.',
+  'O envio de códigos por e-mail está indisponível agora. Entre com o Google ou continue como convidado.':
+    'Email codes are unavailable right now. Sign in with Google or continue as a guest.',
+  'Aguarde {0} segundos para pedir outro código.': 'Wait {0} seconds to ask for another code.',
+  'Muitos códigos pedidos para este e-mail. Tente de novo em 15 minutos.':
+    'Too many codes were requested for this email. Try again in 15 minutes.',
+  'Não foi possível enviar o código agora. Tente de novo em alguns minutos.':
+    'Could not send the code now. Try again in a few minutes.',
+  'Este código venceu ou já foi usado. Peça um novo código.': 'This code expired or was already used. Ask for a new code.',
+  'Código incorreto. Você ainda tem {0} tentativa(s) com este código.':
+    'Wrong code. You have {0} attempt(s) left with this code.',
+  'Conta criada. Boas-vindas ao Acely.': 'Account created. Welcome to Acely.',
+  // Minha conta: exclusão confirmada com código
+  'Para confirmar, enviamos um código de 6 dígitos para o seu e-mail.': 'To confirm, we send a code with 6 digits to your email.',
+  'Enviar código de confirmação': 'Send confirmation code',
+  'Enviar outro código': 'Send another code',
+  'Código recebido por e-mail': 'Code from your email',
+  'Digite os 6 números do código enviado para o seu e-mail.': 'Enter the 6 numbers of the code sent to your email.',
+  'Não foi possível enviar o código agora. Tente novamente em alguns minutos.':
+    'Could not send the code now. Try again in a few minutes.',
+  'Enviamos um código para o seu e-mail. Digite-o abaixo para confirmar.': 'We sent a code to your email. Enter it below to confirm.',
+  'Confirme com o código enviado para o seu e-mail.': 'Confirm with the code sent to your email.',
+  'Código incorreto. Você ainda tem {0} tentativa(s) com este código. A conta não foi excluída.':
+    'Wrong code. You have {0} attempt(s) left with this code. The account was not deleted.',
+  'Este código venceu ou já foi usado. Peça um novo código. A conta não foi excluída.':
+    'This code expired or was already used. Ask for a new code. The account was not deleted.',
+  'Digite os 6 números do código. A conta não foi excluída.': 'Enter the 6 numbers of the code. The account was not deleted.',
+  'Seu e-mail ainda não foi confirmado. Ele fica confirmado no próximo acesso com código ou pelo link que enviamos.':
+    'Your email is not confirmed yet. It is confirmed the next time you sign in with a code or through the link we sent.',
 };

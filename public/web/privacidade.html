@@ -17,7 +17,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/web/icons/favicon-32x32.png?v=3">
   <link rel="apple-touch-icon" sizes="180x180" href="/web/icons/apple-touch-icon.png?v=3">
   <link rel="shortcut icon" href="/web/icons/favicon.ico?v=3">
-  <link rel="stylesheet" href="/web/styles.css?v=28">
+  <link rel="stylesheet" href="/web/styles.css?v=29">
   <script src="/web/modules/theme-boot.js"></script>
 </head>
 <body class="legal-body">
@@ -30,7 +30,7 @@
       </a>
       <p class="eyebrow">Acely · privacidade</p>
       <h1 class="legal-title">Política de privacidade</h1>
-      <p class="legal-meta">Versão de 6 de novembro de 2026 · Lei Geral de Proteção de Dados (Lei 13.709/2018)</p>
+      <p class="legal-meta">Versão de 17 de novembro de 2026 · Lei Geral de Proteção de Dados (Lei 13.709/2018)</p>
 
       <p>Esta política explica quais dados o Acely trata, para quê, com quem compartilha e como você exerce seus direitos. Controlador dos dados: <mark class="legal-fill">Eduardo Felipe Alves de Sousa</mark>. Contato do encarregado: <mark class="legal-fill">edudev2049@gmail.com</mark>.</p>
 
@@ -39,8 +39,9 @@
       <table class="legal-table">
         <thead><tr><th>Dado</th><th>Para quê</th><th>Por quanto tempo</th></tr></thead>
         <tbody>
-          <tr><td>Usuário, e-mail e senha (guardada só como hash PBKDF2)</td><td>Criar e proteger sua conta; recuperar a senha</td><td>Enquanto a conta existir</td></tr>
-          <tr><td>Confirmação do e-mail (se o e-mail foi confirmado e o link de confirmação, guardado só como hash)</td><td>Provar que o e-mail é seu antes de usá-lo para recuperar a senha ou entrar com Google</td><td>Situação: enquanto a conta existir; link: 24 horas</td></tr>
+          <tr><td>Usuário, e-mail e, em contas criadas antes do acesso por código, senha (guardada só como hash PBKDF2)</td><td>Criar e proteger sua conta</td><td>Enquanto a conta existir</td></tr>
+          <tr><td>Código de acesso de 6 dígitos enviado ao seu e-mail (guardado só como hash, com o e-mail e o número de tentativas)</td><td>Entrar sem senha, criar a conta no primeiro acesso e confirmar a exclusão da conta</td><td>Vale 10 minutos; o registro é apagado até 1 dia depois de vencer, ou junto com a conta</td></tr>
+          <tr><td>Confirmação do e-mail (se o e-mail foi confirmado e o link de confirmação, guardado só como hash)</td><td>Provar que o e-mail é seu antes de usá-lo para entrar com código ou com Google</td><td>Situação: enquanto a conta existir; link: 24 horas</td></tr>
           <tr><td>Cookie de sessão <code>__Host-acely_session</code> (antes <code>ifuture_session</code>)</td><td>Manter você conectado</td><td>7 dias</td></tr>
           <tr><td>Cookie de convidado <code>qs_guest</code> (identificador aleatório, sem dados pessoais)</td><td>Contar a cota gratuita de IA</td><td>30 dias</td></tr>
           <tr><td>Simulados criados e histórico de tentativas (nota, percentual, questões erradas)</td><td>Mostrar seus simulados, estatísticas e caderno de erros</td><td>Enquanto a conta existir</td></tr>
@@ -56,7 +57,7 @@
       <p>Execução do serviço que você pediu (conta, simulados, histórico), legítimo interesse (segurança, limites de uso, métricas agregadas) e cumprimento de obrigação legal quando aplicável.</p>
 
       <h2>3. Com quem compartilhamos</h2>
-      <p>Apenas com operadores necessários para o serviço funcionar: hospedagem (Vercel), banco de dados PostgreSQL, provedor de e-mail para a recuperação de senha e provedores de IA, que recebem o texto ou o tema enviado para gerar as questões. Os provedores de IA são usados um de cada vez, na ordem em que estiverem disponíveis: Groq (não usa os pedidos para treinar modelos), Google Gemini (no plano gratuito, o Google usa o conteúdo enviado para melhorar os produtos dele), Cerebras e OpenRouter (que repassa o pedido a modelos gratuitos de terceiros, cujos provedores podem guardar os pedidos e usá-los para melhorar seus serviços). Por isso, evite enviar dados pessoais nos arquivos. Não vendemos dados. Alguns desses operadores podem processar dados fora do Brasil.</p>
+      <p>Apenas com operadores necessários para o serviço funcionar: hospedagem (Vercel), banco de dados PostgreSQL, provedor de e-mail para os códigos de acesso e os avisos da conta e provedores de IA, que recebem o texto ou o tema enviado para gerar as questões. Os provedores de IA são usados um de cada vez, na ordem em que estiverem disponíveis: Groq (não usa os pedidos para treinar modelos), Google Gemini (no plano gratuito, o Google usa o conteúdo enviado para melhorar os produtos dele), Cerebras e OpenRouter (que repassa o pedido a modelos gratuitos de terceiros, cujos provedores podem guardar os pedidos e usá-los para melhorar seus serviços). Por isso, evite enviar dados pessoais nos arquivos. Não vendemos dados. Alguns desses operadores podem processar dados fora do Brasil.</p>
 
       <h2>4. Seus direitos</h2>
       <ul>
@@ -66,7 +67,7 @@
       </ul>
 
       <h2>5. Segurança</h2>
-      <p>Senhas e tokens de sessão são guardados como hash, os cookies são HttpOnly e o tráfego usa HTTPS. Nenhum sistema é totalmente imune; se houver um incidente que afete seus dados, avisaremos conforme a LGPD.</p>
+      <p>Senhas, códigos de acesso e tokens de sessão são guardados como hash, os cookies são HttpOnly e o tráfego usa HTTPS. Nenhum sistema é totalmente imune; se houver um incidente que afete seus dados, avisaremos conforme a LGPD.</p>
 
       <h2>6. Menores de idade</h2>
       <p>Menores de 18 anos devem usar a plataforma com o acompanhamento de um responsável.</p>

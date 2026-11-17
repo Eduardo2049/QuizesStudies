@@ -56,14 +56,24 @@ class _PageParser(HTMLParser):
                     self.references.append((name, ref))
 
 
+# Código comentado (ex.: o login por senha desativado em login.html e auth_page.js) não conta:
+# o navegador não executa nem renderiza, então não precisa achar IDs nem gera IDs repetidos.
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
+_JS_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+
+
+def _page_source(page):
+    return _HTML_COMMENT.sub("", (WEB_DIR / page).read_text(encoding="utf-8"))
+
+
 def _parse(page):
     parser = _PageParser()
-    parser.feed((WEB_DIR / page).read_text(encoding="utf-8"))
+    parser.feed(_page_source(page))
     return parser
 
 
 def _read(script):
-    return (WEB_DIR / script).read_text(encoding="utf-8")
+    return _JS_BLOCK_COMMENT.sub("", (WEB_DIR / script).read_text(encoding="utf-8"))
 
 
 def _looked_up_ids(source):
@@ -109,7 +119,7 @@ class TestUIContract(unittest.TestCase):
 
     def test_ids_are_unique_per_page(self):
         for page in PAGES:
-            ids = re.findall(r'\sid="([^"]+)"', (WEB_DIR / page).read_text(encoding="utf-8"))
+            ids = re.findall(r'\sid="([^"]+)"', _page_source(page))
             duplicated = sorted({i for i in ids if ids.count(i) > 1})
             with self.subTest(page=page):
                 self.assertEqual(duplicated, [], f"{page} tem IDs repetidos: {duplicated}")
