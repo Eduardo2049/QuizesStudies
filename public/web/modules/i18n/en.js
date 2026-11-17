@@ -775,4 +775,79 @@ export default {
   'Digite os 6 números do código. A conta não foi excluída.': 'Enter the 6 numbers of the code. The account was not deleted.',
   'Seu e-mail ainda não foi confirmado. Ele fica confirmado no próximo acesso com código ou pelo link que enviamos.':
     'Your email is not confirmed yet. It is confirmed the next time you sign in with a code or through the link we sent.',
+  // ── Página inicial protótipo (/inicio) ─────────────────────────────────────
+  'Acely · Seu material vira simulado': 'Acely · Your material becomes a quiz',
+  'Mural': 'Mural',
+  'Comece por aqui': 'Start here',
+  'Simulados com IA · grátis para começar': 'AI quizzes · free to start',
+  'Seu material': 'Your material',
+  'vira simulado.': 'becomes a quiz.',
+  'Seu erro': 'Your mistake',
+  'vira treino.': 'becomes practice.',
+  'Envie um PDF, DOCX ou TXT, ou digite um tema. O Acely monta as questões com gabarito comentado e cronômetro, corrige na hora e transforma cada erro em uma questão nova.':
+    'Upload a PDF, DOCX or TXT, or type a topic. Acely builds the questions with an explained answer key and a timer, grades them right away and turns each mistake into a new question.',
+  'Ver como funciona': 'See how it works',
+  'entre só com o e-mail': 'sign in with just your email',
+  'Do vestibular ao treinamento da empresa': 'From entrance exams to company training',
+  'Mostrar no mural': 'Show on the mural',
+  'Você traz': 'You bring',
+  'A IA entrega': 'AI delivers',
+  'O que você traz': 'What you bring',
+  'PDF da apostila': 'Course PDF',
+  'DOCX do resumo': 'Summary DOCX',
+  'TXT das anotações': 'Notes TXT',
+  'Um tema digitado': 'A typed topic',
+  'Prova antiga com gabarito': 'Past exam with answer key',
+  'Manual da empresa': 'Company handbook',
+  'O que a IA entrega': 'What AI delivers',
+  'Questões de múltipla escolha': 'Multiple choice questions',
+  'Gabarito comentado': 'Explained answer key',
+  'Cronômetro e modo foco': 'Timer and focus mode',
+  'Estatísticas por tema': 'Stats by topic',
+  'Caderno de erros': 'Mistake notebook',
+  'Variações das questões erradas': 'Variations of missed questions',
+  'Você não precisa de mais conteúdo. Precisa treinar com o que já tem.':
+    'You do not need more content. You need to practice with what you already have.',
+  'Quatro passos entre a apostila e o treino': 'Four steps from your notes to practice',
+  'Uma questão por vez ou a lista inteira, atalhos de teclado e o tempo que você escolher. O gabarito só aparece no fim.':
+    'One question at a time or the whole list, keyboard shortcuts and the time you choose. The answer key only shows at the end.',
+  'Explicação em cada questão e estatísticas por tema mostram onde está a dificuldade, e não só a nota final.':
+    'An explanation for every question and stats by topic show where the difficulty is, not just the final score.',
+  'Treine de novo o que errou': 'Practice what you missed again',
+  'O caderno de erros gera variações inéditas das questões que você errou, para treinar o conceito e não decorar a letra.':
+    'The mistake notebook creates new variations of the questions you missed, so you practice the concept instead of memorizing the letter.',
+  'Questão 7': 'Question 7',
+  '3 variações novas': '3 new variations',
+  'No plano Grátis, hoje': 'On the Free plan, today',
+  'questões por simulado': 'questions per quiz',
+  'MB por arquivo enviado': 'MB per uploaded file',
+  'gerações com IA sem cadastro': 'AI generations without signing up',
+  'idiomas na tela e nas questões': 'languages in the interface and questions',
+  'Escolha por onde entrar no Acely': 'Choose where to start in Acely',
+  'Digite um assunto e escolha quantas questões e a dificuldade.': 'Type a subject and choose how many questions and the difficulty.',
+  'Enviar um arquivo': 'Upload a file',
+  'PDF, DOCX ou TXT de até 20 MB. Com gabarito, vira simulado sem gastar IA.':
+    'PDF, DOCX or TXT up to 20 MB. With an answer key, it becomes a quiz without using AI.',
+  'Explorar simulados prontos': 'Browse ready quizzes',
+  'Simulados públicos para resolver agora, sem cadastro.': 'Public quizzes to take now, without signing up.',
+  'Entrar com seu e-mail': 'Sign in with your email',
+  'Um código de 6 dígitos chega no e-mail e a conta fica pronta. Sem senha.':
+    'A code with 6 digits arrives by email and your account is ready. No password.',
+  'Temas para testar agora': 'Topics to try now',
+  'Preciso de senha para entrar?': 'Do I need a password to sign in?',
+  'Não. Você digita o e-mail e recebe um código de 6 dígitos que vale por 10 minutos. Se ainda não tem conta, ela é criada nesse primeiro acesso.':
+    'No. You type your email and get a code with 6 digits that works for 10 minutes. If you do not have an account yet, it is created on that first sign in.',
+  'Não. Você resolve os simulados públicos sem cadastro e, como convidado, gera até 3 simulados com IA a cada 24 horas.':
+    'No. You can take the public quizzes without signing up and, as a guest, generate up to 3 AI quizzes every 24 hours.',
+  'Pode. Por isso cada questão vem com explicação para você conferir antes de confiar na resposta.':
+    'It can. That is why every question comes with an explanation, so you can check it before trusting the answer.',
+  'O texto vai para o provedor de IA só para gerar o simulado. Você pode exportar ou apagar seus dados em Minha conta. Os detalhes estão na':
+    'The text goes to the AI provider only to generate the quiz. You can export or delete your data in My account. The details are in the',
+  'Funciona no celular e em inglês?': 'Does it work on phones and in English?',
+  'Sim. O Acely roda no navegador do celular, do tablet e do computador, e a interface e as questões saem em português ou inglês.':
+    'Yes. Acely runs in the browser on phones, tablets and computers, and the interface and questions come in Portuguese or English.',
+  'Rodapé': 'Footer',
+  // Link direto ?simulado= (app.js)
+  'Não encontramos esse simulado. Abrimos o primeiro da lista.': 'We could not find that quiz. We opened the first one on the list.',
+  'Simulado não encontrado': 'Quiz not found',
 };
