@@ -3,7 +3,7 @@ import { initTheme, toggleTheme } from './modules/theme.js?v=9';
 import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js?v=5';
 import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=7';
 import { initTimerDrag } from './modules/timer-drag.js?v=1';
-import { getLanguage } from './modules/i18n.js?v=9';
+import { getLanguage } from './modules/i18n.js?v=10';
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 const quiz = document.querySelector('#quiz');
@@ -2102,7 +2102,7 @@ async function checkAuth() {
   } finally {
     sessionResolved = true;
     if (wantsGuest) {
-      history.replaceState(history.state, '', `/${window.location.search}${window.location.hash}`);
+      history.replaceState(history.state, '', `/app${window.location.search}${window.location.hash}`);
     }
     updateAuthUI();
   }
@@ -2127,19 +2127,19 @@ const ACCESS_COPY = {
     badge: 'Grátis',
     title: 'Crie simulados com IA',
     text: 'Escolha como continuar. A conta grátis guarda seus simulados e seu histórico em qualquer dispositivo. No modo convidado você testa agora, sem cadastro.',
-    next: '/?abrir=criar',
+    next: '/app?abrir=criar',
   },
   remix: {
     badge: 'Grátis',
     title: 'Gere novas questões a partir dos seus erros',
     text: 'A IA cria variações inéditas das questões que você errou. Entre na sua conta ou continue como convidado para usar agora.',
-    next: '/',
+    next: '/app',
   },
   limit: {
     badge: 'Limite do convidado',
     title: 'Você usou as gerações grátis',
     text: '',
-    next: '/?abrir=criar',
+    next: '/app?abrir=criar',
   },
 };
 

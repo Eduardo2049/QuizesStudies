@@ -5,17 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Acely · Seu material vira simulado</title>
   <meta name="description" content="Envie um PDF, DOCX ou TXT, ou digite um tema. O Acely monta o simulado com gabarito comentado e cronômetro e transforma cada erro em treino. Grátis, entre só com o e-mail.">
-  <!-- Protótipo: fora dos buscadores até virar a página inicial (docs/PLANO_SAAS.md, Fase S6) -->
-  <meta name="robots" content="noindex">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Acely">
   <meta property="og:title" content="Acely · Seu material vira simulado. Seu erro vira treino.">
   <meta property="og:description" content="Simulados com IA a partir do seu material, com gabarito comentado, cronômetro e caderno de erros.">
-  <meta property="og:url" content="https://acely.com.br/inicio">
+  <meta property="og:url" content="https://acely.com.br/">
   <meta property="og:image" content="https://acely.com.br/web/icons/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#000000">
-  <link rel="canonical" href="https://acely.com.br/inicio">
+  <link rel="canonical" href="https://acely.com.br/">
   <link rel="icon" type="image/svg+xml" href="/web/icons/favicon.svg?v=3">
   <link rel="icon" type="image/png" sizes="32x32" href="/web/icons/favicon-32x32.png?v=3">
   <link rel="apple-touch-icon" sizes="180x180" href="/web/icons/apple-touch-icon.png?v=3">
@@ -35,10 +33,10 @@
     ]
   }
   </script>
-  <link rel="stylesheet" href="/web/styles.css?v=29">
+  <link rel="stylesheet" href="/web/styles.css?v=30">
   <link rel="stylesheet" href="/web/inicio.css?v=1">
   <link rel="preload" href="/web/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="modulepreload" href="/web/modules/inicio.js?v=1">
+  <link rel="modulepreload" href="/web/modules/inicio.js?v=2">
   <script src="/web/modules/i18n-boot.js?v=1"></script>
   <script src="/web/modules/analytics-boot.js"></script>
   <script defer src="/_vercel/insights/script.js"></script>
@@ -50,7 +48,7 @@
   <!-- ── Navegação flutuante ──────────────────────────────────────────── -->
   <header class="in-nav-wrap">
     <nav class="in-nav" aria-label="Principal">
-      <a href="/inicio" class="in-logo" aria-current="page">
+      <a href="/" class="in-logo" aria-current="page">
         <img src="/web/icons/favicon.svg?v=3" alt="" width="24" height="24">
         <span translate="no">Acely</span>
       </a>
@@ -64,8 +62,8 @@
         <button id="langToggle" class="in-icon-btn" type="button" data-lang-toggle translate="no">
           <span class="lang-code">PT</span>
         </button>
-        <a href="/login" class="in-link-quiet in-hide-mobile">Entrar</a>
-        <a href="/?abrir=criar" class="in-btn in-btn--primary in-btn--sm in-hide-mobile">Começar grátis</a>
+        <a href="/login" class="in-link-quiet in-hide-mobile" id="inNavAccount">Entrar</a>
+        <a href="/app?abrir=criar" class="in-btn in-btn--primary in-btn--sm in-hide-mobile">Começar grátis</a>
         <button class="in-menu-toggle" id="inMenuToggle" type="button" aria-expanded="false" aria-controls="inMenu" aria-label="Abrir menu">
           <span class="in-menu-line" aria-hidden="true"></span>
           <span class="in-menu-line" aria-hidden="true"></span>
@@ -78,9 +76,9 @@
         <li><a href="#como-funciona" data-menu-link>Como funciona</a></li>
         <li><a href="#comece" data-menu-link>Comece por aqui</a></li>
         <li><a href="#perguntas" data-menu-link>Perguntas</a></li>
-        <li><a href="/login" data-menu-link>Entrar</a></li>
+        <li><a href="/login" data-menu-link id="inMenuAccount">Entrar</a></li>
       </ul>
-      <a href="/?abrir=criar" class="in-btn in-btn--primary in-btn--block" data-menu-link>Começar grátis</a>
+      <a href="/app?abrir=criar" class="in-btn in-btn--primary in-btn--block" data-menu-link>Começar grátis</a>
     </div>
   </header>
 
@@ -105,7 +103,7 @@
         <div class="in-hero-side">
           <p class="in-hero-sub">Envie um PDF, DOCX ou TXT, ou digite um tema. O Acely monta as questões com gabarito comentado e cronômetro, corrige na hora e transforma cada erro em uma questão nova.</p>
           <div class="in-hero-actions">
-            <a href="/?abrir=criar" class="in-btn in-btn--primary">Criar meu primeiro simulado</a>
+            <a href="/app?abrir=criar" class="in-btn in-btn--primary">Criar meu primeiro simulado</a>
             <a href="#como-funciona" class="in-link-quiet">Ver como funciona</a>
           </div>
           <p class="in-proof">Grátis <span aria-hidden="true">·</span> sem cartão <span aria-hidden="true">·</span> entre só com o e-mail</p>
@@ -128,32 +126,32 @@
         </div>
 
         <ul class="in-tiles" id="inMuralYou" aria-label="O que você traz">
-          <li><a class="in-tile" href="/?abrir=arquivo">
+          <li><a class="in-tile" href="/app?abrir=arquivo">
             <span class="in-tile-num in-mono" aria-hidden="true">01</span>
             <svg class="in-tile-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h4"/></svg>
             <span class="in-tile-label">PDF da apostila</span>
           </a></li>
-          <li><a class="in-tile" href="/?abrir=arquivo">
+          <li><a class="in-tile" href="/app?abrir=arquivo">
             <span class="in-tile-num in-mono" aria-hidden="true">02</span>
             <svg class="in-tile-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16M4 10h16M4 15h10M4 20h7"/></svg>
             <span class="in-tile-label">DOCX do resumo</span>
           </a></li>
-          <li><a class="in-tile" href="/?abrir=arquivo">
+          <li><a class="in-tile" href="/app?abrir=arquivo">
             <span class="in-tile-num in-mono" aria-hidden="true">03</span>
             <svg class="in-tile-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14v16H5z"/><path d="M9 4v16"/><path d="M12 8h4M12 12h4M12 16h2"/></svg>
             <span class="in-tile-label">TXT das anotações</span>
           </a></li>
-          <li><a class="in-tile" href="/?abrir=tema">
+          <li><a class="in-tile" href="/app?abrir=tema">
             <span class="in-tile-num in-mono" aria-hidden="true">04</span>
             <svg class="in-tile-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
             <span class="in-tile-label">Um tema digitado</span>
           </a></li>
-          <li><a class="in-tile" href="/?abrir=arquivo">
+          <li><a class="in-tile" href="/app?abrir=arquivo">
             <span class="in-tile-num in-mono" aria-hidden="true">05</span>
             <svg class="in-tile-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14v16H5z"/><path d="M8 9l2 2 4-4"/><path d="M8 15h8"/></svg>
             <span class="in-tile-label">Prova antiga com gabarito</span>
           </a></li>
-          <li><a class="in-tile" href="/?abrir=arquivo">
+          <li><a class="in-tile" href="/app?abrir=arquivo">
             <span class="in-tile-num in-mono" aria-hidden="true">06</span>
             <svg class="in-tile-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-5h6v5"/></svg>
             <span class="in-tile-label">Manual da empresa</span>
@@ -161,32 +159,32 @@
         </ul>
 
         <ul class="in-tiles" id="inMuralAi" aria-label="O que a IA entrega" hidden>
-          <li><a class="in-tile" href="/?abrir=explorar">
+          <li><a class="in-tile" href="/app?abrir=explorar">
             <span class="in-tile-num in-mono" aria-hidden="true">01</span>
             <svg class="in-tile-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="12" r="2"/><circle cx="6" cy="18" r="2"/><path d="M11 6h9M11 12h9M11 18h9"/></svg>
             <span class="in-tile-label">Questões de múltipla escolha</span>
           </a></li>
-          <li><a class="in-tile" href="/?abrir=explorar">
+          <li><a class="in-tile" href="/app?abrir=explorar">
             <span class="in-tile-num in-mono" aria-hidden="true">02</span>
             <svg class="in-tile-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
             <span class="in-tile-label">Gabarito comentado</span>
           </a></li>
-          <li><a class="in-tile" href="/?abrir=explorar">
+          <li><a class="in-tile" href="/app?abrir=explorar">
             <span class="in-tile-num in-mono" aria-hidden="true">03</span>
             <svg class="in-tile-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>
             <span class="in-tile-label">Cronômetro e modo foco</span>
           </a></li>
-          <li><a class="in-tile" href="/?abrir=explorar">
+          <li><a class="in-tile" href="/app?abrir=explorar">
             <span class="in-tile-num in-mono" aria-hidden="true">04</span>
             <svg class="in-tile-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
             <span class="in-tile-label">Estatísticas por tema</span>
           </a></li>
-          <li><a class="in-tile" href="/?abrir=explorar">
+          <li><a class="in-tile" href="/app?abrir=explorar">
             <span class="in-tile-num in-mono" aria-hidden="true">05</span>
             <svg class="in-tile-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
             <span class="in-tile-label">Caderno de erros</span>
           </a></li>
-          <li><a class="in-tile" href="/?abrir=explorar">
+          <li><a class="in-tile" href="/app?abrir=explorar">
             <span class="in-tile-num in-mono" aria-hidden="true">06</span>
             <svg class="in-tile-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3l4 4-4 4"/><path d="M3 11V9a2 2 0 0 1 2-2h16"/><path d="M7 21l-4-4 4-4"/><path d="M21 13v2a2 2 0 0 1-2 2H3"/></svg>
             <span class="in-tile-label">Variações das questões erradas</span>
@@ -285,19 +283,19 @@
         <p class="in-eyebrow">Comece por aqui</p>
         <h2 id="inStartTitle" class="in-h2">Escolha por onde entrar no Acely</h2>
         <ul class="in-launch">
-          <li><a class="in-launch-card in-reveal" href="/?abrir=tema">
+          <li><a class="in-launch-card in-reveal" href="/app?abrir=tema">
             <span class="in-launch-num in-mono" aria-hidden="true">A</span>
             <span class="in-h3">Gerar por tema</span>
             <span class="in-launch-text">Digite um assunto e escolha quantas questões e a dificuldade.</span>
             <svg class="in-launch-arrow" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
           </a></li>
-          <li><a class="in-launch-card in-reveal" href="/?abrir=arquivo">
+          <li><a class="in-launch-card in-reveal" href="/app?abrir=arquivo">
             <span class="in-launch-num in-mono" aria-hidden="true">B</span>
             <span class="in-h3">Enviar um arquivo</span>
             <span class="in-launch-text">PDF, DOCX ou TXT de até 20 MB. Com gabarito, vira simulado sem gastar IA.</span>
             <svg class="in-launch-arrow" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
           </a></li>
-          <li><a class="in-launch-card in-reveal" href="/?abrir=explorar">
+          <li><a class="in-launch-card in-reveal" href="/app?abrir=explorar">
             <span class="in-launch-num in-mono" aria-hidden="true">C</span>
             <span class="in-h3">Explorar simulados prontos</span>
             <span class="in-launch-text">Simulados públicos para resolver agora, sem cadastro.</span>
@@ -317,18 +315,18 @@
         <p class="in-marquee-label in-container">Temas para testar agora</p>
         <div class="in-marquee-viewport" id="inMarquee">
           <ul class="in-marquee-track" id="inMarqueeTrack">
-            <li><a class="in-topic" href="/?abrir=tema&amp;tema=Juros%20compostos" translate="no">Juros compostos</a></li>
-            <li><a class="in-topic" href="/?abrir=tema&amp;tema=Revolu%C3%A7%C3%A3o%20Francesa" translate="no">Revolução Francesa</a></li>
-            <li><a class="in-topic" href="/?abrir=tema&amp;tema=Fun%C3%A7%C3%A3o%20do%202%C2%BA%20grau" translate="no">Função do 2º grau</a></li>
-            <li><a class="in-topic" href="/?abrir=tema&amp;tema=Direito%20constitucional" translate="no">Direito constitucional</a></li>
-            <li><a class="in-topic" href="/?abrir=tema&amp;tema=Farmacologia%20b%C3%A1sica" translate="no">Farmacologia básica</a></li>
-            <li><a class="in-topic" href="/?abrir=tema&amp;tema=Redes%20de%20computadores" translate="no">Redes de computadores</a></li>
-            <li><a class="in-topic" href="/?abrir=tema&amp;tema=Present%20perfect" translate="no">Present perfect</a></li>
-            <li><a class="in-topic" href="/?abrir=tema&amp;tema=Ciclo%20de%20Krebs" translate="no">Ciclo de Krebs</a></li>
-            <li><a class="in-topic" href="/?abrir=tema&amp;tema=Estat%C3%ADstica%20descritiva" translate="no">Estatística descritiva</a></li>
-            <li><a class="in-topic" href="/?abrir=tema&amp;tema=Python%20para%20iniciantes" translate="no">Python para iniciantes</a></li>
-            <li><a class="in-topic" href="/?abrir=tema&amp;tema=Contabilidade%20de%20custos" translate="no">Contabilidade de custos</a></li>
-            <li><a class="in-topic" href="/?abrir=tema&amp;tema=Lei%20Geral%20de%20Prote%C3%A7%C3%A3o%20de%20Dados" translate="no">Lei Geral de Proteção de Dados</a></li>
+            <li><a class="in-topic" href="/app?abrir=tema&amp;tema=Juros%20compostos" translate="no">Juros compostos</a></li>
+            <li><a class="in-topic" href="/app?abrir=tema&amp;tema=Revolu%C3%A7%C3%A3o%20Francesa" translate="no">Revolução Francesa</a></li>
+            <li><a class="in-topic" href="/app?abrir=tema&amp;tema=Fun%C3%A7%C3%A3o%20do%202%C2%BA%20grau" translate="no">Função do 2º grau</a></li>
+            <li><a class="in-topic" href="/app?abrir=tema&amp;tema=Direito%20constitucional" translate="no">Direito constitucional</a></li>
+            <li><a class="in-topic" href="/app?abrir=tema&amp;tema=Farmacologia%20b%C3%A1sica" translate="no">Farmacologia básica</a></li>
+            <li><a class="in-topic" href="/app?abrir=tema&amp;tema=Redes%20de%20computadores" translate="no">Redes de computadores</a></li>
+            <li><a class="in-topic" href="/app?abrir=tema&amp;tema=Present%20perfect" translate="no">Present perfect</a></li>
+            <li><a class="in-topic" href="/app?abrir=tema&amp;tema=Ciclo%20de%20Krebs" translate="no">Ciclo de Krebs</a></li>
+            <li><a class="in-topic" href="/app?abrir=tema&amp;tema=Estat%C3%ADstica%20descritiva" translate="no">Estatística descritiva</a></li>
+            <li><a class="in-topic" href="/app?abrir=tema&amp;tema=Python%20para%20iniciantes" translate="no">Python para iniciantes</a></li>
+            <li><a class="in-topic" href="/app?abrir=tema&amp;tema=Contabilidade%20de%20custos" translate="no">Contabilidade de custos</a></li>
+            <li><a class="in-topic" href="/app?abrir=tema&amp;tema=Lei%20Geral%20de%20Prote%C3%A7%C3%A3o%20de%20Dados" translate="no">Lei Geral de Proteção de Dados</a></li>
           </ul>
         </div>
       </div>
@@ -372,7 +370,7 @@
     <section class="in-final" aria-labelledby="inFinalTitle">
       <div class="in-container in-final-inner">
         <h2 id="inFinalTitle" class="in-final-title">Seu próximo simulado começa com o material que você já tem</h2>
-        <a href="/?abrir=criar" class="in-btn in-btn--primary">Criar meu primeiro simulado</a>
+        <a href="/app?abrir=criar" class="in-btn in-btn--primary">Criar meu primeiro simulado</a>
         <p class="in-proof">Grátis <span aria-hidden="true">·</span> sem cartão <span aria-hidden="true">·</span> entre só com o e-mail</p>
       </div>
     </section>
@@ -381,7 +379,7 @@
   <footer class="in-footer">
     <div class="in-container">
       <nav class="in-footer-links" aria-label="Rodapé">
-        <a href="/">Simulados</a>
+        <a href="/app">Simulados</a>
         <a href="/produto">Produto e planos</a>
         <a href="/login">Entrar</a>
         <a href="/termos">Termos de uso</a>
@@ -392,6 +390,6 @@
     </div>
   </footer>
 
-  <script type="module" src="/web/modules/inicio.js?v=1"></script>
+  <script type="module" src="/web/modules/inicio.js?v=2"></script>
 </body>
 </html>

@@ -9,7 +9,7 @@
  * i18n.js vem primeiro: ele traduz a página ao ser importado, antes de a tagline ser
  * quebrada em palavras (a tradução casa frases inteiras do dicionário).
  */
-import './i18n.js?v=9';
+import './i18n.js?v=10';
 import { createSmoothScroll } from './smooth-scroll.js?v=1';
 import { initMural } from './mural.js?v=1';
 
@@ -310,7 +310,23 @@ function initMarquee() {
   }
 }
 
+// ── Quem já entrou vê "Meus simulados" no lugar de "Entrar" ──────────────────
+function initAccountLinks() {
+  fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' })
+    .then((res) => {
+      if (!res.ok) return;
+      ['inNavAccount', 'inMenuAccount'].forEach((id) => {
+        const link = document.getElementById(id);
+        if (!link) return;
+        link.textContent = 'Meus simulados';
+        link.setAttribute('href', '/app');
+      });
+    })
+    .catch(() => {});
+}
+
 initMenu();
+initAccountLinks();
 initActiveNav();
 initHero();
 initMuralSwitch();

@@ -382,11 +382,11 @@ class QuizHandler(BaseHTTPRequestHandler):
             if request.path == "/api/auth/verify-email":
                 allowed, retry_after = _rl_reset_password.check_handler(self, "GET:/api/auth/verify-email")
                 if not allowed:
-                    self._redirect("/?email=muitas_tentativas")
+                    self._redirect("/app?email=muitas_tentativas")
                     return
                 token = query.get("token", [""])[0]
                 ok = self.auth_controller.service.verify_email(token)
-                self._redirect("/?email=confirmado" if ok else "/?email=link_invalido")
+                self._redirect("/app?email=confirmado" if ok else "/app?email=link_invalido")
                 return
 
             # 0.12 API: Provedores de login disponíveis (o botão do Google só aparece se configurado)
@@ -553,11 +553,18 @@ class QuizHandler(BaseHTTPRequestHandler):
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
-            # 3. Servir HTML principal — aberto a todos (sem muro de login).
+            # 3. Raiz: página inicial (dashboard em inicio.html). Links antigos que abriam o
+            # app direto na raiz (?abrir=, ?simulado=, ?email=) continuam abrindo os simulados.
+            # Espelha os rewrites do vercel.json.
+            if request.path == "/" and not ({"abrir", "simulado", "email"} & set(query)):
+                self._send_html_file(WEB_DIR / "inicio.html", 200)
+                return
+
+            # 3.0 Simulados (app) em /app — aberto a todos (sem muro de login).
             # O login só é pedido quando a pessoa tenta uma ação que precisa de conta
             # ou de sessão de convidado (ex.: usar a IA); isso é decidido no cliente
             # e garantido no servidor pelos endpoints de cada ação.
-            if request.path in ("/", "/guest", "/index.html", "/api/index.py", "/api/index"):
+            if request.path in ("/", "/app", "/guest", "/index.html", "/api/index.py", "/api/index"):
                 index_file = WEB_DIR / "index.html"
                 if index_file.is_file():
                     content = index_file.read_bytes()
@@ -646,7 +653,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                 "/privacidade": "privacidade.html", "/privacidade.html": "privacidade.html",
                 # Página de produto e planos (/planos abre a mesma página já nos planos)
                 "/produto": "produto.html", "/produto.html": "produto.html", "/planos": "produto.html",
-                # Página inicial protótipo (estilo estúdio, rolagem suave); noindex até a Fase S6
+                # Página inicial (também servida na raiz /); /inicio fica como apelido
                 "/inicio": "inicio.html", "/inicio.html": "inicio.html",
             }
             if request.path in static_pages:
