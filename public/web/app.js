@@ -621,6 +621,28 @@ timerPreset?.addEventListener('change', () => {
 
 
 // ─── Carregamento de Quiz ─────────────────────────────────────────────────────
+/**
+ * Primeiro simulado da página. Com ?simulado=<nome> (link direto da página /inicio ou um
+ * link compartilhado), tenta esse; se ele não existir ou não estiver visível para a pessoa,
+ * volta ao padrão do servidor sem deixar a tela vazia. O parâmetro sai da barra de endereço.
+ */
+async function loadInitialQuiz() {
+  const params = new URLSearchParams(window.location.search);
+  const wanted = (params.get('simulado') || '').trim().slice(0, 255);
+  if (!wanted) return loadQuiz();
+  params.delete('simulado');
+  const query = params.toString();
+  history.replaceState(history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+  try {
+    await loadQuiz(wanted);
+  } catch (error) {
+    if (error?.name === 'AbortError') throw error;
+    selectedSource = '';
+    showNotice('Não encontramos esse simulado. Abrimos o primeiro da lista.', 'Simulado não encontrado', 'info');
+    await loadQuiz();
+  }
+}
+
 async function loadQuiz(source = selectedSource) {
   // Se for convidado e o quiz for local, carrega diretamente do storage
   if (isGuestMode()) {
@@ -2790,22 +2812,42 @@ async function init() {
   // todas as requisições, então não é preciso esperar a sessão para buscar os dados.
   const assumedGuest = isGuestMode();
   const authPromise = checkAuth();
-  const dataPromise = Promise.all([loadQuiz(), loadQuizList()]);
+  const dataPromise = Promise.all([loadInitialQuiz(), loadQuizList()]);
   await authPromise;
   // Cota mensal do plano no chip do topo (só para quem tem conta; não segura o resto)
   loadPlanStatus();
 
-  // Volta do login/cadastro com intenção de criar simulado (?abrir=criar):
-  // abre assim que a sessão é conhecida, sem esperar a lista de simulados
+  // Links diretos (vindos da página /inicio ou da volta do login/cadastro):
+  //   ?abrir=criar               abre "Criar simulado" (aba de arquivo)
+  //   ?abrir=arquivo             idem, explícito
+  //   ?abrir=tema[&tema=Assunto] abre na aba "Gerar por tema", com o assunto já digitado
+  //   ?abrir=explorar            abre o catálogo de simulados (depois de a lista carregar)
+  //   ?simulado=<nome>           carrega esse simulado (tratado antes, em initialQuizFromUrl)
+  // Abre assim que a sessão é conhecida, sem esperar a lista de simulados.
   const params = new URLSearchParams(window.location.search);
-  if (params.get('abrir') === 'criar') {
+  const openAction = params.get('abrir');
+  if (['criar', 'arquivo', 'tema', 'explorar'].includes(openAction)) {
+    const topic = (params.get('tema') || '').trim().slice(0, 120);
     params.delete('abrir');
+    params.delete('tema');
     const query = params.toString();
     history.replaceState(history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
-    if (sessionKind() === 'visitor') {
-      openAccessModal('create', openModal);
+    if (openAction === 'explorar') {
+      // Abre o catálogo mesmo se o primeiro simulado falhar: a lista é o que importa aqui
+      dataPromise.catch(() => {}).then(() => openCatalogModal());
     } else {
-      openModal();
+      const openCreate = () => {
+        openModal();
+        if (openAction === 'tema' || topic) {
+          switchModalTab('topic');
+          if (topic && topicInput) topicInput.value = topic;
+        }
+      };
+      if (sessionKind() === 'visitor') {
+        openAccessModal('create', openCreate);
+      } else {
+        openCreate();
+      }
     }
   }
 

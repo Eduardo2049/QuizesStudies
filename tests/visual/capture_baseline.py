@@ -54,6 +54,10 @@ SCREENS = {
     "home-timer": ("/guest", "document.querySelector('#btnSetTimer')?.click()"),
     "produto": ("/produto", None),
     "produto-menu": ("/produto", "document.querySelector('#lpMenuToggle')?.click()"),
+    "inicio": ("/inicio", None),
+    "inicio-menu": ("/inicio", "document.querySelector('#inMenuToggle')?.click()"),
+    "login-codigo": ("/login", "(() => { const i = document.querySelector('#codeEmail'); i.value = 'visual@exemplo.com';"
+                               " document.querySelector('#codeEmailForm').requestSubmit(); })()"),
 }
 
 # Conferência de layout executada em cada tela, depois da ação e antes da captura

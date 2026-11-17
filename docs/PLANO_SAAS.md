@@ -208,6 +208,8 @@ Junto com as Fases 3 e 4 do `PLANO_ACELY.md`.
 3. Selo "gabarito conferido" nas questões; métricas de custo por workspace no admin.
 
 ### Fase S6: Promoção da página de produto para a raiz
+
+> **17/11/2026:** protótipo de página inicial em `/inicio` (branch `feature/pagina-inicio`), com `noindex` e fora do sitemap. É candidata a substituir a raiz para visitantes nesta fase; os atalhos dela já abrem o app no ponto certo (`/?abrir=...`, `/?simulado=...`).
 Branch sugerida: `feature/saas-raiz`
 Quando a página de produto estiver validada: `/` vira a página de produto para quem não tem
 sessão e o app passa para `/app`. Tocar com cuidado: `safe_next` (padrão `/`), redirecionamentos

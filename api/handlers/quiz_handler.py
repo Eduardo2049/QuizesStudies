@@ -646,6 +646,8 @@ class QuizHandler(BaseHTTPRequestHandler):
                 "/privacidade": "privacidade.html", "/privacidade.html": "privacidade.html",
                 # Página de produto e planos (/planos abre a mesma página já nos planos)
                 "/produto": "produto.html", "/produto.html": "produto.html", "/planos": "produto.html",
+                # Página inicial protótipo (estilo estúdio, rolagem suave); noindex até a Fase S6
+                "/inicio": "inicio.html", "/inicio.html": "inicio.html",
             }
             if request.path in static_pages:
                 self._send_html_file(WEB_DIR / static_pages[request.path], 200)

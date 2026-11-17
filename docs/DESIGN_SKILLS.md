@@ -55,6 +55,7 @@ A skill fala em classes do Tailwind; aqui o Tailwind é proibido (`AGENTS.md`). 
 |---|---|---|
 | B4 "nunca usar gradiente no fundo" | O fundo animado em WebGL (`public/web/modules/backdrop.js`) e `--bg-gradient` são parte da identidade documentada em `AGENTS.md`. | Manter por enquanto (decisão anterior do projeto vence). Se adotar a skill à risca, trocar por fundo chapado (`--paper`) e deixar a animação só na futura landing page. |
 | B11 seção de tagline obrigatória | Vale para landing pages; a home é uma ferramenta. | Criar uma landing page própria (ex.: `/sobre`) com hero, benefícios, como funciona, FAQ e a seção de tagline. |
+| Tema claro e escuro em toda página | `/inicio` é sempre escura, como as referências (basement.studio, lenis.dev). | Decisão do protótipo: fundo `#000000` chapado, superfícies `#181818`/`#1F1F1F`, acento no coral da logo (`#FF7A5C`, texto preto por cima). O cartão-resposta em canvas é ilustração, não fundo; o único gradiente é o do texto do título (B5). Se a página virar a raiz (Fase S6), decidir se ganha o tema claro. |
 
 ---
 
