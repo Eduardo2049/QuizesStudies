@@ -22,6 +22,7 @@ from api.services.entitlements_service import entitlements_service
 from api.services.ai_service import AIQuotaExceededError
 from api.services.import_service import QuizImportService
 from api.services import google_auth_service as google_auth
+from api.services.auth_service import EmailCodeWait
 from api.middleware.http_middleware import HTTPMiddleware, ResponseFormatter
 from api.utils.validators import AnswerValidator
 from api.repositories.rate_limit_repository import rate_limit_repo, RateLimitRepository
@@ -148,6 +149,10 @@ _rl_forgot_password = RateLimiter(limit=5, window_seconds=15 * 60, repo=rate_lim
 _rl_reset_password = RateLimiter(limit=10, window_seconds=15 * 60, repo=rate_limit_repo) # redefinir senha: 10/15min
 _rl_login_fail_user_ip = RateLimiter(limit=10, window_seconds=15 * 60, repo=rate_limit_repo)  # falhas por (IP + User): 10/15min
 _rl_login_fail_ip = RateLimiter(limit=30, window_seconds=15 * 60, repo=rate_limit_repo)       # falhas por IP (anti-varredura): 30/15min
+# Código por e-mail: envios por IP (o limite por e-mail fica no AuthService, contado no banco)
+# e palpites errados por IP (cada código também aceita só LOGIN_CODE_MAX_ATTEMPTS palpites)
+_rl_email_code_send = RateLimiter(limit=10, window_seconds=15 * 60, repo=rate_limit_repo)     # envios: 10/15min
+_rl_email_code_fail_ip = RateLimiter(limit=30, window_seconds=15 * 60, repo=rate_limit_repo)  # palpites errados: 30/15min
 _rl_submit = RateLimiter(limit=30, window_seconds=15 * 60, repo=rate_limit_repo)  # submit: 30/15min
 _rl_upload = RateLimiter(limit=5, window_seconds=60, repo=rate_limit_repo)         # upload: 5/min
 _rl_generate = RateLimiter(limit=10, window_seconds=60, repo=rate_limit_repo)      # generate IA: 10/min
@@ -386,7 +391,11 @@ class QuizHandler(BaseHTTPRequestHandler):
 
             # 0.12 API: Provedores de login disponíveis (o botão do Google só aparece se configurado)
             if request.path == "/api/auth/providers":
-                status, data = ResponseFormatter.success({"google": google_auth.google_enabled()})
+                status, data = ResponseFormatter.success({
+                    "google": google_auth.google_enabled(),
+                    # Login por código: precisa de SMTP (em DEBUG o código volta na resposta)
+                    "email_code": self.auth_controller.service.email_service.is_configured() or DEBUG,
+                })
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
@@ -786,6 +795,57 @@ class QuizHandler(BaseHTTPRequestHandler):
                 HTTPMiddleware.send_json_response(self, status, data, set_cookie=cookies)
                 return
 
+            # ── 0.01 Entrar com código de 6 dígitos enviado por e-mail ─────────
+            if request.path == "/api/auth/email-code":
+                allowed, retry_after = _rl_email_code_send.check_handler(self, "POST:/api/auth/email-code")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
+                payload = self._read_json_body()
+                if payload is None:
+                    return
+                try:
+                    response = self.auth_controller.request_email_code(payload)
+                except EmailCodeWait as e:
+                    self._send_code_wait(e)
+                    return
+                status, data = ResponseFormatter.success(response["data"], response["message"])
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
+            if request.path == "/api/auth/email-code/verify":
+                client_ip = HTTPMiddleware.get_client_ip(self)
+                fail_ip_key = f"POST:/api/auth/email-code/verify:fail_ip:{client_ip}"
+                blocked, retry_after = _rl_email_code_fail_ip.is_blocked(fail_ip_key)
+                if blocked:
+                    _rate_limited_response(self, retry_after)
+                    return
+                payload = self._read_json_body()
+                if payload is None:
+                    return
+                try:
+                    response = self.auth_controller.verify_email_code(payload)
+                except QuizAPIException as e:
+                    if e.error_code in ("INVALID_CODE", "CODE_EXPIRED"):
+                        _rl_email_code_fail_ip.record(fail_ip_key)
+                    raise
+
+                token = response["data"].get("token")
+                # Mesmo contrato do /api/auth/login: o token fica só no cookie HttpOnly
+                response_data = dict(response["data"])
+                if payload.get("return_token") is not True:
+                    response_data.pop("token", None)
+                status, data = ResponseFormatter.success(response_data, response["message"])
+                cookies = [
+                    *HTTPMiddleware.session_cookies(token, COOKIE_SECURE, 7 * 24 * 60 * 60),
+                    HTTPMiddleware.guest_cookie(None, COOKIE_SECURE, 0),
+                ]
+                HTTPMiddleware.send_json_response(self, status, data, set_cookie=cookies)
+                return
+
+            # ── Cadastro com usuário e senha ─────────────────────────────────────
+            # A tela de cadastro agora usa o código por e-mail (o formulário de senha está
+            # comentado em register.html). A rota continua para clientes da API e testes.
             if request.path == "/api/auth/register":
                 allowed, retry_after = _rl_auth.check_handler(self, "POST:/api/auth/register")
                 if not allowed:
@@ -843,6 +903,27 @@ class QuizHandler(BaseHTTPRequestHandler):
                 return
 
             # ── 0.05 Excluir conta (LGPD: eliminação dos dados) ─────────────────
+            # Primeiro o código vai para o e-mail da conta; depois a exclusão confere o código.
+            if request.path == "/api/account/delete-code":
+                allowed, retry_after = _rl_email_code_send.check_handler(self, "POST:/api/account/delete-code")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
+                user = self._require_authenticated_user()
+                payload = self._read_json_body()
+                if payload is None:
+                    return
+                try:
+                    result = self.auth_controller.service.request_account_deletion_code(
+                        user, language=str(payload.get("language") or "pt-BR")
+                    )
+                except EmailCodeWait as e:
+                    self._send_code_wait(e)
+                    return
+                status, data = ResponseFormatter.success(result, result["message"])
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
             if request.path == "/api/account/delete":
                 allowed, retry_after = _rl_auth.check_handler(self, "POST:/api/account/delete")
                 if not allowed:
@@ -852,7 +933,9 @@ class QuizHandler(BaseHTTPRequestHandler):
                 payload = self._read_json_body()
                 if payload is None:
                     return
-                self.auth_controller.service.delete_account(user, str(payload.get("password", "")))
+                self.auth_controller.service.delete_account(
+                    user, password=str(payload.get("password") or ""), code=str(payload.get("code") or "")
+                )
                 status, data = ResponseFormatter.success({"deleted": True}, "Conta e dados excluídos")
                 cookies = [
                     *HTTPMiddleware.session_cookies(None, COOKIE_SECURE, 0),
@@ -1283,6 +1366,12 @@ class QuizHandler(BaseHTTPRequestHandler):
             info["message"] = job.get("error") or "Não foi possível concluir o pedido."
             info["http_status"] = job.get("error_status") or 422
         status, data = ResponseFormatter.success(info)
+        HTTPMiddleware.send_json_response(self, status, data)
+
+    def _send_code_wait(self, error: EmailCodeWait) -> None:
+        """429 com a mensagem do AuthService e quantos segundos faltam (o navegador mostra a contagem)."""
+        status, data = ResponseFormatter.error(error.message, error.error_code, 429)
+        data["retry_after"] = error.retry_after
         HTTPMiddleware.send_json_response(self, status, data)
 
     def _redirect(self, location: str, cookies: list[str] | None = None) -> None:

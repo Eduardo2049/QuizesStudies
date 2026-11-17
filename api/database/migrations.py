@@ -190,6 +190,23 @@ CREATE TABLE IF NOT EXISTS usage_counters (
     updated_at   TIMESTAMP NOT NULL DEFAULT NOW(),
     PRIMARY KEY (workspace_id, user_id, metric, period)
 );
+
+-- Códigos de 6 dígitos enviados por e-mail: entrar sem senha ('login') e confirmar a exclusão
+-- da conta ('delete_account'). Ligados ao e-mail, não ao usuário, porque o login por código
+-- cria a conta só depois do código certo. Guardamos o HMAC do código, nunca o código.
+CREATE TABLE IF NOT EXISTS email_codes (
+    id          SERIAL PRIMARY KEY,
+    email       VARCHAR(255) NOT NULL,
+    purpose     VARCHAR(20) NOT NULL DEFAULT 'login',
+    code_hash   VARCHAR(64) NOT NULL,
+    expires_at  TIMESTAMP NOT NULL,
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    used        BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_codes_lookup ON email_codes(email, purpose, created_at);
+CREATE INDEX IF NOT EXISTS idx_email_codes_expires ON email_codes(expires_at);
 """
 
 # Linhas iniciais dos planos: ON CONFLICT DO NOTHING mantém ajustes feitos depois no banco

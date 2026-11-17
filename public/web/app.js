@@ -3,7 +3,7 @@ import { initTheme, toggleTheme } from './modules/theme.js?v=9';
 import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js?v=5';
 import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=7';
 import { initTimerDrag } from './modules/timer-drag.js?v=1';
-import { getLanguage } from './modules/i18n.js?v=7';
+import { getLanguage } from './modules/i18n.js?v=8';
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 const quiz = document.querySelector('#quiz');
@@ -2252,7 +2252,10 @@ accessModal?.addEventListener('click', (e) => { if (e.target === accessModal) cl
 // ─── Minha conta: cópia dos dados e exclusão (LGPD) ─────────────────────────
 const accountModal = document.querySelector('#accountModal');
 const deleteAccountForm = document.querySelector('#deleteAccountForm');
-const deleteAccountPassword = document.querySelector('#deleteAccountPassword');
+/* DESATIVADO com a confirmação por senha: const deleteAccountPassword = document.querySelector('#deleteAccountPassword'); */
+const deleteAccountSendCode = document.querySelector('#deleteAccountSendCode');
+const deleteAccountCodeGroup = document.querySelector('#deleteAccountCodeGroup');
+const deleteAccountCode = document.querySelector('#deleteAccountCode');
 const deleteAccountFeedback = document.querySelector('#deleteAccountFeedback');
 const deleteAccountBtn = document.querySelector('#deleteAccountBtn');
 let releaseAccountFocus = null;
@@ -2268,7 +2271,7 @@ function renderAccountEmail() {
   if (accountEmailStatus) {
     accountEmailStatus.textContent = verified
       ? 'Seu e-mail está confirmado.'
-      : 'Seu e-mail ainda não foi confirmado. Confirme pelo link que enviamos para proteger sua conta e receber a recuperação de senha.';
+      : 'Seu e-mail ainda não foi confirmado. Ele fica confirmado no próximo acesso com código ou pelo link que enviamos.';
   }
   if (accountResendBtn) accountResendBtn.hidden = verified;
   if (accountEmailFeedback) accountEmailFeedback.hidden = true;
@@ -2310,8 +2313,7 @@ function openAccountModal() {
   renderAccountEmail();
   renderAccountPlan();
   loadPlanStatus().then(renderAccountPlan);
-  if (deleteAccountPassword) deleteAccountPassword.value = '';
-  if (deleteAccountFeedback) deleteAccountFeedback.hidden = true;
+  resetDeleteAccountForm();
   accountModal.hidden = false;
   document.body.style.overflow = 'hidden';
   releaseAccountFocus = trapFocus(accountModal, document.querySelector('#accountExportLink'));
@@ -2331,6 +2333,86 @@ document.querySelector('#closeAccountModal')?.addEventListener('click', closeAcc
 accountModal?.addEventListener('click', (e) => { if (e.target === accountModal) closeAccountModal(); });
 accountModal?.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAccountModal(); });
 
+// Exclusão confirmada com um código de 6 dígitos enviado ao e-mail da conta
+// (a confirmação por senha foi desativada: quem entra por código ou pelo Google não tem senha).
+function showDeleteFeedback(msg, ok = false) {
+  if (!deleteAccountFeedback) return;
+  deleteAccountFeedback.textContent = msg;
+  deleteAccountFeedback.className = `form-feedback ${ok ? 'feedback-success' : 'feedback-error'}`;
+  deleteAccountFeedback.hidden = false;
+}
+
+function resetDeleteAccountForm() {
+  if (deleteAccountCode) deleteAccountCode.value = '';
+  if (deleteAccountCodeGroup) deleteAccountCodeGroup.hidden = true;
+  if (deleteAccountBtn) deleteAccountBtn.hidden = true;
+  if (deleteAccountSendCode) {
+    deleteAccountSendCode.hidden = false;
+    deleteAccountSendCode.disabled = false;
+    deleteAccountSendCode.textContent = 'Enviar código de confirmação';
+  }
+  if (deleteAccountFeedback) deleteAccountFeedback.hidden = true;
+}
+
+deleteAccountSendCode?.addEventListener('click', async () => {
+  deleteAccountSendCode.disabled = true;
+  try {
+    const res = await fetch('/api/account/delete-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ language: getLanguage() }),
+    });
+    const raw = await readJson(res);
+    if (!res.ok) {
+      showDeleteFeedback(raw.message || 'Não foi possível enviar o código agora. Tente novamente em alguns minutos.');
+      return;
+    }
+    showDeleteFeedback(raw.message || 'Enviamos um código para o seu e-mail. Digite-o abaixo para confirmar.', true);
+    if (deleteAccountCodeGroup) deleteAccountCodeGroup.hidden = false;
+    if (deleteAccountBtn) deleteAccountBtn.hidden = false;
+    deleteAccountSendCode.textContent = 'Enviar outro código';
+    deleteAccountCode?.focus();
+  } catch (_) {
+    showDeleteFeedback('Falha na conexão. Tente novamente.');
+  } finally {
+    deleteAccountSendCode.disabled = false;
+  }
+});
+
+deleteAccountForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const code = (deleteAccountCode?.value || '').replace(/\D/g, '');
+  if (code.length !== 6) {
+    showDeleteFeedback('Digite os 6 números do código enviado para o seu e-mail.');
+    deleteAccountCode?.focus();
+    return;
+  }
+  deleteAccountBtn.disabled = true;
+  try {
+    const res = await fetch('/api/account/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ code }),
+    });
+    const raw = await readJson(res);
+    if (!res.ok) {
+      showDeleteFeedback(raw.message || 'Não foi possível excluir a conta. Tente novamente.');
+      return;
+    }
+    clearAuthToken();
+    closeAccountModal();
+    await showNotice('Sua conta e seus dados foram excluídos.', 'Conta excluída', 'info');
+    window.location.replace('/');
+  } catch (_) {
+    showDeleteFeedback('Falha na conexão. Tente novamente.');
+  } finally {
+    deleteAccountBtn.disabled = false;
+  }
+});
+
+/* DESATIVADO: exclusão confirmada com a senha da conta (formulário comentado em index.html)
 deleteAccountForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const password = deleteAccountPassword?.value || '';
@@ -2367,6 +2449,7 @@ deleteAccountForm?.addEventListener('submit', async (e) => {
     deleteAccountBtn.disabled = false;
   }
 });
+*/
 
 // ─── Logout ─────────────────────────────────────────────────────────────────
 // Sair da conta volta para a home como visitante (sem muro de login).

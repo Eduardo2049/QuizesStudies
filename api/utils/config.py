@@ -220,6 +220,19 @@ SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
 SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "false").lower() in ("true", "1", "yes")
 APP_URL = os.getenv("APP_URL", "").strip()
 
+# Entrar com código de 6 dígitos enviado por e-mail (substitui usuário e senha na tela de login).
+# LOGIN_CODE_TTL_MINUTES: validade do código. LOGIN_CODE_MAX_ATTEMPTS: palpites errados antes de o
+# código ser descartado. LOGIN_CODE_RESEND_SECONDS: espera entre dois envios para o mesmo e-mail.
+# LOGIN_CODE_MAX_PER_HOUR: códigos por e-mail por hora (impede usar o Acely para lotar a caixa de alguém).
+LOGIN_CODE_TTL_MINUTES = _env_int("LOGIN_CODE_TTL_MINUTES", 10, 3, 60)
+LOGIN_CODE_MAX_ATTEMPTS = _env_int("LOGIN_CODE_MAX_ATTEMPTS", 5, 3, 10)
+LOGIN_CODE_RESEND_SECONDS = _env_int("LOGIN_CODE_RESEND_SECONDS", 60, 15, 600)
+LOGIN_CODE_MAX_PER_HOUR = _env_int("LOGIN_CODE_MAX_PER_HOUR", 5, 1, 50)
+# Chave secreta do HMAC que guarda os códigos no banco: com ela fora do banco, uma cópia vazada
+# da tabela não permite testar os 1 milhão de códigos possíveis. Sem a variável, a chave é
+# derivada de ADMIN_PASSWORD (trocar a senha do admin só invalida os códigos dos últimos minutos).
+AUTH_CODE_SECRET = os.getenv("AUTH_CODE_SECRET", "").strip()
+
 # Controle de migrações automáticas (true por padrão; defina false se as migrations rodarem no pipeline de CI/CD)
 AUTO_MIGRATE = os.getenv("AUTO_MIGRATE", "true").lower() in ("true", "1", "yes")
 

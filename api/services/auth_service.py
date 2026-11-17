@@ -4,12 +4,22 @@ Usa PBKDF2-HMAC-SHA256 com salt seguro (nativo do Python).
 """
 import hashlib
 import hmac
+import math
 import re
 import secrets
 from api.repositories.user_repository import UserRepository
 from api.services.email_service import EmailService
 from api.exceptions.quiz_exceptions import QuizAPIException
-from api.utils.config import ADMIN_USERNAME, ADMIN_PASSWORD, DEBUG
+from api.utils.config import (
+    ADMIN_USERNAME,
+    ADMIN_PASSWORD,
+    DEBUG,
+    AUTH_CODE_SECRET,
+    LOGIN_CODE_TTL_MINUTES,
+    LOGIN_CODE_MAX_ATTEMPTS,
+    LOGIN_CODE_RESEND_SECONDS,
+    LOGIN_CODE_MAX_PER_HOUR,
+)
 
 # Salt e hash fixos usados como dummy para equalizar o tempo de resposta
 # quando o usuário não existe (prevenção de enumeração por timing).
@@ -29,6 +39,59 @@ EMAIL_VERIFICATION_HOURS = 24
 _RESET_REQUEST_MESSAGE = (
     "Se os dados informados estiverem cadastrados, você receberá as instruções para redefinir sua senha."
 )
+
+# ─── Códigos de 6 dígitos por e-mail ─────────────────────────────────────────
+EMAIL_CODE_PURPOSES = ("login", "delete_account")
+_CODE_PATTERN = re.compile(r"^\d{6}$")
+_CODE_SENT_MESSAGE = "Enviamos um código de 6 dígitos para o seu e-mail."
+_INVALID_EMAIL_MESSAGE = "Informe um e-mail válido, como nome@exemplo.com."
+_CODE_EXPIRED_MESSAGE = "Este código venceu ou já foi usado. Peça um novo código."
+
+
+class EmailCodeWait(QuizAPIException):
+    """Pedido de código cedo demais para o mesmo e-mail (reenvio ou limite por hora)."""
+
+    def __init__(self, retry_after: int, message: str):
+        self.retry_after = max(1, int(retry_after))
+        super().__init__(message, 429, "CODE_RESEND_WAIT")
+
+
+def normalize_email(email) -> str:
+    return str(email or "").strip().lower()
+
+
+def is_valid_email(email: str) -> bool:
+    return 0 < len(email) <= 254 and bool(_EMAIL_PATTERN.match(email))
+
+
+def _email_code_key() -> bytes:
+    """Chave do HMAC dos códigos. Fica fora do banco (variável de ambiente)."""
+    secret = AUTH_CODE_SECRET or f"acely-email-code:{ADMIN_PASSWORD}"
+    return hashlib.sha256(secret.encode("utf-8")).digest()
+
+
+def hash_email_code(email: str, purpose: str, code: str) -> str:
+    """HMAC-SHA256 do código ligado ao e-mail e à finalidade: o código de um e-mail
+    não serve para outro, e o de login não serve para excluir a conta."""
+    message = f"{purpose}:{normalize_email(email)}:{code}".encode("utf-8")
+    return hmac.new(_email_code_key(), message, hashlib.sha256).hexdigest()
+
+
+def new_email_code() -> str:
+    """Seis dígitos de um gerador criptográfico (inclui zeros à esquerda)."""
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def username_from_email(email: str, exists) -> str:
+    """Nome de usuário a partir da parte antes do @, com número se já existir."""
+    base = re.sub(r"[^a-z0-9_]", "", email.split("@", 1)[0].lower())[:26] or "aluno"
+    if len(base) < 3:
+        base = f"{base}aluno"
+    name, n = base, 1
+    while exists(name):
+        n += 1
+        name = f"{base}{n}"
+    return name
 
 
 def hash_password(password: str, salt: str = None) -> tuple[str, str]:
@@ -212,6 +275,148 @@ class AuthService:
             return False
         return self.repo.consume_email_verification(_hash_token(token)) is not None
 
+    # ─── Entrar com código por e-mail ────────────────────────────────────────
+    # Fluxo: a pessoa digita o e-mail, recebe 6 dígitos válidos por LOGIN_CODE_TTL_MINUTES
+    # e entra com eles. Sem conta com esse e-mail, a conta é criada no código certo (nunca
+    # antes: e-mail digitado errado não deixa conta solta). O código certo prova que a
+    # pessoa lê aquele e-mail, então o e-mail já fica confirmado.
+
+    def request_email_code(self, email: str, purpose: str = "login", language: str = "pt-BR") -> dict:
+        """Gera e envia um código. A resposta é a mesma exista ou não conta com o e-mail."""
+        email = normalize_email(email)
+        if purpose not in EMAIL_CODE_PURPOSES:
+            raise QuizAPIException("Finalidade do código inválida.", 400)
+        if not is_valid_email(email):
+            raise QuizAPIException(_INVALID_EMAIL_MESSAGE, 400, "INVALID_EMAIL")
+        if not self.email_service.is_configured() and not DEBUG:
+            # Sem SMTP o código nunca chegaria: melhor avisar do que deixar a pessoa esperando
+            print("[auth] SMTP não configurado: login por código indisponível (defina SMTP_HOST)")
+            raise QuizAPIException(
+                "O envio de códigos por e-mail está indisponível agora. Entre com o Google ou continue como convidado.",
+                503,
+                "EMAIL_CODE_UNAVAILABLE",
+            )
+
+        stats = self.repo.email_code_send_stats(email, purpose)
+        since = stats.get("seconds_since_last")
+        if since is not None and since < LOGIN_CODE_RESEND_SECONDS:
+            wait = math.ceil(LOGIN_CODE_RESEND_SECONDS - since)
+            raise EmailCodeWait(wait, f"Aguarde {wait} segundos para pedir outro código.")
+        if stats.get("sent_last_hour", 0) >= LOGIN_CODE_MAX_PER_HOUR:
+            raise EmailCodeWait(
+                15 * 60, "Muitos códigos pedidos para este e-mail. Tente de novo em 15 minutos."
+            )
+
+        response = {
+            "message": _CODE_SENT_MESSAGE,
+            "expires_in": LOGIN_CODE_TTL_MINUTES * 60,
+            "resend_in": LOGIN_CODE_RESEND_SECONDS,
+        }
+
+        # O admin entra só com usuário e senha (ADMIN_PASSWORD), como na recuperação de senha e
+        # no Google: um código por e-mail abriria uma porta extra para a conta mais poderosa.
+        # A resposta é igual à de qualquer e-mail para não revelar qual endereço é o do admin.
+        user = self.repo.find_by_email(email)
+        if user and user.get("role") == "admin":
+            print("[auth] código por e-mail recusado para o administrador (use usuário e senha)")
+            return response
+
+        code = new_email_code()
+        self.repo.create_email_code(email, purpose, hash_email_code(email, purpose, code), LOGIN_CODE_TTL_MINUTES)
+        success, mode = self.email_service.send_email_code(
+            email, code, LOGIN_CODE_TTL_MINUTES, purpose=purpose, language=language
+        )
+        if not success:
+            raise QuizAPIException(
+                "Não foi possível enviar o código agora. Tente de novo em alguns minutos.", 503, "EMAIL_SEND_FAILED"
+            )
+        # Só em desenvolvimento, sem SMTP: o código volta na resposta para testar sem caixa de e-mail
+        if mode == "simulated" and DEBUG:
+            response["dev_code"] = code
+        return response
+
+    def _check_email_code(self, email: str, purpose: str, code: str) -> None:
+        """Confere o código e o queima. Cada palpite conta, certo ou errado."""
+        code = re.sub(r"\s+", "", str(code or ""))
+        if not _CODE_PATTERN.match(code):
+            raise QuizAPIException("Digite os 6 números do código.", 400, "INVALID_CODE")
+
+        row = self.repo.take_email_code_attempt(email, purpose, LOGIN_CODE_MAX_ATTEMPTS)
+        if not row:
+            raise QuizAPIException(_CODE_EXPIRED_MESSAGE, 400, "CODE_EXPIRED")
+
+        if not hmac.compare_digest(row["code_hash"], hash_email_code(email, purpose, code)):
+            remaining = max(0, LOGIN_CODE_MAX_ATTEMPTS - int(row.get("attempts") or 0))
+            if remaining == 0:
+                raise QuizAPIException(_CODE_EXPIRED_MESSAGE, 400, "CODE_EXPIRED")
+            raise QuizAPIException(
+                f"Código incorreto. Você ainda tem {remaining} tentativa(s) com este código.", 400, "INVALID_CODE"
+            )
+
+        if not self.repo.consume_email_code(row["id"]):
+            raise QuizAPIException(_CODE_EXPIRED_MESSAGE, 400, "CODE_EXPIRED")
+
+    def login_with_email_code(self, email: str, code: str) -> dict:
+        """Confere o código e devolve uma sessão no mesmo formato de login(). Cria a conta se preciso."""
+        email = normalize_email(email)
+        if not is_valid_email(email):
+            raise QuizAPIException(_INVALID_EMAIL_MESSAGE, 400, "INVALID_EMAIL")
+        self._check_email_code(email, "login", code)
+
+        repo = self.repo
+        user = repo.find_by_email(email)
+        created = False
+        if not user:
+            username = username_from_email(email, lambda n: bool(repo.find_by_username(n)))
+            # Senha aleatória que ninguém conhece: a conta entra por código (ou pelo Google)
+            pwd_hash, salt = hash_password(secrets.token_urlsafe(32))
+            try:
+                user = repo.create_user(username, email, pwd_hash, salt, role="student", email_verified=True)
+                created = True
+            except Exception:
+                # Outra requisição criou a conta no mesmo instante: usa a que ficou no banco
+                user = repo.find_by_email(email)
+                if not user:
+                    raise
+        elif user.get("role") == "admin":
+            raise QuizAPIException("A conta de administrador entra só com usuário e senha.", 403, "CODE_ADMIN_BLOCKED")
+        elif not user.get("email_verified"):
+            # Conta criada com este e-mail sem confirmação (cadastro antigo por senha): quem a criou
+            # pode não ser o dono do e-mail. O código acabou de provar quem é o dono: a senha vira
+            # aleatória, as outras sessões caem e o e-mail passa a contar como confirmado.
+            pwd_hash, salt = hash_password(secrets.token_urlsafe(32))
+            repo.update_password_and_role(user["id"], pwd_hash, salt)
+            repo.delete_user_sessions(user["id"])
+            repo.mark_email_verified(user["id"])
+
+        repo.cleanup_expired_sessions()
+        token = secrets.token_urlsafe(48)
+        session = repo.create_session(_hash_token(token), user["id"], duration_days=7)
+        return {
+            "token": token,
+            "expires_at": session["expires_at"].isoformat(),
+            "created": created,
+            "user": {
+                "id": user["id"],
+                "username": user["username"],
+                "email": user["email"],
+                "role": user["role"],
+                "email_verified": True,
+            },
+        }
+
+    def request_account_deletion_code(self, user: dict, language: str = "pt-BR") -> dict:
+        """Envia para o e-mail da conta o código que confirma a exclusão (substitui a senha)."""
+        if not user:
+            raise QuizAPIException("Autenticação necessária", 401)
+        if user.get("role") == "admin":
+            raise QuizAPIException(
+                "A conta de administrador não pode ser excluída por aqui. Use os scripts de manutenção.", 403
+            )
+        result = self.request_email_code(user.get("email", ""), purpose="delete_account", language=language)
+        result["message"] = "Enviamos um código para o seu e-mail. Digite-o abaixo para confirmar."
+        return result
+
     def export_account(self, user_id: int) -> dict:
         """LGPD art. 18 (acesso e portabilidade): cópia dos dados da conta."""
         data = self.repo.export_user_data(user_id)
@@ -223,19 +428,31 @@ class AuthService:
         data.update(plan_repo.export_for_user(user_id))
         return data
 
-    def delete_account(self, user: dict, password: str) -> None:
-        """LGPD art. 18 (eliminação): apaga a conta depois de confirmar a senha."""
+    def delete_account(self, user: dict, password: str = "", code: str = "") -> None:
+        """LGPD art. 18 (eliminação): apaga a conta depois de confirmar com o código do e-mail.
+
+        A tela usa o código (contas que entram por código ou pelo Google não têm senha
+        conhecida). A confirmação por senha continua aceita para clientes antigos da API.
+        """
         if not user:
             raise QuizAPIException("Autenticação necessária", 401)
         if user.get("role") == "admin":
             raise QuizAPIException(
                 "A conta de administrador não pode ser excluída por aqui. Use os scripts de manutenção.", 403
             )
-        if not password:
-            raise QuizAPIException("Confirme sua senha para excluir a conta.", 400)
-        record = self.repo.find_by_username(user["username"])
-        if not record or not verify_password(password, record["salt"], record["password_hash"]):
-            raise QuizAPIException("Senha incorreta. A conta não foi excluída.", 403, "WRONG_PASSWORD")
+        if code:
+            try:
+                self._check_email_code(normalize_email(user.get("email")), "delete_account", code)
+            except QuizAPIException as e:
+                # 403 e não 400/401: a sessão continua válida, só a confirmação falhou
+                raise QuizAPIException(f"{e.message} A conta não foi excluída.", 403, "WRONG_CODE")
+        elif password:
+            # ── Confirmação por senha (formulário comentado na tela; mantida na API) ──
+            record = self.repo.find_by_username(user["username"])
+            if not record or not verify_password(password, record["salt"], record["password_hash"]):
+                raise QuizAPIException("Senha incorreta. A conta não foi excluída.", 403, "WRONG_PASSWORD")
+        else:
+            raise QuizAPIException("Confirme com o código enviado para o seu e-mail.", 400)
         self.repo.delete_user_and_data(user["id"])
 
     def validate_token(self, token: str) -> dict | None:
