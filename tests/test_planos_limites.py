@@ -233,7 +233,12 @@ class TestPlanRoutes(unittest.TestCase):
             self.qh.QuizController, "generate_quiz_by_topic", self._fake_controller_generate
         )
         self.persist_patch.start()
-        self.limiters = (self.qh._rl_generate, self.qh._rl_remix, self.qh._rl_read)
+        self.limiters = (
+            self.qh._rl_generate,
+            self.qh._rl_remix,
+            self.qh._rl_ai_user_per_minute,
+            self.qh._rl_read,
+        )
         self.saved_repos = [limiter.repo for limiter in self.limiters]
         for limiter in self.limiters:
             limiter._requests.clear()
