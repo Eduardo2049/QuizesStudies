@@ -32,7 +32,7 @@
       { "@type": "Question", "name": "Preciso criar conta para testar?", "acceptedAnswer": { "@type": "Answer", "text": "Não. Você resolve os simulados públicos sem cadastro e, como convidado, gera até 3 simulados com IA a cada 24 horas. A conta grátis guarda seus simulados e o histórico." } },
       { "@type": "Question", "name": "Quais arquivos posso enviar?", "acceptedAnswer": { "@type": "Answer", "text": "PDF, DOCX e TXT de até 20 MB. Se o arquivo já tem questões e gabarito, ele vira simulado na hora e não gasta usos de IA." } },
       { "@type": "Question", "name": "A IA pode errar o gabarito?", "acceptedAnswer": { "@type": "Answer", "text": "Pode. Por isso cada questão vem com explicação para você conferir. Nos planos pagos, um segundo modelo responde a questão sem ver o gabarito e as que divergem são refeitas." } },
-      { "@type": "Question", "name": "O que acontece com o material que eu envio?", "acceptedAnswer": { "@type": "Answer", "text": "O texto é enviado ao provedor de IA só para gerar o simulado. Você pode exportar ou apagar seus dados em Minha conta. Os detalhes estão na política de privacidade." } }
+      { "@type": "Question", "name": "O que acontece com o material que eu envio?", "acceptedAnswer": { "@type": "Answer", "text": "O texto é enviado ao provedor de IA ativo no momento (atualmente priorizando a OpenAI/Codex API por tempo limitado, com reserva em provedores gratuitos) só para gerar o simulado. Você pode exportar ou apagar seus dados em Minha conta. Os detalhes estão na política de privacidade." } }
     ]
   }
   </script>
@@ -169,7 +169,7 @@
       <div class="lp-container">
         <p class="lp-eyebrow">Modelos de IA</p>
         <h2 id="lpModelsTitle" class="lp-h2">Três formas de gerar, cada uma com o seu custo</h2>
-        <p class="lp-lead">Você escolhe o caminho pelo que precisa. O servidor decide qual modelo atende e passa para o próximo se um deles estiver lento ou fora do ar.</p>
+        <p class="lp-lead">Você escolhe o caminho pelo que precisa. O servidor tenta os provedores em sequência (hoje priorizando a OpenAI/Codex API por tempo limitado) e passa para os provedores gratuitos de reserva se um deles estiver lento, fora do ar ou atingir o limite diário.</p>
         <div class="lp-models">
           <article class="lp-card lp-model lp-reveal">
             <div class="lp-model-head">
@@ -187,11 +187,12 @@
               <span class="lp-model-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></span>
               <h3 class="lp-h3">Rápido</h3>
             </div>
-            <p>Modelos abertos em provedores gratuitos, tentados em sequência até um responder. Ideal para começar e para temas do dia a dia.</p>
+            <p>Atualmente prioriza a OpenAI/Codex API por tempo limitado para respostas mais rápidas e consistentes, com fila automática de reserva em provedores gratuitos (Groq, Gemini, Cerebras e OpenRouter).</p>
             <ul class="lp-checks">
               <li>Plano Grátis e convidado</li>
+              <li>OpenAI/Codex API ativa por tempo limitado + reserva gratuita</li>
               <li>Português e inglês</li>
-              <li>Provedores gratuitos podem usar o texto para melhorar os modelos deles</li>
+              <li>Na fila de reserva gratuita, alguns provedores podem usar o texto para melhorar os modelos deles</li>
             </ul>
           </article>
           <article class="lp-card lp-model lp-model--accent lp-reveal">
@@ -279,7 +280,7 @@
               <li>Simulados por arquivo ou por tema</li>
               <li>Até 30 questões por simulado</li>
               <li>Arquivos de até 20 MB</li>
-              <li>Modelos de IA Rápido</li>
+              <li>Modelos de IA Rápido (OpenAI/Codex API por tempo limitado + reserva gratuita)</li>
               <li>Caderno de erros com variações</li>
               <li>Estatísticas e histórico</li>
             </ul>
@@ -351,7 +352,7 @@
           </details>
           <details>
             <summary>O que acontece com o material que eu envio?</summary>
-            <p>O texto é enviado ao provedor de IA só para gerar o simulado. Você pode exportar ou apagar seus dados em Minha conta. Os detalhes estão na <a href="/privacidade">política de privacidade</a>.</p>
+            <p>O texto é enviado ao provedor de IA ativo no momento (atualmente priorizando a OpenAI/Codex API por tempo limitado, com reserva em provedores gratuitos) só para gerar o simulado. Você pode exportar ou apagar seus dados em Minha conta. Os detalhes estão na <a href="/privacidade">política de privacidade</a>.</p>
           </details>
           <details>
             <summary>Quando os planos pagos ficam disponíveis?</summary>

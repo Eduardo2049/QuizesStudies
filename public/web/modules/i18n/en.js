@@ -851,4 +851,22 @@ export default {
   // Link direto ?simulado= (app.js)
   'Não encontramos esse simulado. Abrimos o primeiro da lista.': 'We could not find that quiz. We opened the first one on the list.',
   'Simulado não encontrado': 'Quiz not found',
+  // Atualização de provedores de IA (OpenAI/Codex API por tempo limitado + fila gratuita)
+  'Qual IA o Acely usa para gerar os simulados?': 'Which AI does Acely use to generate quizzes?',
+  'Por tempo limitado, os simulados priorizam a OpenAI/Codex API para entregar questões mais rápidas e estáveis. Quando a cota diária é atingida ou o provedor oscila, o servidor passa automaticamente para a fila gratuita de reserva (Groq, Google Gemini, Cerebras e OpenRouter).':
+    'For a limited time, quizzes prioritize the OpenAI/Codex API for faster, more consistent questions. When the daily quota is reached or the provider fluctuates, the server automatically switches to the free backup queue (Groq, Google Gemini, Cerebras and OpenRouter).',
+  'O texto vai para o provedor de IA ativo no momento (atualmente priorizando a OpenAI/Codex API por tempo limitado, com reserva em provedores gratuitos) só para gerar o simulado. Você pode exportar ou apagar seus dados em Minha conta. Os detalhes estão na':
+    'The text goes to the active AI provider (currently prioritizing the OpenAI/Codex API for a limited time, with free providers as backup) only to generate the quiz. You can export or delete your data in My account. The details are in the',
+  'Você escolhe o caminho pelo que precisa. O servidor tenta os provedores em sequência (hoje priorizando a OpenAI/Codex API por tempo limitado) e passa para os provedores gratuitos de reserva se um deles estiver lento, fora do ar ou atingir o limite diário.':
+    'You choose the path based on what you need. The server tries providers in order (currently prioritizing the OpenAI/Codex API for a limited time) and moves to the free backup providers if one is slow, unavailable or reaches its daily limit.',
+  'Atualmente prioriza a OpenAI/Codex API por tempo limitado para respostas mais rápidas e consistentes, com fila automática de reserva em provedores gratuitos (Groq, Gemini, Cerebras e OpenRouter).':
+    'Currently prioritizes the OpenAI/Codex API for a limited time for faster, more consistent answers, with an automatic free backup queue (Groq, Gemini, Cerebras and OpenRouter).',
+  'OpenAI/Codex API ativa por tempo limitado + reserva gratuita':
+    'OpenAI/Codex API active for a limited time + free backup',
+  'Na fila de reserva gratuita, alguns provedores podem usar o texto para melhorar os modelos deles':
+    'In the free backup queue, some providers may use the text to improve their models',
+  'Modelos de IA Rápido (OpenAI/Codex API por tempo limitado + reserva gratuita)':
+    'Fast AI models (OpenAI/Codex API for a limited time + free backup)',
+  'O texto é enviado ao provedor de IA ativo no momento (atualmente priorizando a OpenAI/Codex API por tempo limitado, com reserva em provedores gratuitos) só para gerar o simulado. Você pode exportar ou apagar seus dados em Minha conta. Os detalhes estão na':
+    'The text is sent to the active AI provider (currently prioritizing the OpenAI/Codex API for a limited time, with free providers as backup) only to generate the quiz. You can export or delete your data in My account. The details are in the',
 };
