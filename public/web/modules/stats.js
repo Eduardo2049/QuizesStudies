@@ -62,24 +62,24 @@ export function calculateQuizStats(questions, results, totalSeconds = 0) {
   const avgSecondsPerQuestion = total > 0 ? Math.round(totalSeconds / total) : 0;
 
   // Classificação geral
-  let tierBadge = `${icon('target')} Bom Rendimento`;
+  let tierBadge = `${icon('target')} Bom rendimento`;
   let tierColor = 'tier-good';
   let encouragement = 'Você teve um bom aproveitamento. Revise os erros pontuais para consolidar o conteúdo.';
 
   if (percentage >= 85) {
-    tierBadge = `${icon('trophy')} Desempenho Excepcional`;
+    tierBadge = `${icon('trophy')} Desempenho excepcional`;
     tierColor = 'tier-excellent';
     encouragement = 'Excelente domínio. Você está pronto para os níveis mais desafiadores desta matéria.';
   } else if (percentage >= 70) {
-    tierBadge = `${icon('target')} Acima da Média`;
+    tierBadge = `${icon('target')} Acima da média`;
     tierColor = 'tier-good';
     encouragement = 'Muito bom. Você superou o ponto de corte padrão. Foco nas justificativas das erradas.';
   } else if (percentage >= 50) {
-    tierBadge = `${icon('scale')} Regular / Em Evolução`;
+    tierBadge = `${icon('scale')} Regular ou em evolução`;
     tierColor = 'tier-average';
     encouragement = 'Bom esforço. Recomendamos retreinar o Caderno de Erros ou gerar variações com IA para fixar.';
   } else {
-    tierBadge = `${icon('warning')} Atenção Redobrada`;
+    tierBadge = `${icon('warning')} Atenção redobrada`;
     tierColor = 'tier-attention';
     encouragement = 'Revise a teoria e as explicações didáticas antes de tentar o próximo simulado.';
   }
@@ -143,7 +143,7 @@ export function renderStatsHtml(stats) {
     <div class="stats-overview-card ${tierColor}">
       <div class="stats-tier-header">
         <span class="stats-tier-tag">${tierBadge}</span>
-        <span class="stats-rhythm-badge">${icon('clock', 14)} Ritmo Médio: <strong>${formatDuration(avgSecondsPerQuestion)}</strong> / questão</span>
+        <span class="stats-rhythm-badge">${icon('clock', 14)} Ritmo médio: <strong>${formatDuration(avgSecondsPerQuestion)}</strong> / questão</span>
       </div>
       <p class="stats-encouragement">${encouragement}</p>
 
@@ -172,7 +172,7 @@ export function renderStatsHtml(stats) {
     ${sections.length > 0 ? `
       <div class="sections-breakdown-card">
         <h3 class="sections-breakdown-title">
-          <span>${icon('chart')} Desempenho por Disciplina / Matéria</span>
+          <span>${icon('chart')} Desempenho por disciplina</span>
         </h3>
         <div class="sections-list">
           ${sections.map((sec) => {

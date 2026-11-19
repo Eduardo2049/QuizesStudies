@@ -1,9 +1,9 @@
 import { icon } from './modules/icons.js?v=6';
-import { initTheme, toggleTheme } from './modules/theme.js?v=9';
+import { initTheme, toggleTheme } from './modules/theme.js?v=10';
 import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js?v=5';
-import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=7';
+import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=8';
 import { initTimerDrag } from './modules/timer-drag.js?v=1';
-import { getLanguage } from './modules/i18n.js?v=10';
+import { getLanguage } from './modules/i18n.js?v=11';
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 const quiz = document.querySelector('#quiz');
@@ -17,6 +17,180 @@ const customQuizValue = document.querySelector('#customQuizValue');
 const customQuizDropdown = document.querySelector('#customQuizDropdown');
 const timer = document.querySelector('#timer');
 const startBtn = document.querySelector('#startBtn');
+
+// ─── Acessibilidade: Movimento reduzido, inert e Drawer mobile ────────────────
+function getScrollBehavior() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+}
+
+function syncModalInert() {
+  const openModals = Array.from(document.querySelectorAll('.modal-overlay:not([hidden])'));
+  const hasOpenModal = openModals.length > 0;
+  const topOpenModal = hasOpenModal ? openModals[openModals.length - 1] : null;
+
+  for (const el of document.body.children) {
+    if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.classList.contains('backdrop')) {
+      continue;
+    }
+    if (el.classList.contains('modal-overlay')) {
+      el.inert = !el.hidden && Boolean(topOpenModal && el !== topOpenModal);
+      continue;
+    }
+    const containsActiveModal = openModals.some((modal) => el === modal || el.contains(modal));
+    el.inert = hasOpenModal && !containsActiveModal;
+  }
+
+  document.body.style.overflow = hasOpenModal ? 'hidden' : '';
+}
+
+function syncFocusQuestionInert() {
+  if (!quiz) return;
+  const isFocus = viewMode === 'focus';
+  quiz.querySelectorAll('.question').forEach((card) => {
+    const isHiddenInFocus = isFocus && !card.classList.contains('question--active');
+    card.inert = isHiddenInFocus;
+    card.classList.toggle('is-hidden', isHiddenInFocus);
+    if (isHiddenInFocus) {
+      card.setAttribute('aria-hidden', 'true');
+    } else {
+      card.removeAttribute('aria-hidden');
+    }
+  });
+}
+
+const appMenuToggle = document.querySelector('#appMenuToggle');
+const appNavDrawer = document.querySelector('#appNavDrawer');
+
+function isNavDrawerOpen() {
+  return Boolean(appNavDrawer?.classList.contains('is-open'));
+}
+
+function setNavDrawerOpen(open, { restoreFocus = false } = {}) {
+  if (!appMenuToggle || !appNavDrawer) return;
+  const nextOpen = Boolean(open);
+  appNavDrawer.classList.toggle('is-open', nextOpen);
+  appMenuToggle.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+  appMenuToggle.setAttribute('aria-label', nextOpen ? 'Fechar menu' : 'Abrir menu');
+  if (!nextOpen && restoreFocus && typeof appMenuToggle.focus === 'function') {
+    appMenuToggle.focus();
+  }
+}
+
+appMenuToggle?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setNavDrawerOpen(!isNavDrawerOpen());
+});
+
+document.addEventListener('click', (e) => {
+  if (!isNavDrawerOpen()) return;
+  if (appNavDrawer?.contains(e.target) || appMenuToggle?.contains(e.target)) return;
+  setNavDrawerOpen(false);
+});
+
+appNavDrawer?.addEventListener('click', (e) => {
+  if (!isNavDrawerOpen()) return;
+  if (!e.target.closest('a, button')) return;
+  setNavDrawerOpen(false);
+});
+
+// Bloqueia atalhos de shortcuts.js em captura enquanto o drawer mobile estiver aberto
+window.addEventListener('keydown', (e) => {
+  if (!isNavDrawerOpen()) return;
+  e.stopImmediatePropagation();
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    setNavDrawerOpen(false, { restoreFocus: true });
+  }
+}, true);
+
+window.matchMedia?.('(min-width: 769px)').addEventListener?.('change', (e) => {
+  if (e.matches && isNavDrawerOpen()) {
+    setNavDrawerOpen(false);
+  }
+});
+
+// ─── Ciclo de vida da prova (WebGL backdrop + Screen Wake Lock) ────────────────
+let examState = 'idle'; // 'idle' | 'active' | 'results'
+let wakeLockSentinel = null;
+let wakeLockPending = false;
+let backdropModule = null;
+let backdropModulePromise = null;
+
+function syncBackdropSuspension() {
+  const suspended = examState !== 'idle';
+  if (backdropModule) {
+    backdropModule.setBackdropSuspended?.(suspended);
+    return;
+  }
+  if (!backdropModulePromise) {
+    const scriptEl = document.querySelector('script[src*="/modules/backdrop.js"]');
+    const src = scriptEl?.getAttribute('src') || './modules/backdrop.js?v=9';
+    backdropModulePromise = import(src)
+      .then((mod) => {
+        backdropModule = mod || null;
+        backdropModule?.setBackdropSuspended?.(examState !== 'idle');
+        return backdropModule;
+      })
+      .catch(() => null);
+  }
+}
+
+async function acquireWakeLock() {
+  if (examState !== 'active' || wakeLockSentinel || wakeLockPending) return;
+  if (!navigator.wakeLock?.request) return;
+  if (document.visibilityState === 'hidden') return;
+  wakeLockPending = true;
+  try {
+    const sentinel = await navigator.wakeLock.request('screen');
+    if (examState !== 'active' || !sentinel) {
+      sentinel?.release?.().catch(() => {});
+      return;
+    }
+    wakeLockSentinel = sentinel;
+    sentinel.addEventListener?.('release', () => {
+      if (wakeLockSentinel === sentinel) {
+        wakeLockSentinel = null;
+      }
+    });
+  } catch (_) {
+    // Silencioso: navegador sem suporte, sem permissão ou sem foco
+  } finally {
+    wakeLockPending = false;
+  }
+}
+
+function releaseWakeLock() {
+  const sentinel = wakeLockSentinel;
+  wakeLockSentinel = null;
+  if (sentinel) {
+    try {
+      sentinel.release().catch(() => {});
+    } catch (_) {}
+  }
+}
+
+function setExamState(nextState) {
+  if (!['idle', 'active', 'results'].includes(nextState)) return;
+  examState = nextState;
+  if (document.body) {
+    document.body.dataset.examState = examState;
+  }
+  syncBackdropSuspension();
+  if (examState === 'active') {
+    acquireWakeLock();
+  } else {
+    releaseWakeLock();
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && examState === 'active' && !wakeLockSentinel) {
+    acquireWakeLock();
+  }
+});
+
+window.addEventListener('pagehide', releaseWakeLock);
+window.addEventListener('beforeunload', releaseWakeLock);
 
 // ─── Toolbar & Modos de Visualização ──────────────────────────────────────────
 const examToolbar = document.querySelector('#examToolbar');
@@ -127,7 +301,7 @@ function openConfirmSubmitModal(answeredCount, totalCount) {
     }
     if (confirmSubmitModal) {
       confirmSubmitModal.hidden = false;
-      document.body.style.overflow = 'hidden';
+      syncModalInert();
     }
 
     // Gerenciador acessível de foco: foca inicialmente o botão principal de confirmação
@@ -144,8 +318,8 @@ function openConfirmSubmitModal(answeredCount, totalCount) {
     function cleanup() {
       if (confirmSubmitModal) {
         confirmSubmitModal.hidden = true;
-        document.body.style.overflow = '';
       }
+      syncModalInert();
       confirmSubmitConfirm?.removeEventListener('click', onConfirm);
       confirmSubmitCancel?.removeEventListener('click', onCancel);
       confirmSubmitModal?.removeEventListener('click', onOverlayClick);
@@ -217,7 +391,7 @@ export function showNotice(message, title = 'Aviso', iconName = 'info') {
     if (iconEl) iconEl.innerHTML = icon(iconName, 36);
 
     modal.hidden = false;
-    document.body.style.overflow = 'hidden';
+    syncModalInert();
 
     const releaseFocus = trapFocus(modal, closeBtn);
 
@@ -233,7 +407,7 @@ export function showNotice(message, title = 'Aviso', iconName = 'info') {
     }
     function cleanup() {
       modal.hidden = true;
-      document.body.style.overflow = '';
+      syncModalInert();
       closeBtn?.removeEventListener('click', onClose);
       modal.removeEventListener('click', onOverlayClick);
       document.removeEventListener('keydown', onKeyDown);
@@ -275,7 +449,7 @@ export function openCustomTimerModal() {
   });
 
   modal.hidden = false;
-  document.body.style.overflow = 'hidden';
+  syncModalInert();
 
   const releaseFocus = trapFocus(modal, input);
 
@@ -337,7 +511,7 @@ export function openCustomTimerModal() {
 
   function closeModal() {
     modal.hidden = true;
-    document.body.style.overflow = '';
+    syncModalInert();
     if (timerPreset && timerPreset.value === 'custom') {
       timerPreset.value = customTimerSeconds !== null ? 'custom-set' : 'auto';
     }
@@ -374,16 +548,16 @@ let releaseCatalogFocus = null;
 function openCatalogModal() {
   if (catalogModal) {
     catalogModal.hidden = false;
-    document.body.style.overflow = 'hidden';
+    syncModalInert();
     renderCatalogList();
     releaseCatalogFocus = trapFocus(catalogModal, catalogSearchInput);
   }
 }
 
 function closeCatalogModal() {
-  if (catalogModal) {
+  if (catalogModal && !catalogModal.hidden) {
     catalogModal.hidden = true;
-    document.body.style.overflow = '';
+    syncModalInert();
     releaseCatalogFocus?.();
     releaseCatalogFocus = null;
   }
@@ -412,17 +586,20 @@ let releaseResultFocus = null;
 function openResultModal() {
   if (resultModal) {
     resultModal.hidden = false;
-    document.body.style.overflow = 'hidden';
+    syncModalInert();
     releaseResultFocus = trapFocus(resultModal, btnRedoQuiz || btnCloseResultModal);
   }
+  setExamState('results');
 }
 
 function closeResultModal() {
-  if (resultModal) {
-    resultModal.hidden = true;
-    document.body.style.overflow = '';
-    releaseResultFocus?.();
-    releaseResultFocus = null;
+  if (!resultModal || resultModal.hidden) return;
+  resultModal.hidden = true;
+  syncModalInert();
+  releaseResultFocus?.();
+  releaseResultFocus = null;
+  if (examState === 'results') {
+    setExamState(Boolean(timerInterval || timer?.classList.contains('running')) ? 'active' : 'idle');
   }
 }
 
@@ -436,16 +613,16 @@ let releaseAboutFocus = null;
 function openAboutModal() {
   if (aboutModal) {
     aboutModal.hidden = false;
-    document.body.style.overflow = 'hidden';
+    syncModalInert();
     // Foco inicial no fechar do topo: focar o botão do rodapé rolava o modal até o fim
     releaseAboutFocus = trapFocus(aboutModal, closeAboutModalBtn || btnCloseAbout);
   }
 }
 
 function closeAboutModal() {
-  if (aboutModal) {
+  if (aboutModal && !aboutModal.hidden) {
     aboutModal.hidden = true;
-    document.body.style.overflow = '';
+    syncModalInert();
     releaseAboutFocus?.();
     releaseAboutFocus = null;
   }
@@ -544,6 +721,19 @@ function formatTime(seconds) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+function isTimerActiveOrExpired() {
+  return Boolean(
+    timerInterval
+    || timer?.classList.contains('running')
+    || timer?.classList.contains('expired')
+  );
+}
+
+function hasAnsweredQuestions() {
+  if (!quiz) return false;
+  return [...new FormData(quiz).keys()].length > 0;
+}
+
 function resetTimer() {
   clearInterval(timerInterval);
   timerInterval = undefined;
@@ -556,9 +746,15 @@ function resetTimer() {
 }
 
 function startTimer() {
-  if (timerInterval || remainingSeconds === 0) return;
+  if (timerInterval || remainingSeconds === 0) {
+    if (isTimerActiveOrExpired()) {
+      setExamState('active');
+    }
+    return;
+  }
   timer.classList.add('running');
   if (startBtn) startBtn.classList.add('hidden');
+  setExamState('active');
   timerInterval = setInterval(() => {
     remainingSeconds -= 1;
     timer.textContent = formatTime(remainingSeconds);
@@ -567,6 +763,7 @@ function startTimer() {
       timerInterval = undefined;
       timer.classList.remove('running');
       timer.classList.add('expired');
+      setExamState('active');
     }
   }, 1000);
 }
@@ -627,9 +824,18 @@ timerPreset?.addEventListener('change', () => {
  * volta ao padrão do servidor sem deixar a tela vazia. O parâmetro sai da barra de endereço.
  */
 async function loadInitialQuiz() {
+  if (!isTimerActiveOrExpired() && !hasAnsweredQuestions()) {
+    setExamState('idle');
+  }
   const params = new URLSearchParams(window.location.search);
   const wanted = (params.get('simulado') || '').trim().slice(0, 255);
-  if (!wanted) return loadQuiz();
+  if (!wanted) {
+    await loadQuiz();
+    if (!isTimerActiveOrExpired() && !hasAnsweredQuestions()) {
+      setExamState('idle');
+    }
+    return;
+  }
   params.delete('simulado');
   const query = params.toString();
   history.replaceState(history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
@@ -640,6 +846,9 @@ async function loadInitialQuiz() {
     selectedSource = '';
     showNotice('Não encontramos esse simulado. Abrimos o primeiro da lista.', 'Simulado não encontrado', 'info');
     await loadQuiz();
+  }
+  if (!isTimerActiveOrExpired() && !hasAnsweredQuestions()) {
+    setExamState('idle');
   }
 }
 
@@ -692,24 +901,25 @@ function renderQuestions() {
 
   quiz.innerHTML = questions.map((item, index) => `
     <article class="question ${viewMode === 'focus' && index === currentQuestionIndex ? 'question--active' : ''}" data-index="${index}" id="question-card-${index}">
-      <p class="section">${escapeHtml(item.section)}</p>
+      <p class="section" translate="no">${escapeHtml(item.section)}</p>
       ${item.context && (index === 0 || questions[index - 1].context !== item.context)
-        ? `<p class="context">${escapeHtml(item.context)}</p>` : ''}
+        ? `<p class="context" translate="no">${escapeHtml(item.context)}</p>` : ''}
       <div class="question-head">
         <span class="number">${escapeHtml(String(item.id).padStart(2, '0'))}</span>
-        <h2>${escapeHtml(item.question)}</h2>
+        <h2 translate="no">${escapeHtml(item.question)}</h2>
       </div>
       <div class="options">
         ${item.options.map((option, i) => `
           <label class="option" id="option-${index}-${i}">
             <input type="radio" name="q-${escapeHtml(item.id)}" value="${i}">
-            <span>${String.fromCharCode(65 + i)}) ${escapeHtml(option)}</span>
+            <span translate="no">${String.fromCharCode(65 + i)}) ${escapeHtml(option)}</span>
             ${getShortcutBadgeHtml(i)}
           </label>
         `).join('')}
       </div>
     </article>`).join('');
 
+  syncFocusQuestionInert();
   updateFocusNavigation();
   renderQuestionPalette();
   updateProgress();
@@ -754,17 +964,18 @@ function goToQuestion(index) {
     cards.forEach((card, idx) => {
       card.classList.toggle('question--active', idx === currentQuestionIndex);
     });
+    syncFocusQuestionInert();
     updateFocusNavigation();
     renderQuestionPalette();
     const activeCard = quiz.querySelector('.question.question--active');
     if (activeCard) {
-      activeCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      activeCard.scrollIntoView({ behavior: getScrollBehavior(), block: 'start' });
     }
   } else {
     renderQuestionPalette();
     const targetCard = document.querySelector(`#question-card-${index}`);
     if (targetCard) {
-      targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      targetCard.scrollIntoView({ behavior: getScrollBehavior(), block: 'start' });
     }
   }
 }
@@ -824,7 +1035,7 @@ async function loadQuizList() {
   if (serverQuizzes.length > 0) {
     html += '<optgroup label="Quizzes da Plataforma">';
     html += serverQuizzes.map((item) =>
-      `<option value="${escapeHtml(item.name)}">
+      `<option value="${escapeHtml(item.name)}" data-label="${escapeHtml(item.label)}" data-ai="${item.ai_generated ? '1' : '0'}">
         ${escapeHtml(item.label)}${item.ai_generated ? ' (IA)' : ''}
       </option>`
     ).join('');
@@ -834,7 +1045,7 @@ async function loadQuizList() {
   if (localQuizzes.length > 0) {
     html += '<optgroup label="Seus Quizzes Gerados (Convidado)">';
     html += localQuizzes.map((item) =>
-      `<option value="${escapeHtml(item.name)}">
+      `<option value="${escapeHtml(item.name)}" data-label="${escapeHtml(item.label)}" data-ai="1">
         ${escapeHtml(item.label)} (IA)
       </option>`
     ).join('');
@@ -871,7 +1082,7 @@ function renderCustomQuizOptions(serverQuizzes = [], localQuizzes = []) {
     html += '<div class="custom-select-group-header">Quizzes da Plataforma</div>';
     html += serverQuizzes.map((item) => `
       <div class="custom-select-option" role="option" data-value="${escapeHtml(item.name)}" tabindex="0">
-        <span class="custom-select-option-label">${escapeHtml(item.label)}${item.ai_generated ? ` <span class="inline-ai">${icon('bot', 14)}</span>` : ''}</span>
+        <span class="custom-select-option-label"><span translate="no">${escapeHtml(item.label)}</span>${item.ai_generated ? ` <span class="inline-ai">${icon('bot', 14)}</span>` : ''}</span>
         <span class="custom-select-option-check" aria-hidden="true"></span>
       </div>
     `).join('');
@@ -883,7 +1094,7 @@ function renderCustomQuizOptions(serverQuizzes = [], localQuizzes = []) {
     html += '<div class="custom-select-group-header">Seus Quizzes Gerados (Convidado)</div>';
     html += localQuizzes.map((item) => `
       <div class="custom-select-option" role="option" data-value="${escapeHtml(item.name)}" tabindex="0">
-        <span class="custom-select-option-label">${escapeHtml(item.label)} <span class="inline-ai">${icon('sparkle', 14)}</span></span>
+        <span class="custom-select-option-label"><span translate="no">${escapeHtml(item.label)}</span> <span class="inline-ai">${icon('sparkle', 14)}</span></span>
         <span class="custom-select-option-check" aria-hidden="true"></span>
       </div>
     `).join('');
@@ -898,21 +1109,26 @@ function syncCustomQuizSelector() {
 
   const currentVal = quizSelector.value;
   const selectedOpt = quizSelector.selectedOptions?.[0] || quizSelector.querySelector(`option[value="${CSS.escape(currentVal)}"]`);
-  if (selectedOpt) {
+  if (selectedOpt && selectedOpt.value) {
+    const label = selectedOpt.dataset.label || selectedOpt.textContent.trim();
+    const isAi = selectedOpt.dataset.ai === '1';
+    customQuizValue.innerHTML = `<span translate="no">${escapeHtml(label)}</span>${isAi ? ' (<span>IA</span>)' : ''}`;
+  } else if (selectedOpt) {
     customQuizValue.textContent = selectedOpt.textContent.trim();
   } else if (selectedSource) {
-    customQuizValue.textContent = selectedSource;
+    customQuizValue.innerHTML = `<span translate="no">${escapeHtml(selectedSource)}</span>`;
   } else {
     customQuizValue.textContent = 'Selecione um simulado…';
   }
 
   if (customQuizDropdown) {
+    const checkSvg = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
     customQuizDropdown.querySelectorAll('.custom-select-option').forEach(opt => {
       const isSel = opt.getAttribute('data-value') === currentVal;
       opt.classList.toggle('is-selected', isSel);
       opt.setAttribute('aria-selected', isSel ? 'true' : 'false');
       const checkSpan = opt.querySelector('.custom-select-option-check');
-      if (checkSpan) checkSpan.textContent = isSel ? '✓' : '';
+      if (checkSpan) checkSpan.innerHTML = isSel ? checkSvg : '';
     });
   }
 }
@@ -975,10 +1191,11 @@ document.addEventListener('keydown', (e) => {
 function updateProgress() {
   const answered = new FormData(quiz);
   const count = [...answered.keys()].length;
-  const value = Math.round(count / (questions.length || 1) * 100);
+  const ratio = questions.length ? Math.max(0, Math.min(1, count / questions.length)) : 0;
+  const value = Math.round(ratio * 100);
   progress.textContent = `${count} de ${questions.length} respondidas`;
   percent.textContent = `${value}%`;
-  progressBar.style.width = `${value}%`;
+  progressBar.style.transform = `scaleX(${ratio})`;
 
   renderQuestionPalette();
 
@@ -1003,7 +1220,7 @@ async function handleSubmitQuiz(event) {
   const answeredCount = Object.keys(answers).length;
 
   if (answeredCount === 0) {
-    showNotice('Por favor, marque pelo menos uma resposta antes de conferir.', 'Simulado Incompleto', 'warning');
+    showNotice('Por favor, marque pelo menos uma resposta antes de conferir.', 'Simulado incompleto', 'warning');
     return;
   }
 
@@ -1067,11 +1284,11 @@ async function handleSubmitQuiz(event) {
     renderResultModal(data);
     openResultModal();
   } catch (err) {
-    showNotice('Erro ao conferir respostas. Verifique a conexão com o servidor.', 'Erro de Conexão', 'error');
+    showNotice('Erro ao conferir respostas. Verifique a conexão com o servidor.', 'Erro de conexão', 'error');
   } finally {
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.innerHTML = 'Conferir respostas <span>→</span>';
+      submitBtn.innerHTML = 'Conferir respostas <span><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></span>';
     }
   }
 }
@@ -1136,11 +1353,11 @@ function renderResultModal(data) {
     const statsContainer = document.querySelector('#resultStatsContainer');
     if (statsContainer && stats) {
       statsContainer.innerHTML = renderStatsHtml(stats);
-      // Aplica a largura das barras via CSSOM (não via atributo style inline),
+      // Aplica o preenchimento das barras via CSSOM (não via atributo style inline),
       // compatível com CSP style-src sem 'unsafe-inline'.
       statsContainer.querySelectorAll('.section-progress-fill[data-percentage]').forEach((el) => {
         const pct = Math.max(0, Math.min(100, Number(el.dataset.percentage) || 0));
-        el.style.width = `${pct}%`;
+        el.style.transform = `scaleX(${pct / 100})`;
       });
     }
   } catch (err) {
@@ -1148,6 +1365,9 @@ function renderResultModal(data) {
   }
 
   if (resultQuestionsList) {
+    const checkSvg = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+    const xSvg = '<svg class="ui-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+
     resultQuestionsList.innerHTML = results.map((item) => {
       const qData = questions.find((q) => q.id === item.id);
       const questionText = qData?.question || `Questão ${item.id}`;
@@ -1167,22 +1387,22 @@ function renderResultModal(data) {
         <article class="result-card ${item.isCorrect ? 'is-correct' : 'is-wrong'}">
           <div class="result-card-header">
             <span class="result-card-qnumber">Questão ${escapeHtml(String(item.id).padStart(2, '0'))}</span>
-            <span class="result-card-tag">${item.isCorrect ? '✓ Correta' : '✗ Errada'}</span>
+            <span class="result-card-tag">${item.isCorrect ? `${checkSvg} Correta` : `${xSvg} Errada`}</span>
           </div>
-          <p class="result-card-question">${escapeHtml(questionText)}</p>
+          <p class="result-card-question"${qData?.question ? ' translate="no"' : ''}>${escapeHtml(questionText)}</p>
           <div class="result-card-answers">
             <div class="result-user-answer">
-              Sua resposta: <strong>${userSelectedLabel}</strong>
+              Sua resposta: ${hasUserSelected ? `<strong translate="no">${userSelectedLabel}</strong>` : `<strong>${userSelectedLabel}</strong>`}
             </div>
             ${!item.isCorrect && correctLabel ? `
             <div class="result-correct-answer">
-              Gabarito correto: <strong>${correctLabel}</strong>
+              Gabarito correto: <strong translate="no">${correctLabel}</strong>
             </div>` : ''}
           </div>
           ${item.explanation ? `
           <div class="result-card-explanation">
-            <strong>${icon('bulb')} Explicação Didática</strong>
-            ${escapeHtml(item.explanation)}
+            <strong>${icon('bulb')} Explicação didática</strong>
+            <span translate="no">${escapeHtml(item.explanation)}</span>
           </div>` : ''}
         </article>
       `;
@@ -1199,7 +1419,7 @@ document.querySelector('#submit')?.addEventListener('click', (e) => {
 startBtn?.addEventListener('click', () => {
   startTimer();
   const firstQuestion = quiz.querySelector('.question');
-  if (firstQuestion) firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (firstQuestion) firstQuestion.scrollIntoView({ behavior: getScrollBehavior(), block: 'start' });
 });
 
 document.querySelector('#reset').addEventListener('click', () => {
@@ -1207,7 +1427,8 @@ document.querySelector('#reset').addEventListener('click', () => {
   resetTimer();
   closeResultModal();
   updateProgress();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setExamState('idle');
+  window.scrollTo({ top: 0, behavior: getScrollBehavior() });
 });
 
 // Ações do Modal de Resultados
@@ -1218,11 +1439,12 @@ btnRedoQuiz?.addEventListener('click', () => {
   quiz.reset();
   resetTimer();
   updateProgress();
+  setExamState('idle');
   const firstQuestion = quiz.querySelector('.question');
   if (firstQuestion) {
-    firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    firstQuestion.scrollIntoView({ behavior: getScrollBehavior(), block: 'start' });
   } else {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: getScrollBehavior() });
   }
 });
 
@@ -1235,11 +1457,12 @@ btnTrainMistakes?.addEventListener('click', () => {
   quiz.reset();
   resetTimer();
   updateProgress();
+  setExamState('idle');
   const firstQuestion = quiz.querySelector('.question');
   if (firstQuestion) {
-    firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    firstQuestion.scrollIntoView({ behavior: getScrollBehavior(), block: 'start' });
   } else {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: getScrollBehavior() });
   }
 });
 
@@ -1287,11 +1510,12 @@ async function runRemixMistakes() {
     quiz.reset();
     resetTimer();
     updateProgress();
+    setExamState('idle');
     const firstQuestion = quiz.querySelector('.question');
     if (firstQuestion) {
-      firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      firstQuestion.scrollIntoView({ behavior: getScrollBehavior(), block: 'start' });
     } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: getScrollBehavior() });
     }
   } catch (err) {
     showNotice(`Não foi possível gerar as variações: ${err.message}. Tente novamente em instantes.`, 'Falha na IA', 'error');
@@ -1396,14 +1620,14 @@ function renderCatalogList() {
     return `
       <div class="catalog-card" data-source="${escapeHtml(item.name)}">
         <div class="catalog-card-header">
-          <h3 class="catalog-card-title">${escapeHtml(item.label)}</h3>
+          <h3 class="catalog-card-title" translate="no">${escapeHtml(item.label)}</h3>
           <span class="catalog-card-badge ${item.ai_generated ? 'ai' : ''}">${escapeHtml(badgeLabel)}</span>
         </div>
         <div class="catalog-card-meta">
           <span>${icon('note', 14)} ${count} questões</span>
           <span>${icon('clock', 14)} ~${estMinutes} min</span>
         </div>
-        <button type="button" class="primary catalog-card-btn">Iniciar Simulado ▶</button>
+        <button type="button" class="primary catalog-card-btn">Iniciar simulado ${icon('play', 14)}</button>
       </div>
     `;
   }).join('');
@@ -1444,15 +1668,21 @@ catalogList?.addEventListener('click', async (e) => {
     startTimer();
     const firstQuestion = quiz.querySelector('.question');
     if (firstQuestion) {
-      firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      firstQuestion.scrollIntoView({ behavior: getScrollBehavior(), block: 'start' });
     }
   } catch (err) {
-    showNotice('Erro ao carregar o simulado selecionado.', 'Erro de Carregamento', 'error');
+    if (!isTimerActiveOrExpired() && !hasAnsweredQuestions()) {
+      setExamState('idle');
+    }
+    showNotice('Erro ao carregar o simulado selecionado.', 'Erro de carregamento', 'error');
   }
 });
 
 quiz.addEventListener('change', (e) => {
   startTimer();
+  if (hasAnsweredQuestions() && examState !== 'active') {
+    setExamState('active');
+  }
   updateProgress();
   const card = e.target?.closest?.('.question');
   if (card && card.dataset.index !== undefined) {
@@ -1467,8 +1697,12 @@ quizSelector.addEventListener('change', async () => {
   resetTimer();
   closeResultModal();
   quiz.innerHTML = '';
+  setExamState('idle');
   try {
     await loadQuiz(quizSelector.value);
+    if (!isTimerActiveOrExpired() && !hasAnsweredQuestions()) {
+      setExamState('idle');
+    }
   } catch (error) {
     if (error.name !== 'AbortError')
       quiz.innerHTML = `<p class="empty-state">Não foi possível carregar este questionário.</p>`;
@@ -1701,13 +1935,14 @@ let releaseUploadFocus = null;
 function openModal() {
   resetModalState();
   uploadModal.hidden = false;
-  document.body.style.overflow = 'hidden';
+  syncModalInert();
   releaseUploadFocus = trapFocus(uploadModal, tabUploadFile || fileInput);
 }
 
 function closeModal() {
+  if (!uploadModal || uploadModal.hidden) return;
   uploadModal.hidden = true;
-  document.body.style.overflow = '';
+  syncModalInert();
   selectedFile = null;
   releaseUploadFocus?.();
   releaseUploadFocus = null;
@@ -2181,16 +2416,14 @@ function openAccessModal(reason = 'create', onGranted = null) {
   if (accessGuestBtn) accessGuestBtn.disabled = false;
 
   accessModal.hidden = false;
-  document.body.style.overflow = 'hidden';
+  syncModalInert();
   releaseAccessFocus = trapFocus(accessModal, document.querySelector('#accessRegisterLink'));
 }
 
 function closeAccessModal() {
   if (!accessModal || accessModal.hidden) return;
   accessModal.hidden = true;
-  // Pode ter sido aberto por cima do resultado: só libera a rolagem se nada mais estiver aberto
-  const otherOpen = [...document.querySelectorAll('.modal-overlay')].some((m) => !m.hidden);
-  if (!otherOpen) document.body.style.overflow = '';
+  syncModalInert();
   pendingAccessAction = null;
   releaseAccessFocus?.();
   releaseAccessFocus = null;
@@ -2337,14 +2570,14 @@ function openAccountModal() {
   loadPlanStatus().then(renderAccountPlan);
   resetDeleteAccountForm();
   accountModal.hidden = false;
-  document.body.style.overflow = 'hidden';
+  syncModalInert();
   releaseAccountFocus = trapFocus(accountModal, document.querySelector('#accountExportLink'));
 }
 
 function closeAccountModal() {
   if (!accountModal || accountModal.hidden) return;
   accountModal.hidden = true;
-  document.body.style.overflow = '';
+  syncModalInert();
   releaseAccountFocus?.();
   releaseAccountFocus = null;
 }
@@ -2566,6 +2799,9 @@ async function showCreatedQuiz(data, closeDelayMs) {
   closeResultModal();
   quiz.innerHTML = '';
   try { await loadQuiz(data.name); } catch (_) {}
+  if (!isTimerActiveOrExpired() && !hasAnsweredQuestions()) {
+    setExamState('idle');
+  }
 
   setTimeout(closeModal, closeDelayMs);
 }
@@ -2761,6 +2997,7 @@ fileInput.addEventListener('change', () => {
 resetTimer();
 
 async function init() {
+  setExamState('idle');
   initTheme();
   initTimerDrag(timer, timerConfig);
 
@@ -2798,10 +3035,20 @@ async function init() {
       closeCatalogModal();
       closeResultModal();
       closeAboutModal();
-      const uploadModalEl = document.querySelector('#uploadModal');
-      if (uploadModalEl) uploadModalEl.hidden = true;
-      if (confirmSubmitModal) confirmSubmitModal.hidden = true;
-      document.body.style.overflow = '';
+      closeAccountModal();
+      closeModal();
+      if (confirmSubmitModal && !confirmSubmitModal.hidden) {
+        confirmSubmitCancel?.click();
+      }
+      const noticeModalEl = document.querySelector('#noticeModal');
+      if (noticeModalEl && !noticeModalEl.hidden) {
+        document.querySelector('#btnNoticeClose')?.click();
+      }
+      const customTimerModalEl = document.querySelector('#customTimerModal');
+      if (customTimerModalEl && !customTimerModalEl.hidden) {
+        document.querySelector('#closeCustomTimerModal')?.click();
+      }
+      syncModalInert();
     },
     getViewMode: () => viewMode,
     getCurrentQuestionIndex: () => currentQuestionIndex,

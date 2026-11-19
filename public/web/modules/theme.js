@@ -5,9 +5,14 @@ import { icon } from './icons.js?v=6';
  */
 
 const THEME_STORAGE_KEY = 'quiz_theme_preference';
-const THEMES = ['system', 'dark', 'light'];
+const THEMES = ['dark', 'light', 'system'];
 
-let currentTheme = 'system';
+function getDefaultTheme() {
+  const attr = document.documentElement.getAttribute('data-default-theme');
+  return THEMES.includes(attr) ? attr : 'system';
+}
+
+let currentTheme = getDefaultTheme();
 let systemMediaQuery = null;
 
 /** Retorna o tema resolvido ('dark' ou 'light') com base no sistema ou preferência */
@@ -35,14 +40,14 @@ export function applyTheme(theme = currentTheme) {
     metaTheme.name = 'theme-color';
     document.head.appendChild(metaTheme);
   }
-  metaTheme.content = resolved === 'dark' ? '#171717' : '#f4f0e8';
+  metaTheme.content = resolved === 'dark' ? '#000000' : '#f4f0e8';
 
   updateThemeButtonUI();
 }
 
 /** Salva o tema escolhido no localStorage e o aplica */
 export function setTheme(theme) {
-  if (!THEMES.includes(theme)) theme = 'system';
+  if (!THEMES.includes(theme)) theme = getDefaultTheme();
   currentTheme = theme;
   try {
     localStorage.setItem(THEME_STORAGE_KEY, theme);
@@ -50,7 +55,7 @@ export function setTheme(theme) {
   applyTheme(theme);
 }
 
-/** Alterna ciclicamente entre: Sistema -> Escuro -> Claro */
+/** Alterna ciclicamente entre: Escuro -> Claro -> Sistema */
 export function toggleTheme() {
   const currentIndex = THEMES.indexOf(currentTheme);
   const nextTheme = THEMES[(currentIndex + 1) % THEMES.length];
@@ -93,15 +98,16 @@ function updateThemeButtonUI() {
 
 /** Inicializa o observador do sistema operacional e carrega preferência salva */
 export function initTheme() {
+  const fallback = getDefaultTheme();
   try {
     const saved = localStorage.getItem(THEME_STORAGE_KEY);
     if (saved && THEMES.includes(saved)) {
       currentTheme = saved;
     } else {
-      currentTheme = 'system';
+      currentTheme = fallback;
     }
   } catch (_) {
-    currentTheme = 'system';
+    currentTheme = fallback;
   }
 
   // Listener para quando o usuário alterar o tema do Windows/Mac/Linux em tempo real
