@@ -9,7 +9,11 @@
 export default {
   // ── Geral / cabeçalho ──────────────────────────────────────────────────────
   'Acely — Treino de Raciocínio': 'Acely — Reasoning practice',
+  'Acely · Treino de raciocínio': 'Acely · Reasoning practice',
   'Acely · prática guiada': 'Acely · guided practice',
+  'Voltar para a página inicial': 'Back to home page',
+  'Início': 'Home',
+  'Controles do simulado': 'Quiz controls',
   'Pular para as questões': 'Skip to questions',
   'Alternar tema (Sistema / Escuro / Claro)': 'Switch theme (System / Dark / Light)',
   'Tema': 'Theme',
@@ -199,10 +203,15 @@ export default {
   'Muito bom. Você acertou a maior parte das questões.': 'Very good. You got most of the questions right.',
   'Revise detalhadamente cada questão abaixo e tente novamente.': 'Review each question below carefully and try again.',
   'Desempenho Excepcional': 'Outstanding performance',
+  'Desempenho excepcional': 'Outstanding performance',
   'Acima da Média': 'Above average',
+  'Acima da média': 'Above average',
   'Bom Rendimento': 'Good result',
+  'Bom rendimento': 'Good result',
   'Regular / Em Evolução': 'Fair / improving',
+  'Regular ou em evolução': 'Fair / improving',
   'Atenção Redobrada': 'Needs extra attention',
+  'Atenção redobrada': 'Needs extra attention',
   'Excelente domínio. Você está pronto para os níveis mais desafiadores desta matéria.':
     'Excellent command. You are ready for the hardest levels of this subject.',
   'Muito bom. Você superou o ponto de corte padrão. Foco nas justificativas das erradas.':
@@ -214,22 +223,28 @@ export default {
   'Revise a teoria e as explicações didáticas antes de tentar o próximo simulado.':
     'Review the theory and the explanations before your next quiz.',
   'Ritmo Médio:': 'Average pace:',
+  'Ritmo médio:': 'Average pace:',
   '/ questão': '/ question',
   'Acertos': 'Correct',
   'Erros': 'Wrong',
   'Em branco': 'Blank',
   'Tempo total': 'Total time',
   'Desempenho por Disciplina / Matéria': 'Performance by subject',
+  'Desempenho por disciplina': 'Performance by subject',
   'Geral': 'General',
   '✓ Correta': '✓ Correct',
+  'Correta': 'Correct',
   '✗ Errada': '✗ Wrong',
+  'Errada': 'Wrong',
   'Explicação Didática': 'Explanation',
+  'Explicação didática': 'Explanation',
   'Sua resposta:': 'Your answer:',
   'Gabarito correto:': 'Correct answer:',
   'Não respondida': 'Not answered',
   'Refazer tudo': 'Retake all',
   'Caderno de erros (': 'Mistake notebook (',
   '↻ Gerar novas variações': '↻ Generate new variations',
+  'Gerar novas variações': 'Generate new variations',
   'Criando variações com IA…': 'Creating variations with AI…',
   'Fechar': 'Close',
   'Gere novas questões a partir dos seus erros': 'Generate new questions from your mistakes',
@@ -250,17 +265,20 @@ export default {
   'Voltar e revisar': 'Go back and review',
   'Confirmar e ver gabarito →': 'Confirm and see the answer key →',
   'Simulado Incompleto': 'Incomplete quiz',
+  'Simulado incompleto': 'Incomplete quiz',
   'Por favor, marque pelo menos uma resposta antes de conferir.': 'Please answer at least one question before checking.',
   'Erro ao conferir respostas. Verifique a conexão com o servidor.': 'Could not check your answers. Check your connection to the server.',
 
   // ── Modal de tempo ────────────────────────────────────────────────────────
   'Escolha um tempo pré-definido ou digite a duração em minutos.': 'Pick a preset or type the duration in minutes.',
   'Opções Rápidas:': 'Quick options:',
+  'Opções rápidas:': 'Quick options:',
   'Tempo personalizado (1 a 300 minutos)': 'Custom time (1 to 300 minutes)',
   'Por favor, informe um número entre 1 e 300 minutos.': 'Please enter a number between 1 and 300 minutes.',
 
   // ── Catálogo de simulados ─────────────────────────────────────────────────
   'Biblioteca de Estudos': 'Study library',
+  'Biblioteca de estudos': 'Study library',
   'Escolha um simulado para treinar com foco total ou filtre por assunto.': 'Pick a quiz to practice with full focus, or filter by subject.',
   'Pesquisar simulado por tema, matéria ou tipo…': 'Search quizzes by topic, subject or type…',
   'Todos': 'All',
@@ -332,7 +350,9 @@ export default {
   'Entendi': 'Got it',
   'Cancelar': 'Cancel',
   'Erro de Carregamento': 'Loading error',
+  'Erro de carregamento': 'Loading error',
   'Erro de Conexão': 'Connection error',
+  'Erro de conexão': 'Connection error',
   'Erro ao carregar o simulado selecionado.': 'The selected quiz could not be loaded.',
   'Não foi possível carregar este questionário.': 'This quiz could not be loaded.',
   'Falha ao carregar o questionário ({0})': 'Failed to load the quiz ({0})',
@@ -517,6 +537,7 @@ export default {
   "✓ Quiz '{0}' carregado somente neste dispositivo. Gabarito lido do arquivo, sem gastar usos de IA.":
     "✓ Quiz '{0}' loaded on this device only. Answer key read from the file, no AI used.",
   "✓ Quiz '{0}' carregado somente neste dispositivo.": "✓ Quiz '{0}' loaded on this device only.",
+  '✓ Simulado gerado.': '✓ Quiz generated.',
 
   // ── Página de produto e planos (/produto) ──────────────────────────────────
   "Acely · Simulados com IA para estudar e treinar equipes":

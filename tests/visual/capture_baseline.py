@@ -22,8 +22,10 @@ Em cada largura também confere o layout: rolagem lateral na página conta como
 falha (LAYOUT) e, no celular, alvos de toque menores que 44px aparecem como AVISO.
 Não faz parte da suíte `unittest`; serve para comparar antes/depois.
 """
+
 import argparse
 import base64
+import contextlib
 import json
 import os
 import shutil
@@ -56,8 +58,11 @@ SCREENS = {
     "produto-menu": ("/produto", "document.querySelector('#lpMenuToggle')?.click()"),
     "inicio": ("/", None),
     "inicio-menu": ("/", "document.querySelector('#inMenuToggle')?.click()"),
-    "login-codigo": ("/login", "(() => { const i = document.querySelector('#codeEmail'); i.value = 'visual@exemplo.com';"
-                               " document.querySelector('#codeEmailForm').requestSubmit(); })()"),
+    "login-codigo": (
+        "/login",
+        "(() => { const i = document.querySelector('#codeEmail'); i.value = 'visual@exemplo.com';"
+        " document.querySelector('#codeEmailForm').requestSubmit(); })()",
+    ),
 }
 
 # Conferência de layout executada em cada tela, depois da ação e antes da captura
@@ -181,17 +186,15 @@ class WebSocket:
                 return message.decode()
 
     def close(self) -> None:
-        try:
+        with contextlib.suppress(OSError):
             self.sock.close()
-        except OSError:
-            pass
 
 
 class Browser:
     def __init__(self, executable: str):
         self.port = free_port()
         self.profile = tempfile.mkdtemp(prefix="quiz-baseline-")
-        self.proc = subprocess.Popen(
+        self.proc = subprocess.Popen(  # noqa: S603 - executável de navegador validado
             [
                 executable,
                 "--headless=new",
@@ -235,8 +238,7 @@ class Browser:
                 return data.get("result", {})
 
     def evaluate(self, expression: str, await_promise: bool = False):
-        result = self.call("Runtime.evaluate", expression=expression,
-                           awaitPromise=await_promise, returnByValue=True)
+        result = self.call("Runtime.evaluate", expression=expression, awaitPromise=await_promise, returnByValue=True)
         return result.get("result", {}).get("value")
 
     def goto(self, url: str) -> None:
@@ -251,10 +253,8 @@ class Browser:
         time.sleep(0.8)  # dados assíncronos (lista de quizzes, sessão)
 
     def close(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self.call("Browser.close")
-        except Exception:
-            pass
         self.ws.close()
         try:
             self.proc.wait(timeout=10)
@@ -269,9 +269,12 @@ def capture(browser: Browser, out_file: Path, width: int, height: int, full_page
         shot = browser.call("Page.captureScreenshot", format="png")
         out_file.write_bytes(base64.b64decode(shot["data"]))
         return
-    full_height = browser.evaluate(
-        "Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)"
-    ) or height
+    full_height = (
+        browser.evaluate(
+            "Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)"
+        )
+        or height
+    )
     full_height = max(height, min(int(full_height), 12000))
     shot = browser.call(
         "Page.captureScreenshot",
@@ -289,8 +292,7 @@ def main() -> int:
     parser.add_argument("--out", default="design-baseline")
     parser.add_argument("--browser", help="Caminho do msedge/chrome (detectado automaticamente)")
     parser.add_argument("--only", help="Captura só as telas informadas, separadas por vírgula")
-    parser.add_argument("--lang", choices=("pt-BR", "en"), default="pt-BR",
-                        help="Idioma da interface (padrão: pt-BR)")
+    parser.add_argument("--lang", choices=("pt-BR", "en"), default="pt-BR", help="Idioma da interface (padrão: pt-BR)")
     args = parser.parse_args()
 
     executable = find_browser(args.browser)
@@ -314,30 +316,43 @@ def main() -> int:
     try:
         browser.call("Page.enable")
         browser.call("Runtime.enable")
-        # O idioma fica salvo no localStorage da origem, como quando o usuário troca pelo botão
+        # O idioma e o tema ficam salvos no localStorage da origem; em /app o padrão sem
+        # preferência é escuro (data-default-theme="dark"), então forçamos quiz_theme_preference
+        # a cada tema para capturar claro e escuro de forma determinística.
         browser.goto(base + "/login")
-        browser.evaluate(f"localStorage.setItem('quiz_lang', '{args.lang}')")
+        browser.evaluate(f"localStorage.setItem('quiz_lang', {json.dumps(args.lang)})")
         for theme in THEMES:
-            browser.call("Emulation.setEmulatedMedia", features=[
-                {"name": "prefers-color-scheme", "value": theme},
-                {"name": "prefers-reduced-motion", "value": "reduce"},
-            ])
+            browser.call(
+                "Emulation.setEmulatedMedia",
+                features=[
+                    {"name": "prefers-color-scheme", "value": theme},
+                    {"name": "prefers-reduced-motion", "value": "reduce"},
+                ],
+            )
+            browser.evaluate(f"localStorage.setItem('quiz_theme_preference', {json.dumps(theme)})")
             for vp_name, (width, height) in VIEWPORTS.items():
-                browser.call("Emulation.setDeviceMetricsOverride", width=width, height=height,
-                             deviceScaleFactor=1, mobile=width < 600)
+                browser.call(
+                    "Emulation.setDeviceMetricsOverride",
+                    width=width,
+                    height=height,
+                    deviceScaleFactor=1,
+                    mobile=width < 600,
+                )
                 browser.call("Emulation.setTouchEmulationEnabled", enabled=width < 600)
                 for screen, (path, action) in screens.items():
                     out_file = out_dir / f"{screen}-{vp_name}-{theme}{lang_suffix}.png"
                     try:
-                        if path == "/":
+                        if path in ("/", "/app"):
                             # Primeira visita: sem sessão de conta nem de convidado
                             browser.call("Network.clearBrowserCookies")
+                            if path == "/app":
+                                browser.evaluate("sessionStorage.removeItem('quiz_guest_mode')")
                         if path == "/guest":
                             # Entra no modo convidado do mesmo jeito que o botão da tela de login
                             browser.goto(base + "/login")
                             browser.evaluate("sessionStorage.setItem('quiz_guest_mode', 'true')")
                         browser.goto(base + path)
-                        if path == "/guest":
+                        if path in ("/app", "/guest"):
                             # Espera a lista de quizzes e as questões carregarem
                             deadline = time.time() + 10
                             while time.time() < deadline and not browser.evaluate(
@@ -356,7 +371,7 @@ def main() -> int:
                         if layout.get("small"):
                             warnings += 1
                             print(f"AVISO {out_file.name}: alvos de toque < 44px: {', '.join(layout['small'][:8])}")
-                    except Exception as exc:  # noqa: BLE001 - registra e segue para a próxima tela
+                    except Exception as exc:  # registra e segue para a próxima tela
                         failures += 1
                         print("FALHA", out_file, f"({exc})")
     finally:
