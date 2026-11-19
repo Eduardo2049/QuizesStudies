@@ -280,6 +280,8 @@ void main() {
 `;
 
 let instance = null;
+let isSuspended = false;
+let pendingInit = false;
 
 function parseHex(value, fallback) {
   let hex = (value || '').trim().replace('#', '');
@@ -320,13 +322,27 @@ function compile(gl, type, source) {
 }
 
 function createProgram(gl, fragmentSource, uniformNames) {
+  const vs = compile(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
+  let fs;
+  try {
+    fs = compile(gl, gl.FRAGMENT_SHADER, fragmentSource);
+  } catch (err) {
+    gl.deleteShader?.(vs);
+    throw err;
+  }
   const program = gl.createProgram();
-  gl.attachShader(program, compile(gl, gl.VERTEX_SHADER, VERTEX_SHADER));
-  gl.attachShader(program, compile(gl, gl.FRAGMENT_SHADER, fragmentSource));
+  gl.attachShader(program, vs);
+  gl.attachShader(program, fs);
   gl.bindAttribLocation(program, 0, 'a_pos');
   gl.linkProgram(program);
+  gl.detachShader?.(program, vs);
+  gl.detachShader?.(program, fs);
+  gl.deleteShader?.(vs);
+  gl.deleteShader?.(fs);
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    throw new Error(`Programa: ${gl.getProgramInfoLog(program)}`);
+    const log = gl.getProgramInfoLog(program);
+    gl.deleteProgram?.(program);
+    throw new Error(`Programa: ${log}`);
   }
   const uniforms = {};
   uniformNames.forEach((name) => { uniforms[name] = gl.getUniformLocation(program, name); });
@@ -339,16 +355,22 @@ function createBackdrop(canvas, gl) {
 
   let field = null;
   let display = null;
+  let vertexBuffer = null;
   let fieldTexture = null;
   let framebuffer = null;
   let palette = readPalette();
   let rafId = 0;
+  let resizeRafId = 0;
+  let hideTimer = 0;
+  let hideTransitionHandler = null;
   let lastFrame = 0;
   let elapsed = 0;
   let renderScale = 1;
   let quality = 1;
   let slowFrames = 0;
   let contextLost = false;
+  let suspended = isSuspended;
+  let destroyed = false;
   const size = { fieldW: 1, fieldH: 1, cell: CELL_CSS };
   // Ponteiro em 0..1 com origem embaixo; começa (e fica, no toque) no centro.
   // px/py: paralaxe em -1..1; amt: força do giro; last: último movimento.
@@ -390,8 +412,8 @@ function createBackdrop(canvas, gl) {
     display = createProgram(gl, DISPLAY_SHADER, [
       'u_field', 'u_res', 'u_cell', 'u_column', 'u_calm', 'u_mix', 'u_base', 'u_colorA', 'u_colorB', 'u_line',
     ]);
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
     // Um triângulo que cobre a tela inteira.
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
@@ -407,6 +429,7 @@ function createBackdrop(canvas, gl) {
   }
 
   function resize() {
+    if (contextLost || !fieldTexture || !framebuffer) return;
     const cssW = window.innerWidth;
     const cssH = window.innerHeight;
     const maxRatio = coarsePointer.matches ? 1 : MAX_PIXEL_RATIO;
@@ -495,6 +518,10 @@ function createBackdrop(canvas, gl) {
   }
 
   function frame(now) {
+    if (suspended || destroyed) {
+      rafId = 0;
+      return;
+    }
     rafId = requestAnimationFrame(frame);
     if (lastFrame && now - lastFrame < 1000 / MAX_FPS - 1) return;
     const dt = lastFrame ? Math.min(0.1, (now - lastFrame) / 1000) : 1 / MAX_FPS;
@@ -511,9 +538,50 @@ function createBackdrop(canvas, gl) {
     lastFrame = 0;
   }
 
+  function clearPendingHide() {
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = 0;
+    }
+    if (hideTransitionHandler) {
+      canvas.removeEventListener('transitionend', hideTransitionHandler);
+      hideTransitionHandler = null;
+    }
+  }
+
+  function scheduleCanvasHide() {
+    clearPendingHide();
+    const hadRunning = canvas.classList.contains('is-running');
+    canvas.classList.remove('is-running');
+    if (!hadRunning || reducedMotion.matches) {
+      canvas.hidden = true;
+      return;
+    }
+    const finishHide = () => {
+      clearPendingHide();
+      if (suspended && !destroyed) {
+        canvas.hidden = true;
+      }
+    };
+    hideTransitionHandler = (event) => {
+      if (event && event.target && event.target !== canvas) return;
+      if (event && event.propertyName && event.propertyName !== 'opacity') return;
+      finishHide();
+    };
+    canvas.addEventListener('transitionend', hideTransitionHandler);
+    hideTimer = setTimeout(finishHide, 700);
+  }
+
   function update() {
+    if (destroyed) return;
     stopLoop();
     syncToggle();
+    if (suspended) {
+      palette = readPalette();
+      canvas.classList.remove('is-running');
+      if (toggle) toggle.hidden = true;
+      return;
+    }
     if (contextLost) {
       canvas.classList.remove('is-running');
       return;
@@ -529,19 +597,55 @@ function createBackdrop(canvas, gl) {
     }
   }
 
+  function setSuspended(nextSuspended) {
+    if (destroyed) return;
+    const next = Boolean(nextSuspended);
+    if (next === suspended) {
+      if (suspended) {
+        stopLoop();
+        if (toggle) toggle.hidden = true;
+      }
+      return;
+    }
+    suspended = next;
+    if (suspended) {
+      stopLoop();
+      if (resizeRafId) {
+        cancelAnimationFrame(resizeRafId);
+        resizeRafId = 0;
+        resizeQueued = false;
+      }
+      scheduleCanvasHide();
+      if (toggle) toggle.hidden = true;
+    } else {
+      clearPendingHide();
+      canvas.hidden = false;
+      if (toggle) toggle.hidden = false;
+      if (!contextLost && fieldTexture && framebuffer) {
+        resize();
+      }
+      update();
+      if (motionEnabled() && !contextLost && field) {
+        render();
+      }
+    }
+  }
+
   let resizeQueued = false;
   function onResize() {
-    if (resizeQueued) return;
+    if (suspended || destroyed || resizeQueued) return;
     resizeQueued = true;
-    requestAnimationFrame(() => {
+    resizeRafId = requestAnimationFrame(() => {
+      resizeRafId = 0;
       resizeQueued = false;
+      if (suspended || destroyed || contextLost) return;
       resize();
       render();
     });
   }
 
   function onPointerMove(event) {
-    if (event.pointerType === 'touch') return;
+    if (suspended || destroyed || event.pointerType === 'touch') return;
     pointer.tx = event.clientX / Math.max(1, window.innerWidth);
     pointer.ty = 1 - event.clientY / Math.max(1, window.innerHeight);
     if (!pointer.last) {
@@ -552,6 +656,7 @@ function createBackdrop(canvas, gl) {
   }
 
   function onPointerOut(event) {
+    if (suspended || destroyed) return;
     if (!event.relatedTarget) pointer.last = 0;
   }
 
@@ -573,6 +678,61 @@ function createBackdrop(canvas, gl) {
     }
   }
 
+  function onPageHide(event) {
+    if (!event.persisted) {
+      destroy();
+    }
+  }
+
+  function destroy() {
+    if (destroyed) return;
+    destroyed = true;
+    clearPendingHide();
+    stopLoop();
+    if (resizeRafId) {
+      cancelAnimationFrame(resizeRafId);
+      resizeRafId = 0;
+      resizeQueued = false;
+    }
+    if (toggle) {
+      toggle.removeEventListener('click', onToggleClick);
+      toggle.hidden = true;
+    }
+    themeObserver.disconnect();
+    document.removeEventListener('visibilitychange', update);
+    window.removeEventListener('resize', onResize);
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerout', onPointerOut);
+    window.removeEventListener('pagehide', onPageHide);
+    reducedMotion.removeEventListener?.('change', update);
+    canvas.removeEventListener('webglcontextlost', onContextLost);
+    canvas.removeEventListener('webglcontextrestored', onContextRestored);
+
+    if (fieldTexture) {
+      gl.deleteTexture?.(fieldTexture);
+      fieldTexture = null;
+    }
+    if (framebuffer) {
+      gl.deleteFramebuffer?.(framebuffer);
+      framebuffer = null;
+    }
+    if (vertexBuffer) {
+      gl.deleteBuffer?.(vertexBuffer);
+      vertexBuffer = null;
+    }
+    if (field?.program) {
+      gl.deleteProgram?.(field.program);
+      field = null;
+    }
+    if (display?.program) {
+      gl.deleteProgram?.(display.program);
+      display = null;
+    }
+
+    canvas.remove();
+    instance = null;
+  }
+
   setup();
   resize();
 
@@ -583,33 +743,45 @@ function createBackdrop(canvas, gl) {
   window.addEventListener('resize', onResize, { passive: true });
   window.addEventListener('pointermove', onPointerMove, { passive: true });
   window.addEventListener('pointerout', onPointerOut, { passive: true });
+  window.addEventListener('pagehide', onPageHide);
   reducedMotion.addEventListener?.('change', update);
   canvas.addEventListener('webglcontextlost', onContextLost);
   canvas.addEventListener('webglcontextrestored', onContextRestored);
   if (toggle) {
-    toggle.hidden = false;
+    toggle.hidden = suspended;
     toggle.addEventListener('click', onToggleClick);
+  }
+  if (suspended) {
+    canvas.hidden = true;
   }
 
   update();
 
   return {
-    destroy() {
-      stopLoop();
-      if (toggle) {
-        toggle.removeEventListener('click', onToggleClick);
-        toggle.hidden = true;
-      }
-      themeObserver.disconnect();
-      document.removeEventListener('visibilitychange', update);
-      window.removeEventListener('resize', onResize);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerout', onPointerOut);
-      reducedMotion.removeEventListener?.('change', update);
-      canvas.remove();
-      instance = null;
-    },
+    setSuspended,
+    destroy,
   };
+}
+
+/** Suspende ou retoma o fundo WebGL sem destruir o contexto (economiza GPU durante a prova). */
+export function setBackdropSuspended(suspended) {
+  const next = Boolean(suspended);
+  const changed = next !== isSuspended;
+  isSuspended = next;
+  if (instance) {
+    instance.setSuspended(isSuspended);
+    return instance;
+  }
+  if (isSuspended) {
+    const toggle = document.querySelector('[data-backdrop-toggle]');
+    if (toggle) toggle.hidden = true;
+    return null;
+  }
+  if (changed || pendingInit) {
+    pendingInit = false;
+    return initBackdrop();
+  }
+  return null;
 }
 
 /** Cria o canvas de fundo (uma vez por página) e liga a animação ao tema. */
@@ -645,7 +817,14 @@ export function initBackdrop() {
  * e o canvas entra com o fade de .backdrop.is-running.
  */
 function scheduleBackdrop() {
-  const run = () => initBackdrop();
+  const run = () => {
+    if (isSuspended || (document.body?.dataset?.examState && document.body.dataset.examState !== 'idle')) {
+      isSuspended = true;
+      pendingInit = true;
+      return;
+    }
+    initBackdrop();
+  };
   const whenIdle = () => {
     if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 1500 });
     else setTimeout(run, 200);
