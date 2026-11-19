@@ -10,8 +10,9 @@
  * quebrada em palavras (a tradução casa frases inteiras do dicionário).
  */
 import './i18n.js?v=11';
+import { initTheme, toggleTheme } from './theme.js?v=10';
 import { createSmoothScroll } from './smooth-scroll.js?v=1';
-import { initMural } from './mural.js?v=1';
+import { initMural } from './mural.js?v=2';
 
 const root = document.documentElement;
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -324,6 +325,11 @@ function initAccountLinks() {
     })
     .catch(() => {});
 }
+
+initTheme();
+document.getElementById('themeToggle')?.addEventListener('click', () => {
+  toggleTheme();
+});
 
 initMenu();
 initAccountLinks();

@@ -178,7 +178,7 @@ class TestSmoothScrollRemovalContract(unittest.TestCase):
         self.assertNotIn("smooth-scroll.js", index_html)
         self.assertNotIn("smooth-scroll.js", app_js)
         self.assertIn("smooth-scroll.js", inicio_js)
-        self.assertIn('<html lang="pt-BR" data-theme="dark" class="in-html">', inicio_html)
+        self.assertIn('<html lang="pt-BR" data-theme="dark" data-default-theme="dark" class="in-html">', inicio_html)
 
 
 class TestTwoLayerArchitectureContract(unittest.TestCase):
@@ -283,7 +283,7 @@ class TestCacheBustingVersionSyncContract(unittest.TestCase):
         for html_path in ALL_HTMLS:
             html = _read(html_path)
             with self.subTest(file=html_path.name):
-                self.assertIn("/web/styles.css?v=31", html)
+                self.assertIn("/web/styles.css?v=32", html)
                 self.assertNotIn("styles.css?v=30", html)
 
         for html_path in THEME_BOOT_HTMLS:
