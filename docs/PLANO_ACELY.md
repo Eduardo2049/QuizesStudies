@@ -7,15 +7,15 @@ pelo fluxo `feature/*` → `develop` → `homolog` → `main` descrito em `docs/
 
 ---
 
-## 0. Estado das branches (em 06/11/2026)
+## 0. Estado das branches (atualizado em 18/11/2026)
 
-`main`, `homolog` e `develop` estão no mesmo commit (PR #67, 04/11/2026): a rebrand Acely e a
-`feature/banco-credenciais` já foram integradas, e as branches antigas não existem mais no remoto.
+Em `18/11/2026`, `develop` está em `e8853de` (após a integração da página inicial na raiz pelo PR #85 `feature/inicio-na-raiz`); anteriormente (`06/11/2026`), a rebrand Acely e a `feature/banco-credenciais` já haviam sido integradas (PR #67).
 
 | Branch | Conteúdo | O que fazer |
 |---|---|---|
 | `feature/ia-tarefas-persistentes` | **Fase 1** (seção 3): `request_id`, `ai_jobs`/`ai_cache`, `GET /api/quiz/jobs/<id>`, streaming com `AI_ATTEMPT_TIMEOUT`, retomada no navegador | Revisar e abrir PR para a `develop`. |
 | `feature/ia-multiprovedor` | **Fase 2** (seção 3), criada a partir da Fase 1: Groq, Gemini, Cerebras e OpenRouter em sequência | Abrir PR para a `develop` depois do merge da Fase 1 (o PR mostra só a Fase 2). |
+| `feature/quiz-visual-dashboard` | **Missão 1** (seção 6): redesign visual de `/app` alinhado a `/`, criado a partir de `develop` (`e8853de`), implementado e aprovado na revisão C | Commitar, executar `capture_baseline.py --label after` (PT e EN) e `unittest discover tests` fora do sandbox, fazer `push` e abrir PR para a `develop`. |
 
 Para criar a próxima branch: `git checkout develop && git pull && git checkout -b feature/<nome>`.
 
@@ -293,3 +293,128 @@ Fontes: [OpenRouter — Free LLM APIs compared](https://openrouter.ai/blog/tutor
   cada PR e, em mudança de tela, `python tests/visual/capture_baseline.py --label after` (e `--lang en`).
 - Uma fase por branch e por PR; no PR, citar a fase deste documento e marcar o que ficou pronto.
 - Ao terminar uma fase, atualizar a tabela da seção 0 e marcar a fase como concluída aqui.
+
+---
+
+## 6. Missão 1 — Redesign visual de `/app` alinhado a `/` ✅
+
+Implementação e revisão concluídas em `18/11/2026` para a branch `feature/quiz-visual-dashboard`
+(criada a partir de `develop` em `e8853de`). Toda a documentação de pesquisa, design, arquitetura,
+consolidação e baseline está registrada em `docs/missoes/m1/` (`features.md`, `design.md`,
+`arquitetura.md`, `plano-consolidado.md` e `qa-baseline.md`), e a Fase 4 recebeu parecer final
+**`APPROVE`** na revisão C.
+
+### 6.1 Resumo do que foi implementado (5 decisões R2 + item #9)
+
+1. **Tema escuro padrão e claro opcional (R2.1):** `/app` (`public/web/index.html`) passa a usar
+   `data-default-theme="dark"` e `<meta name="theme-color" content="#000000">`, com `theme-boot.js`
+   (zero FOUC) e `theme.js` (`THEMES = ['dark', 'light', 'system']`) mantendo `quiz_theme_preference`
+   no `localStorage` e o tema claro completo no seletor. Superfícies escuras unificadas com `/`:
+   `#000000` (fundo), `#181818` e `#1F1F1F` (superfícies), `#272727` e `#313131` (bordas).
+2. **Fundo WebGL suspenso em prova ativa (R2.2):** `public/web/modules/backdrop.js` exporta
+   `setBackdropSuspended(boolean)` e desaloca explicitamente recursos GL no `destroy()`. Em
+   `public/web/app.js`, a máquina de estados `examState` (`'idle' | 'active' | 'results'`) suspende
+   o loop `requestAnimationFrame` (`0%` de GPU/CPU), oculta `<canvas class="backdrop">` e
+   `#backdropMotionToggle` durante a prova e nos resultados — mantendo `#000000` chapado sem vazar
+   contexto WebGL — e retoma no repouso (`#reset`, `#btnRedoQuiz`, troca de simulado ou fechamento
+   de `#resultModal` quando o timer não estiver mais rodando).
+3. **Acento coral `#FF7A5C` e contraste WCAG AA/AAA (R2.3):** no tema escuro de `/app`, `--coral`
+   e o alias `--teal` passam para `#FF7A5C` (removendo azul/roxo genéricos), com
+   `--btn-primary-text: #000000` (`8,19:1` AAA), `--accent-text: #FF8F75` (`7,41:1` sobre `#1F1F1F`),
+   `--line-interactive: #525252` (WCAG 1.4.11) e botões secundários em contorno neutro (1 CTA
+   principal cheio por tela). O tema claro opcional mantém contraste AA (`--coral: #c9462a` com
+   `#ffffff`, `--teal: #176b67`).
+4. **Navegação em 2 camadas (R2.4):**
+   - **Camada 1 (`.app-nav-wrap` / `.app-nav`):** barra global flutuante e translúcida
+     (`backdrop-filter: blur(16px)` com fallback sólido `@supports not`) reunindo marca (`/`),
+     links (`Início`, `Planos` `#plansLink`, `Por que o Acely?` `#btnOpenAboutModal`), utilitários
+     (`#langToggle`, `#themeToggle`, `#backdropMotionToggle`) e `#authControls`. No desktop
+     (`>= 769px`), `#appNavDrawer` usa `display: contents` (com quebra limpa em `769px–920px`); no
+     celular (`<= 768px`), expande como drawer acessível via `#appMenuToggle` sem duplicar IDs.
+   - **Camada 2 (`.exam-panel` em `.hero`):** painel do simulado com seletor de questionário, ações,
+     progresso e paleta `#questionPalette`. `#timer` permanece direto em `.timer-wrap` com
+     `position: fixed` e `z-index: var(--z-timer)` na regra base (e `top`/`right` em
+     `#timer:not(.timer--custom)`), preservando compatibilidade com `.timer--custom` de
+     `timer-drag.js`.
+5. **Movimento nativo, `scaleX`, acessibilidade e item #9 (`Screen Wake Lock`):**
+   - Sem `smooth-scroll.js` em `/app`; rolagem nativa com `scroll-padding-top` / `scroll-margin-top`
+     (WCAG 2.2 SC 2.4.11) e `getScrollBehavior()` respeitando `prefers-reduced-motion`.
+   - `#progressBar` e `.section-progress-fill` convertidos de `width` para `transform: scaleX(...)`
+     com `--ease-out` (`>= 200ms`); remoção de `border-left` isolados e de `text-transform: uppercase`
+     em rótulos; `inert` em `<main>`/`<footer>` nos 8 modais e nos cards ocultos do Modo Foco.
+   - **Item #9 (`navigator.wakeLock`):** integrado ao estado `examState === 'active'` em `app.js`
+     com `try/catch`, reaquisição em `visibilitychange` e liberação garantida ao encerrar/sair da prova.
+6. **i18n, `translate="no"`, sincronia `?v=` e preservação de `/` e `/produto`:**
+   - `translate="no"` aplicado aos conteúdos dinâmicos de questões, alternativas e nomes de simulados;
+     21 chaves novas/normalizadas adicionadas em `public/web/modules/i18n/en.js` (e títulos
+     normalizados em `stats.js`).
+   - Versões `?v=` sincronizadas nos 9 HTMLs e módulos JS (`styles.css?v=31`, `app.js?v=27`,
+     `theme-boot.js?v=2`, `theme.js?v=10`, `backdrop.js?v=9`, `i18n.js?v=11` / `en.js?v=11`,
+     `stats.js?v=8`), mantendo `inicio.css`, `produto.css`, `smooth-scroll.js`, `mural.js`,
+     `timer-drag.js`, `api/`, `Dockerfile` e `vercel.json` intactos.
+
+### 6.2 Testes, baseline e pendências explícitas fora do sandbox
+
+- **Contratos e lint no repositório (aprovados pós-implementação):**
+  - `tests/test_app_dashboard_contract.py` criado com **13** novos testes cobrindo tema padrão
+    escuro, 2 camadas sem IDs duplicados, `scaleX`, ciclo WebGL, `wakeLock`, `inert`,
+    `translate="no"`, retorno de `closeResultModal()` para `'idle'`, sincronia `?v=`, 21 chaves de
+    `en.js`, `#timer` compatível com `.timer--custom` e alvos `>= 44px` no mobile (incluindo
+    `.catalog-tab-btn`, corrigindo os 2 avisos EN vistos no `before`).
+  - `test_ui_contract.py` + `test_modulepreload.py` + `test_app_dashboard_contract.py`: **19/19 OK**.
+  - `ruff check` e `ruff format --check` em `tests/test_app_dashboard_contract.py` e
+    `tests/visual/capture_baseline.py`: **0 violações** (`ruff check .` caiu de `237` para `232`).
+  - `tests/visual/capture_baseline.py` adaptado para testar `light` e `dark` sobre o novo padrão
+    escuro de `/app` (gravando `quiz_theme_preference` e limpando cookies/`quiz_guest_mode` antes de `/app`).
+- **Pendências operacionais antes de abrir o PR (bloqueadas no sandbox por `WinError 10013`):**
+  1. Criar a branch `feature/quiz-visual-dashboard` a partir de `develop` (`e8853de`) e gravar os
+     commits organizados (sem `.claude/settings.local.json`, `design-baseline/` ou `.env`).
+  2. Executar fora do sandbox (com servidor em `http://127.0.0.1:8010`) `capture_baseline.py --label after`
+     (PT e `--lang en`, gerando 180 PNGs com 0 falhas `LAYOUT` e 0 avisos `< 44px`) e
+     `python -m unittest discover tests` com `$env:E2E_PORT = "8015"`.
+  3. Executar `git push -u origin feature/quiz-visual-dashboard` e abrir o PR para `develop`.
+
+---
+
+## 7. Backlog priorizado (a partir da Missão 1)
+
+Consolidado da pesquisa técnica em `docs/missoes/m1/features.md` e da auditoria de `docs/missoes/m1/arquitetura.md`:
+
+### 7.1 Implementados na Missão 1 (#1 a #9)
+
+- **#1** `color-scheme` + `color-mix()` para tokens AA/AAA (`#FF7A5C`, tema escuro padrão).
+- **#2** `scroll-padding-top` + `scroll-margin-top` (WCAG 2.2 SC 2.4.11 sob cabeçalho em 2 camadas).
+- **#3** `100dvh` + `overscroll-behavior: contain` + `scrollbar-gutter: stable`.
+- **#4** `backdrop-filter: blur(16px)` restrito à Camada 1 com fallback sólido `@supports not`.
+- **#5** Atributo HTML `inert` em `<main>`/`<footer>` nos modais e em cards ocultos do Modo Foco.
+- **#6** `content-visibility: auto` + `contain-intrinsic-size` em `.question`, `.result-question-item` e `.catalog-card`.
+- **#7** Seletor relacional `:has()` para estados declarativos em opções, questões e painéis.
+- **#8** `text-wrap: balance` / `pretty` e alvos de toque `>= 44px` no mobile (WCAG 2.2 SC 2.5.8).
+- **#9** Screen Wake Lock API (`navigator.wakeLock`) durante prova ativa.
+
+### 7.2 Adiados para missões futuras (com justificativa técnica)
+
+| Posição | Item | Impacto / Esforço | Motivo do adiamento na M1 e próximo passo |
+|---|---|---|---|
+| **#10** | **CSS Cascade Layers (`@layer`)** para unificar tokens com `/` | Alto / Médio | `inicio.css` e `produto.css` carregam após `styles.css` sem `@layer` e venceriam estilos em camadas. Exige refatoração e auditoria das 9 páginas em missão dedicada (combinável com eventual extração de `tokens.css` se `/` ganhar tema claro). |
+| **#11** | **CSS Container Queries (`@container`)** em painéis e catálogo | Alto / Médio | `container-type: inline-size` cria contenção e *stacking context* que podem prender `#customQuizDropdown` ou alterar larguras intrínsecas da barra de controle. Media queries atuais atendem os breakpoints da M1. |
+| **#12** | **Popover API (`popover="auto"`)** na Top Layer | Médio / Médio | `#timerConfig` depende de coordenadas calculadas por `timer-drag.js` e `#customQuizDropdown` possui gestão própria de foco/ARIA em `app.js`; requer refatoração comportamental própria fora do escopo visual R2. |
+
+### 7.3 Itens explicitamente fora das regras (manter descartados)
+
+Conforme `docs/missoes/m1/features.md` (seção 3), continuam vetados em `/app`: `smooth-scroll.js` (R2.5),
+WebGL ativo durante prova em andamento (R2.2), `backdrop-filter` em cards/opções/modais (`DESIGN_SKILLS.md` B4),
+Cross-Document `@view-transition` e `document.startViewTransition()` na troca de questões, Scroll-Driven
+Animations em `/app`, frameworks CSS/JS ou CDNs externas (CSP `'self'`), animações em propriedades de layout
+(`width`/`height`) ou abaixo de `200ms`, gradientes de fundo no modo escuro e `border-left` isolado, pesos
+`800`/`900`, itálico e `DM Mono` fora de números, CSS Anchor Positioning sem fallback, além de `window.alert()`,
+`window.prompt()`, redirecionamento para `/login` ou controle de cota no navegador.
+
+### 7.4 Tarefa de infraestrutura recomendada (fora da Missão 1)
+
+- **Retorno do `Dockerfile` para `python:3.15-slim` (branch sugerida: `chore/dockerfile-python-3.15`):**
+  na `develop` (`e8853de`), os dois estágios (`builder` e `runtime`) do `Dockerfile` (linhas 3 e 17) usam
+  `python:3.16.0a1-slim@sha256:df293ba3b89f458e1aad6051b62ff1c4fad7b3b52b8147ae9cc4b667f9cf2741`.
+  Abrir tarefa própria para voltar ambos os estágios à série estável **`python:3.15-slim`** com digest
+  `@sha256` atualizado, evitando versão *alpha* em produção e incompatibilidades de ABI/build em
+  extensões C (`psycopg2-binary`).
