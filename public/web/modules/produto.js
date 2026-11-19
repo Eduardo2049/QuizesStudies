@@ -6,8 +6,8 @@
  * i18n.js vem primeiro: ele traduz a página ao ser importado, antes de a tagline
  * ser quebrada em palavras (a tradução casa frases inteiras do dicionário).
  */
-import './i18n.js?v=10';
-import { initTheme } from './theme.js?v=9';
+import './i18n.js?v=11';
+import { initTheme } from './theme.js?v=10';
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 document.documentElement.classList.add('lp-js');
