@@ -1278,9 +1278,14 @@ class QuizHandler(BaseHTTPRequestHandler):
             else:
                 reservation = None
             def acquire_upload_ai():
-                self._enforce_ai_user_rpm(user, guest_id, client_ip)
                 if reservation:
                     reservation.acquire()
+                try:
+                    self._enforce_ai_user_rpm(user, guest_id, client_ip)
+                except Exception:
+                    if reservation:
+                        reservation.refund()
+                    raise
 
             try:
                 response = self.upload_controller.upload_file(
@@ -1489,7 +1494,6 @@ class QuizHandler(BaseHTTPRequestHandler):
     @staticmethod
     def _reserve_ai(user, guest_id: str | None, client_ip: str, metric: str):
         """Reserva um uso de IA: da cota mensal do plano (conta) ou da cota do convidado."""
-        QuizHandler._enforce_ai_user_rpm(user, guest_id, client_ip)
         if user:
             reservation = entitlements_service.reservation(user, metric)
         elif guest_id:
@@ -1497,6 +1501,11 @@ class QuizHandler(BaseHTTPRequestHandler):
         else:
             return None
         reservation.acquire()
+        try:
+            QuizHandler._enforce_ai_user_rpm(user, guest_id, client_ip)
+        except Exception:
+            reservation.refund()
+            raise
         return reservation
 
     @staticmethod

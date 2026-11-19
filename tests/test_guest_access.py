@@ -171,7 +171,7 @@ class TestGuestAccessHTTP(unittest.TestCase):
         self.svc_patch = patch.object(self.qh, "guest_service", self.guest_service)
         self.svc_patch.start()
         self.limiters = (self.qh._rl_generate, self.qh._rl_remix, self.qh._rl_upload,
-                         self.qh._rl_read, self.qh._rl_guest_start)
+                         self.qh._rl_ai_user_per_minute, self.qh._rl_read, self.qh._rl_guest_start)
         self.saved_repos = [limiter.repo for limiter in self.limiters]
         for limiter in self.limiters:
             limiter._requests.clear()
