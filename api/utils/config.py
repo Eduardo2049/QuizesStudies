@@ -92,14 +92,15 @@ OPENROUTER_FREE_MODELS = [
 # usa os outros gratuitos como reserva.
 OPENROUTER_DISCOVER_FREE_MODELS = os.getenv("OPENROUTER_DISCOVER_FREE_MODELS", "true").lower() == "true"
 
-# ─── Vários provedores gratuitos em sequência (docs/PLANO_ACELY.md, Fase 2) ──────────────────
-# Todos falam o formato de chat da OpenAI. A IA tenta os provedores na ordem de AI_PROVIDERS;
-# quando um bate no limite (429), falha ou fica sem resposta, passa ao próximo. Provedor sem
-# chave fica de fora: sem GROQ/GEMINI/CEREBRAS, o comportamento é o de antes (só OpenRouter).
-_KNOWN_AI_PROVIDERS = ("groq", "gemini", "cerebras", "openrouter")
+# ─── Vários provedores em sequência (docs/PLANO_ACELY.md, Fase 2) ────────────────────────────
+# Todos falam OpenAI Chat Completions (ou Responses API no provedor Codex). A IA tenta os
+# provedores na ordem de AI_PROVIDERS; quando um bate no limite (429), falha ou fica sem
+# resposta, passa ao próximo. Provedor sem chave fica de fora: sem CODEX/GROQ/GEMINI/CEREBRAS,
+# o comportamento é o de antes (só OpenRouter).
+_KNOWN_AI_PROVIDERS = ("codex", "groq", "gemini", "cerebras", "openrouter")
 AI_PROVIDERS = [
     name for name in (
-        p.strip().lower() for p in (os.getenv("AI_PROVIDERS") or "groq,gemini,cerebras,openrouter").split(",")
+        p.strip().lower() for p in (os.getenv("AI_PROVIDERS") or "codex,groq,gemini,cerebras,openrouter").split(",")
     )
     if name in _KNOWN_AI_PROVIDERS
 ] or ["openrouter"]
@@ -107,6 +108,17 @@ AI_PROVIDERS = [
 
 def _env_list(name: str, default: str) -> list[str]:
     return [item.strip() for item in (os.getenv(name) or default).split(",") if item.strip()]
+
+
+# OpenAI / Codex API (platform.openai.com): usado primeiro quando CODEX_API_KEY (ou
+# OPENAI_API_KEY) estiver configurada; vazio = pulado sem afetar os provedores gratuitos.
+# CODEX_API_MODE: "auto" (usa /responses em modelos *codex* e /chat/completions nos demais,
+# com fallback automático), "responses" ou "chat".
+CODEX_API_KEY = (os.getenv("CODEX_API_KEY") or os.getenv("OPENAI_API_KEY") or "").strip()
+CODEX_BASE_URL = (os.getenv("CODEX_BASE_URL") or "https://api.openai.com/v1").strip()
+CODEX_MODELS = _env_list("CODEX_MODELS", "gpt-5-nano,gpt-5-mini,codex-mini-latest")
+_codex_mode = (os.getenv("CODEX_API_MODE") or "auto").strip().lower()
+CODEX_API_MODE = _codex_mode if _codex_mode in ("auto", "responses", "chat") else "auto"
 
 
 # Groq (console.groq.com): rápido; não usa os dados para treino. Limite grátis por modelo:
@@ -167,6 +179,10 @@ GUEST_AI_LIMIT = _env_int("GUEST_AI_LIMIT", 3, 0, 50)
 GUEST_AI_IP_LIMIT = _env_int("GUEST_AI_IP_LIMIT", 10, 1, 500)
 GUEST_AI_WINDOW_SECONDS = _env_int("GUEST_AI_WINDOW_HOURS", 24, 1, 24) * 60 * 60
 
+# Limite de chamadas de IA por minuto por usuário (ou convidado), somando gerar por tema,
+# variações e upload que precisa de IA. 0 desliga. Protege o saldo da API contra rajadas.
+AI_USER_REQUESTS_PER_MINUTE = _env_int("AI_USER_REQUESTS_PER_MINUTE", 3, 0, 120)
+
 # Teto global de chamadas à IA por 24 h, somando todos os usuários (trava de emergência
 # contra a conta do provedor estourar). 0 desliga. Os modelos gratuitos do OpenRouter têm
 # limite diário por conta (50 pedidos sem créditos comprados; 1.000 com pelo menos US$ 10
@@ -198,6 +214,7 @@ def _provider_budget(name: str, requests_default: int, tokens_default: int) -> t
     )
 
 
+CODEX_DAILY_REQUESTS, CODEX_DAILY_TOKENS = _provider_budget("CODEX", 500, 500_000)
 GROQ_DAILY_REQUESTS, GROQ_DAILY_TOKENS = _provider_budget("GROQ", 950, 190_000)
 GEMINI_DAILY_REQUESTS, GEMINI_DAILY_TOKENS = _provider_budget("GEMINI", 450, 0)
 CEREBRAS_DAILY_REQUESTS, CEREBRAS_DAILY_TOKENS = _provider_budget("CEREBRAS", 0, 950_000)
