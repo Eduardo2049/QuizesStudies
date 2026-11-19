@@ -282,5 +282,34 @@ class TestCodexProvider(_ProvidersTestCase):
         self.assertEqual((provider, model), ("Groq", "openai/gpt-oss-120b"))
 
 
+class TestAIUserRateLimitPerMinute(unittest.TestCase):
+
+    def test_limits_ai_calls_per_minute_per_user_and_isolates_users(self):
+        from api.handlers import quiz_handler
+
+        limiter = quiz_handler.RateLimiter(limit=2, window_seconds=60, repo=None)
+        user_a = {"id": 101}
+        user_b = {"id": 202}
+        with patch.object(quiz_handler, "AI_USER_REQUESTS_PER_MINUTE", 2), \
+             patch.object(quiz_handler, "_rl_ai_user_per_minute", limiter):
+            quiz_handler.QuizHandler._enforce_ai_user_rpm(user_a, None, "10.0.0.1")
+            quiz_handler.QuizHandler._enforce_ai_user_rpm(user_a, None, "10.0.0.1")
+            with self.assertRaises(ai_service.AIQuotaExceededError) as ctx:
+                quiz_handler.QuizHandler._enforce_ai_user_rpm(user_a, None, "10.0.0.1")
+            self.assertGreater(ctx.exception.retry_after, 0)
+            self.assertIn("2 usos de IA por minuto", str(ctx.exception))
+            # Outro usuário no mesmo IP mantém sua própria cota por minuto
+            quiz_handler.QuizHandler._enforce_ai_user_rpm(user_b, None, "10.0.0.1")
+
+    def test_zero_disables_per_minute_user_limit(self):
+        from api.handlers import quiz_handler
+
+        limiter = quiz_handler.RateLimiter(limit=1, window_seconds=60, repo=None)
+        with patch.object(quiz_handler, "AI_USER_REQUESTS_PER_MINUTE", 0), \
+             patch.object(quiz_handler, "_rl_ai_user_per_minute", limiter):
+            for _ in range(5):
+                quiz_handler.QuizHandler._enforce_ai_user_rpm({"id": 1}, None, "10.0.0.1")
+
+
 if __name__ == "__main__":
     unittest.main()

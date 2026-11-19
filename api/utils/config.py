@@ -179,6 +179,10 @@ GUEST_AI_LIMIT = _env_int("GUEST_AI_LIMIT", 3, 0, 50)
 GUEST_AI_IP_LIMIT = _env_int("GUEST_AI_IP_LIMIT", 10, 1, 500)
 GUEST_AI_WINDOW_SECONDS = _env_int("GUEST_AI_WINDOW_HOURS", 24, 1, 24) * 60 * 60
 
+# Limite de chamadas de IA por minuto por usuário (ou convidado), somando gerar por tema,
+# variações e upload que precisa de IA. 0 desliga. Protege o saldo da API contra rajadas.
+AI_USER_REQUESTS_PER_MINUTE = _env_int("AI_USER_REQUESTS_PER_MINUTE", 3, 0, 120)
+
 # Teto global de chamadas à IA por 24 h, somando todos os usuários (trava de emergência
 # contra a conta do provedor estourar). 0 desliga. Os modelos gratuitos do OpenRouter têm
 # limite diário por conta (50 pedidos sem créditos comprados; 1.000 com pelo menos US$ 10
