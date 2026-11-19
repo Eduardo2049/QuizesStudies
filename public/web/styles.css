@@ -4673,6 +4673,668 @@ a.access-cta.primary:hover { color: var(--btn-primary-text); }
 .account-delete-code { display: flex; flex-direction: column; gap: var(--space-2); }
 .account-delete-code[hidden], .account-delete-form .btn-danger[hidden] { display: none; }
 
+/* ═══ Estúdio Acely (/app — Linguagem de `/` em Workspace 2 Colunas + Modais limpos) ═══ */
+
+/* 1. Barra flutuante translúcida estilo `/` (sem poluição de caixas nos ícones) */
+.app-nav {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="light"] .app-nav {
+  box-shadow: 0 8px 24px rgba(24, 35, 38, 0.08);
+}
+
+.app-nav .btn-theme-toggle {
+  border-color: transparent;
+  background: transparent;
+}
+
+.app-nav .btn-theme-toggle:hover {
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+
+.app-nav .user-profile-badge {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  gap: var(--space-2);
+}
+
+[data-theme="dark"] .backdrop.is-running {
+  opacity: 0.6;
+}
+
+/* 2. Workspace de Estúdio em 2 colunas no desktop (Painel à esquerda + Questão acima da dobra) */
+@media (min-width: 1024px) {
+  .shell {
+    max-width: 1260px;
+    display: grid;
+    grid-template-columns: 360px minmax(0, 1fr);
+    column-gap: var(--space-6);
+    row-gap: 0;
+    align-items: start;
+    padding: calc(var(--app-nav-height, 64px) + var(--space-7)) var(--space-5) var(--space-10);
+  }
+
+  .shell > .hero {
+    grid-column: 1;
+    grid-row: 1 / span 6;
+    position: sticky;
+    top: calc(var(--app-nav-height, 64px) + var(--space-6));
+    z-index: 5;
+    border-bottom: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    min-width: 0;
+  }
+
+  .shell > #quiz,
+  .shell > #focusNavigation,
+  .shell > #shortcutsHint,
+  .shell > .actions {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  .shell > #quiz {
+    grid-row: 1;
+    margin-top: 0;
+  }
+
+  .shell > #focusNavigation {
+    grid-row: 2;
+  }
+
+  .shell > .actions {
+    grid-row: 3;
+  }
+
+  .shell > #shortcutsHint {
+    grid-row: 4;
+  }
+
+  .exam-panel .hero-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .exam-panel .quiz-picker {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+  }
+
+  .exam-panel .custom-select-wrap {
+    width: 100%;
+    max-width: none;
+  }
+
+  .exam-panel .hero-top-buttons {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-2);
+    width: 100%;
+  }
+
+  .exam-panel .hero-top-buttons button {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    padding: 0 var(--space-2);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+
+  .exam-panel .hero-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-2);
+    width: 100%;
+  }
+
+  .exam-panel .start-btn {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    padding: 0 var(--space-3);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+
+  .exam-panel .btn-set-timer {
+    min-width: 0;
+    padding: 0 var(--space-3);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+
+  .exam-panel .exam-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .exam-panel .view-mode-toggle {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .exam-panel .view-mode-toggle .toggle-btn {
+    min-width: 0;
+    justify-content: center;
+    padding: 0 var(--space-2);
+  }
+
+  .exam-panel #btnQuickSubmit {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Superfície estúdio do painel lateral (mesma linguagem dos cards de `/`) */
+.exam-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-sizing: border-box;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="light"] .exam-panel {
+  box-shadow: var(--shadow-sm);
+}
+
+.exam-panel h1 {
+  font-size: var(--text-2xl);
+  line-height: var(--leading-2xl);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin: 0 0 var(--space-2);
+}
+
+.exam-panel h1 br {
+  display: none;
+}
+
+.exam-panel h1 em {
+  color: var(--ink);
+  font-weight: 700;
+  margin-left: 0.28em;
+}
+
+.exam-panel .intro {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0 0 var(--space-4);
+}
+
+.exam-panel .intro-proof {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin: var(--space-2) 0 0;
+}
+
+.exam-panel .hero-top {
+  margin-bottom: var(--space-3);
+}
+
+.exam-panel .hero-actions {
+  margin: 0 0 var(--space-4);
+}
+
+.exam-panel .progress-track {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--line);
+  margin-bottom: var(--space-4);
+}
+
+.exam-panel .exam-toolbar {
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* Paleta integrada diretamente na sidebar (sem caixa extra aninhada) */
+.exam-panel .question-palette {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  gap: 6px;
+  margin-top: var(--space-3);
+  padding: var(--space-3) 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.exam-panel .palette-btn {
+  width: 100%;
+  min-width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.exam-panel .palette-btn:hover {
+  border-color: var(--line-strong);
+  background: var(--line);
+}
+
+.exam-panel .palette-btn.active {
+  border-color: var(--coral);
+  background: color-mix(in srgb, var(--coral) 16%, var(--surface-2));
+  color: var(--ink);
+}
+
+/* 3. Palco da Questão (editorial, limpo, sem 3 botões coral competindo) */
+.quiz .question {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="light"] .quiz .question {
+  box-shadow: var(--shadow-sm);
+}
+
+.quiz .question-head h2 {
+  font-size: var(--text-xl);
+  line-height: 1.45;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.quiz .options {
+  grid-template-columns: 1fr;
+  gap: var(--space-2);
+}
+
+.quiz .option {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+
+.quiz .option:hover {
+  background: color-mix(in srgb, var(--ink) 4%, var(--surface-2));
+  border-color: var(--line-strong);
+}
+
+.quiz .option:has(input:checked) {
+  background: color-mix(in srgb, var(--coral) 12%, var(--surface-2));
+  border-color: var(--coral);
+}
+
+/* Hierarquia de CTAs: Finalizar neutro, Próxima branco/alto-contraste, Iniciar/Conferir coral */
+#btnQuickSubmit.btn-quick-submit {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+#btnQuickSubmit.btn-quick-submit:hover {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+#btnNextQuestion.primary {
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  color: var(--paper);
+  box-shadow: none;
+}
+
+#btnNextQuestion.primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+@media (min-width: 769px) {
+  .focus-navigation {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    margin-top: var(--space-4);
+    box-shadow: none;
+  }
+}
+
+.shortcuts-hint {
+  background: transparent;
+  border: 0;
+  padding: var(--space-1) 0 0;
+  margin-top: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  opacity: 0.72;
+  text-align: center;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-direction: row-reverse;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+@media (max-width: 640px) {
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Não exibir barra de envio nem dica de atalhos flutuando no vazio enquanto #quiz carrega */
+.shell:has(#quiz:empty) > #shortcutsHint,
+.shell:has(#quiz:empty) > .actions {
+  display: none;
+}
+
+/* 4. Modais e Confirmações (estética de estúdio, adaptáveis a computador e mobile) */
+.modal-overlay {
+  background: rgba(0, 0, 0, 0.76);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  padding: clamp(16px, 3vw, 36px);
+}
+
+[data-theme="light"] .modal-overlay {
+  background: rgba(24, 35, 38, 0.45);
+}
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-sizing: border-box;
+  width: min(720px, 90vw);
+  max-width: 720px;
+  max-height: min(90dvh, 880px);
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(24px, 2.8vw, 36px);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="light"] .modal {
+  box-shadow: 0 24px 56px rgba(24, 35, 38, 0.16);
+}
+
+/* Escala proporcional por tipo de modal no computador */
+.modal--catalog {
+  width: min(1080px, 92vw);
+  max-width: 1080px;
+  max-height: min(90dvh, 880px);
+}
+
+.modal--results {
+  width: min(1020px, 92vw);
+  max-width: 1020px;
+  max-height: min(92dvh, 920px);
+  padding: clamp(24px, 2.8vw, 36px) clamp(24px, 2.8vw, 36px) 0;
+}
+
+.modal--about {
+  width: min(940px, 90vw);
+  max-width: 940px;
+  max-height: min(90dvh, 880px);
+}
+
+.modal--access {
+  width: min(820px, 90vw);
+  max-width: 820px;
+}
+
+.modal--access-compact {
+  width: min(600px, 88vw);
+  max-width: 600px;
+}
+
+.modal--confirm-submit {
+  width: min(560px, 90vw);
+  max-width: 560px;
+}
+
+.modal--notice {
+  width: min(520px, 90vw);
+  max-width: 520px;
+}
+
+.modal--timer {
+  width: min(540px, 90vw);
+  max-width: 540px;
+}
+
+/* Telas amplas (>= 1440px): aproveita melhor o espaço horizontal */
+@media (min-width: 1440px) {
+  .modal {
+    width: min(780px, 84vw);
+    max-width: 780px;
+  }
+  .modal--catalog {
+    width: min(1160px, 88vw);
+    max-width: 1160px;
+  }
+  .modal--results {
+    width: min(1100px, 88vw);
+    max-width: 1100px;
+  }
+  .modal--about {
+    width: min(1020px, 86vw);
+    max-width: 1020px;
+  }
+  .modal--access {
+    width: min(860px, 86vw);
+    max-width: 860px;
+  }
+  .modal--access-compact {
+    width: min(640px, 84vw);
+    max-width: 640px;
+  }
+  .modal--confirm-submit {
+    width: min(580px, 86vw);
+    max-width: 580px;
+  }
+}
+
+/* Mobile (<= 768px): ocupa a largura útil com rolagem interna suave e alvos >= 44px */
+@media (max-width: 768px) {
+  .modal-overlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .modal,
+  .modal--catalog,
+  .modal--results,
+  .modal--about,
+  .modal--access,
+  .modal--access-compact,
+  .modal--confirm-submit,
+  .modal--notice,
+  .modal--timer {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92dvh;
+    padding: var(--space-5) var(--space-4);
+    border-radius: var(--radius-lg) var(--radius-lg) var(--radius-md) var(--radius-md);
+  }
+
+  .modal--results {
+    padding: var(--space-5) var(--space-4) 0;
+    max-height: 94dvh;
+  }
+
+  .modal-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 768px) and (max-height: 640px) {
+  .modal-overlay {
+    align-items: center;
+  }
+}
+
+.catalog-tabs,
+.modal-tabs {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.confirm-submit-actions,
+.notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.confirm-submit-actions button,
+.notice-actions button {
+  flex: 0 1 auto;
+  padding: 10px 18px;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .confirm-submit-actions,
+  .notice-actions,
+  .modal-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    width: 100%;
+  }
+  .confirm-submit-actions button,
+  .notice-actions button,
+  .modal-actions button {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+    white-space: normal;
+  }
+}
+
+.modal-header,
+.catalog-header {
+  border-bottom-color: var(--line);
+}
+
+.catalog-badge {
+  display: inline-block;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin-bottom: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.catalog-tab-btn {
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.catalog-tab-btn:hover {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.catalog-tab-btn.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.catalog-card {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.catalog-card:hover {
+  border-color: var(--line-strong);
+}
+
+.guest-ai-notice {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+}
+
+.guest-ai-notice-link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.drop-zone {
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+}
+
+.drop-zone:hover,
+.drop-zone:focus,
+.drop-zone--active {
+  background: var(--surface-2);
+  border-color: var(--coral);
+}
+
+/* Confirmações e avisos (#confirmSubmitModal, #noticeModal, #accessModal) */
+.confirm-submit-icon,
+.notice-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.confirm-submit-warning {
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+}
+
+.result-stat-card,
+.result-card {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
 /* ═══ Alvos de toque >= 44×44px no mobile (WCAG 2.2 SC 2.5.8 — após declarações base) ═══ */
 @media (max-width: 768px) {
   button,

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-theme="dark" class="in-html">
+<html lang="pt-BR" data-theme="dark" data-default-theme="dark" class="in-html">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -33,10 +33,11 @@
     ]
   }
   </script>
-  <link rel="stylesheet" href="/web/styles.css?v=31">
-  <link rel="stylesheet" href="/web/inicio.css?v=1">
+  <link rel="stylesheet" href="/web/styles.css?v=32">
+  <link rel="stylesheet" href="/web/inicio.css?v=2">
   <link rel="preload" href="/web/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="modulepreload" href="/web/modules/inicio.js?v=2">
+  <link rel="modulepreload" href="/web/modules/inicio.js?v=3">
+  <script src="/web/modules/theme-boot.js?v=2"></script>
   <script src="/web/modules/i18n-boot.js?v=1"></script>
   <script src="/web/modules/analytics-boot.js"></script>
   <script defer src="/_vercel/insights/script.js"></script>
@@ -61,6 +62,10 @@
       <div class="in-nav-tools">
         <button id="langToggle" class="in-icon-btn" type="button" data-lang-toggle translate="no">
           <span class="lang-code">PT</span>
+        </button>
+        <button id="themeToggle" class="in-icon-btn" type="button" title="Alternar tema (Sistema / Escuro / Claro)">
+          <span class="theme-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg></span>
+          <span class="theme-label">Tema</span>
         </button>
         <a href="/login" class="in-link-quiet in-hide-mobile" id="inNavAccount">Entrar</a>
         <a href="/app?abrir=criar" class="in-btn in-btn--primary in-btn--sm in-hide-mobile">Começar grátis</a>
@@ -390,6 +395,6 @@
     </div>
   </footer>
 
-  <script type="module" src="/web/modules/inicio.js?v=2"></script>
+  <script type="module" src="/web/modules/inicio.js?v=3"></script>
 </body>
 </html>
