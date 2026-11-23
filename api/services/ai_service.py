@@ -14,6 +14,7 @@ import re
 import time
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 import requests
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -373,7 +374,8 @@ def _discover_free_models() -> dict[str, set]:
     now = time.time()
     with _free_models_lock:
         if now - _free_models_cache["fetched_at"] < _FREE_MODELS_TTL:
-            return _free_models_cache["models"]
+            cached_models: dict[str, set] = _free_models_cache["models"]
+            return cached_models
 
     try:
         resp = _get_http_session().get(f"{OPENROUTER_BASE_URL.rstrip('/')}/models", timeout=8)
@@ -383,7 +385,8 @@ def _discover_free_models() -> dict[str, set]:
         _log_ops(f"não foi possível consultar os modelos gratuitos do OpenRouter ({e})")
         with _free_models_lock:
             _free_models_cache["fetched_at"] = now - _FREE_MODELS_TTL + _FREE_MODELS_RETRY
-            return _free_models_cache["models"]
+            fallback_models: dict[str, set] = _free_models_cache["models"]
+            return fallback_models
 
     found: dict[str, set] = {}
     for model in catalog:
@@ -403,7 +406,8 @@ def _discover_free_models() -> dict[str, set]:
         _free_models_cache["fetched_at"] = now
         if found:
             _free_models_cache["models"] = found
-        return _free_models_cache["models"]
+        updated_models: dict[str, set] = _free_models_cache["models"]
+        return updated_models
 
 
 def _free_model_candidates() -> list[tuple[str, set | None]]:
@@ -477,7 +481,8 @@ def _read_chat_response(resp, attempt_timeout: float, deadline: float) -> dict:
     except Exception:  # noqa: BLE001
         content_type = ""
     if "text/event-stream" not in content_type:
-        return resp.json()
+        data = resp.json()
+        return data if isinstance(data, dict) else {}
 
     try:
         return _read_event_stream(resp, attempt_timeout, deadline)
@@ -644,7 +649,7 @@ def _call_openrouter(
         remaining = deadline - time.monotonic()
         if remaining < 5:
             break
-        payload = {
+        payload: dict[str, Any] = {
             "model": model,
             "messages": messages,
             "temperature": temperature,
@@ -850,7 +855,7 @@ def _record_budget(provider: Provider, model: str, tokens: int = 0, request: boo
         if request and provider.daily_requests:
             rate_limit_repo.record(req_key, 1)
         if tokens and provider.daily_tokens:
-            rate_limit_repo.record(tok_key, int(tokens))
+            rate_limit_repo.record(tok_key, tokens)
     except Exception:  # noqa: BLE001
         pass
 
@@ -897,7 +902,7 @@ def _call_compatible(
         model_lower = model.lower()
         if use_responses:
             url = f"{base}/responses"
-            payload = {
+            payload: dict[str, Any] = {
                 "model": model,
                 "input": messages,
                 "max_output_tokens": max_tokens,
@@ -912,7 +917,7 @@ def _call_compatible(
                 payload["max_output_tokens"] = int(max_tokens * _REASONING_TOKEN_HEADROOM)
         else:
             url = f"{base}/chat/completions"
-            payload = {
+            payload: dict[str, Any] = {
                 "model": model,
                 "messages": messages,
                 provider.max_tokens_field: max_tokens,
