@@ -1382,8 +1382,13 @@ def validate_question(
     norm_opts: set[str] = set()
     for opt in options:
         opt_text = str(opt or "").strip()
-        opt_key = _normalize_question_key(opt_text)
-        if not opt_text or not opt_key:
+        if not opt_text:
+            return False, "empty_option"
+        decomposed = unicodedata.normalize("NFKD", opt_text)
+        no_accents = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+        # Preserva símbolos matemáticos/lógicos (∧, ∨, →, +, -, =) e ignora pontuação final
+        opt_key = re.sub(r"[.!?,;:]+$", "", re.sub(r"\s+", " ", no_accents.lower())).strip()
+        if not opt_key:
             return False, "empty_option"
         if opt_key in norm_opts:
             return False, "duplicate_options"
@@ -1636,10 +1641,6 @@ def generate_quiz_by_topic(
     Quando `cross_check=True` (Fase 4), um segundo modelo confere o gabarito sem
     ver a resposta original e registra `verified_count`.
     """
-    if not ai_configured():
-        _log_ops("nenhuma chave de IA configurada (defina GROQ_API_KEY, GEMINI_API_KEY ou OPENROUTER_API_KEY)")
-        raise AIServiceError(AI_UNAVAILABLE_MESSAGE)
-
     clean_topic = topic.strip() if topic else ""
     if not clean_topic:
         raise AIServiceError("Por favor, informe um tema ou assunto para gerar o quiz.")
@@ -1652,6 +1653,17 @@ def generate_quiz_by_topic(
     diff = difficulty if difficulty in ("Fácil", "Médio", "Difícil") else "Médio"
     context_str = context.strip() if context else ""
     lang = normalize_language(language)
+
+    # Fase 5: temas de exemplo prontos respondem na hora sem chamar a IA nem gastar cota
+    from api.utils.sample_quizzes import get_preset_quiz
+
+    preset = get_preset_quiz(clean_topic, qty=qty, difficulty=diff, context=context_str, language=lang)
+    if preset is not None:
+        return preset
+
+    if not ai_configured():
+        _log_ops("nenhuma chave de IA configurada (defina GROQ_API_KEY, GEMINI_API_KEY ou OPENROUTER_API_KEY)")
+        raise AIServiceError(AI_UNAVAILABLE_MESSAGE)
 
     # ── Cache de simulação para evitar requisições idênticas duplicadas ──────
     cache_suffix = ":cc" if cross_check else ""

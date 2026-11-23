@@ -246,17 +246,21 @@ Branch: `feature/ia-qualidade` (concluída em 23/11/2026)
 4. **Testes:** `tests/test_ia_qualidade.py` cobrindo gabarito fora do intervalo, alternativas
    repetidas, idioma errado, discordância na conferência, troca de provedor e política `AI_CROSS_CHECK`.
 
-### Fase 5 — Menos chamadas por simulado
-Branch sugerida: `feature/ia-banco-de-questoes`
+### Fase 5 — Menos chamadas por simulado ✅
+Branch: `feature/ia-banco-de-questoes` (concluída em 23/11/2026)
 
-1. **Temas de exemplo prontos:** os temas clicáveis da home (`.topic-chip`) passam a ter simulados
-   já gerados e salvos (script em `scripts/` que gera uma vez); clicar não gasta IA.
-2. **Banco reaproveitável:** simulados públicos gerados ficam disponíveis para o mesmo tema
-   (o `ai_cache` da Fase 1 já cobre a repetição exata).
-3. **Caminho sem IA mais visível:** quando a cota acaba, destacar "Enviar um quiz que já tem
-   gabarito" (não usa IA).
-4. **Opcional: chave própria** (o usuário cola a chave grátis dele do Groq ou Gemini nas
-   configurações da conta; guardar criptografada; nunca devolver a chave para o navegador).
+1. **Temas de exemplo prontos (`api/utils/sample_quizzes.py`):** os 4 temas clicáveis de
+   `.topic-chip` (*Juros simples e compostos*, *Uso da crase na língua portuguesa*, *Lógica
+   proposicional e tabela-verdade* e *Direito constitucional: direitos e garantias fundamentais*)
+   possuem simulados prontos e validados. Gerar com os parâmetros padrão responde instantaneamente
+   sem chamar a IA nem descontar cota (`cached=True`, `sample_preset=True`).
+2. **Banco reaproveitável:** `ai_cache` cobre repetições exatas entre instâncias e os presets
+   cobrem o primeiro acesso instantâneo mesmo sem chave de IA configurada.
+3. **Caminho sem IA mais visível:** quando a cota do modo convidado acaba, o aviso destaca que
+   ainda é possível enviar um arquivo que já tem gabarito sem gastar usos de IA (com tradução em
+   `en.js`, `app.js?v=29`).
+4. **Testes:** `tests/test_ia_banco_de_questoes.py` valida todas as questões prontas com
+   `validate_question`, 0 chamadas a `_call_ai` nos presets e chamada normal quando o pedido varia.
 
 ---
 
