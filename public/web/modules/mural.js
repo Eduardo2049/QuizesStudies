@@ -19,16 +19,34 @@ const WAVE_SPEED = 0.16;   // px por ms
 const WAVE_BAND = 720;     // largura da faixa marcada atrás da frente da onda
 const POINTER_RADIUS = 140;
 
-const COLORS = {
-  bg: '#000000',
-  line: '#272727',
-  letter: '#4d4d4d',
-  num: '#3b3b3b',
-  near: '#9B9B9B',
-  mark: '#FF7A5C',
-  markInk: '#000000',
-  touched: '#EDEDED',
+const PALETTES = {
+  dark: {
+    bg: '#000000',
+    line: '#272727',
+    letter: '#4d4d4d',
+    num: '#3b3b3b',
+    near: '#9B9B9B',
+    mark: '#FF7A5C',
+    markInk: '#000000',
+    touched: '#EDEDED',
+  },
+  light: {
+    bg: '#F4F0E8',
+    line: '#D6CEC0',
+    letter: '#948B7D',
+    num: '#A39A8C',
+    near: '#525B5E',
+    mark: '#C24126',
+    markInk: '#FFFFFF',
+    touched: '#182326',
+  },
 };
+
+function readPalette() {
+  return document.documentElement.getAttribute('data-theme') === 'light'
+    ? PALETTES.light
+    : PALETTES.dark;
+}
 
 // Número "aleatório" fixo por linha: o desenho é o mesmo a cada visita
 function seeded(n) {
@@ -43,6 +61,7 @@ export function initMural(canvas, { reduceMotion = false } = {}) {
   const baseCtx = base.getContext('2d');
 
   let rows = [];
+  let colors = readPalette();
   let width = 0;
   let height = 0;
   let dpr = 1;
@@ -105,16 +124,16 @@ export function initMural(canvas, { reduceMotion = false } = {}) {
   }
 
   function drawBase() {
-    baseCtx.fillStyle = COLORS.bg;
+    baseCtx.fillStyle = colors.bg;
     baseCtx.fillRect(0, 0, width, height);
     setFont(baseCtx);
     for (const row of rows) {
-      baseCtx.fillStyle = COLORS.num;
+      baseCtx.fillStyle = colors.num;
       baseCtx.textAlign = 'right';
       baseCtx.fillText(String(row.n).padStart(2, '0'), row.x + NUM_W - 10, row.y + 0.5);
       baseCtx.textAlign = 'center';
       LETTERS.forEach((letter, i) => {
-        drawBubble(baseCtx, bubbleX(row, i), row.y, letter, { stroke: COLORS.line, ink: COLORS.letter });
+        drawBubble(baseCtx, bubbleX(row, i), row.y, letter, { stroke: colors.line, ink: colors.letter });
       });
     }
   }
@@ -138,7 +157,7 @@ export function initMural(canvas, { reduceMotion = false } = {}) {
         const fadeOut = Math.min(1, (WAVE_BAND - behind) / 240);
         ctx.globalAlpha = Math.min(fadeIn, fadeOut);
         drawBubble(ctx, bubbleX(row, row.answer), row.y, LETTERS[row.answer], {
-          stroke: COLORS.mark, fill: COLORS.mark, ink: COLORS.markInk,
+          stroke: colors.mark, fill: colors.mark, ink: colors.markInk,
         });
       }
 
@@ -151,7 +170,7 @@ export function initMural(canvas, { reduceMotion = false } = {}) {
             const dist = Math.hypot(cx - pointer.x, row.y - pointer.y);
             if (dist > POINTER_RADIUS) continue;
             ctx.globalAlpha = 1 - dist / POINTER_RADIUS;
-            drawBubble(ctx, cx, row.y, LETTERS[i], { stroke: COLORS.near, ink: COLORS.near });
+            drawBubble(ctx, cx, row.y, LETTERS[i], { stroke: colors.near, ink: colors.near });
             if (dist < BUBBLE_R + 3) touched.set(index, { letter: i, at: now });
           }
         }
@@ -165,7 +184,7 @@ export function initMural(canvas, { reduceMotion = false } = {}) {
         } else {
           ctx.globalAlpha = 1 - age / 1600;
           drawBubble(ctx, bubbleX(row, mark.letter), row.y, LETTERS[mark.letter], {
-            stroke: COLORS.touched, fill: COLORS.touched, ink: COLORS.markInk,
+            stroke: colors.touched, fill: colors.touched, ink: colors.markInk,
           });
         }
       }
@@ -221,9 +240,23 @@ export function initMural(canvas, { reduceMotion = false } = {}) {
     start();
   }
 
+  // Reage imediatamente quando o usuário alterna entre tema claro e escuro
+  const themeObserver = typeof MutationObserver !== 'undefined'
+    ? new MutationObserver(() => {
+      const next = readPalette();
+      if (next !== colors) {
+        colors = next;
+        drawBase();
+        draw(performance.now());
+      }
+    })
+    : null;
+  themeObserver?.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
   return {
     destroy() {
       stop();
+      themeObserver?.disconnect();
       window.removeEventListener('resize', onResize);
     },
   };
