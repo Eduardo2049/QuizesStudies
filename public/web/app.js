@@ -2052,7 +2052,7 @@ function guestAiDescription() {
   if (!guestAI) return '';
   const hours = guestAI.window_hours || 24;
   if (guestAI.remaining <= 0) {
-    return `Você usou os ${guestAI.limit} usos de IA do modo convidado. A cota renova em até ${hours} horas.`;
+    return `Você usou os ${guestAI.limit} usos de IA do modo convidado (renova em até ${hours} horas). Você ainda pode enviar um arquivo que já tem gabarito sem gastar IA.`;
   }
   const usos = guestAI.remaining === 1 ? 'uso' : 'usos';
   return `Modo convidado: ${guestAI.remaining} de ${guestAI.limit} ${usos} de IA restantes nas próximas ${hours} horas. Os simulados ficam só neste navegador.`;

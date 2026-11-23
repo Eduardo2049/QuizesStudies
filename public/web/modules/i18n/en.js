@@ -118,6 +118,8 @@ export default {
     'Guest mode: {0} of {1} AI {2} left for the next {3} hours. Your quizzes stay in this browser only.',
   'uso': 'use',
   'usos': 'uses',
+  'Você usou os {0} usos de IA do modo convidado (renova em até {1} horas). Você ainda pode enviar um arquivo que já tem gabarito sem gastar IA.':
+    'You used all {0} guest AI uses (resets within {1} hours). You can still upload a file that already has an answer key without using AI.',
   'Você usou os {0} usos de IA do modo convidado. A cota renova em até {1} horas.':
     'You have used all {0} guest AI uses. Your allowance resets within {1} hours.',
 
