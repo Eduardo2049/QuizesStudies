@@ -124,6 +124,7 @@ CREATE TABLE IF NOT EXISTS ai_jobs (
     kind         VARCHAR(20) NOT NULL,          -- 'generate', 'upload', 'remix'
     params_hash  VARCHAR(64) NOT NULL,
     status       VARCHAR(10) NOT NULL,          -- 'running', 'done', 'failed'
+    progress     JSONB,
     result       JSONB,
     error        TEXT,
     error_code   VARCHAR(40),
@@ -131,6 +132,8 @@ CREATE TABLE IF NOT EXISTS ai_jobs (
     created_at   TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at   TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE ai_jobs ADD COLUMN IF NOT EXISTS progress JSONB;
 
 CREATE INDEX IF NOT EXISTS idx_ai_jobs_owner_created ON ai_jobs(owner_kind, owner_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_ai_jobs_created ON ai_jobs(created_at);
