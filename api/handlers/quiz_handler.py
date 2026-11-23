@@ -447,9 +447,13 @@ class QuizHandler(BaseHTTPRequestHandler):
                 if not expected_state or not secrets.compare_digest(expected_state, received_state):
                     self._redirect("/login?erro=google_sessao", [clear_state])
                     return
+                redirect_uri = self._google_redirect_uri()
+                if not redirect_uri:
+                    self._redirect("/login?erro=google_indisponivel")
+                    return
                 try:
                     result = google_auth.GoogleAuthService(self.auth_controller.service).login_with_code(
-                        query.get("code", [""])[0], self._google_redirect_uri()
+                        query.get("code", [""])[0], redirect_uri
                     )
                 except QuizAPIException as e:
                     code = {
@@ -733,7 +737,7 @@ class QuizHandler(BaseHTTPRequestHandler):
             HTTPMiddleware.send_json_response(self, status, data)
 
         except AIQuotaExceededError as e:
-            _rate_limited_response(self, max(1, int(getattr(e, "retry_after", 60))), str(e) or None)
+            _rate_limited_response(self, max(1, e.retry_after), str(e) or None)
         except QuizAPIException as e:
             status, data = ResponseFormatter.error(e.message, e.error_code, e.status_code)
             HTTPMiddleware.send_json_response(self, status, data, clear_cookie=(e.status_code == 401))
@@ -1075,6 +1079,18 @@ class QuizHandler(BaseHTTPRequestHandler):
                 if user:
                     entitlements_service.check_questions(user, num_questions)
 
+                raw_request_id = payload.get("request_id")
+                valid_request_id = (
+                    raw_request_id
+                    if isinstance(raw_request_id, str) and is_valid_job_id(raw_request_id)
+                    else None
+                )
+                on_progress = (
+                    (lambda done, total, jid=valid_request_id: ai_job_repo.update_progress(jid, done, total))
+                    if valid_request_id is not None
+                    else None
+                )
+
                 def run_generate():
                     reservation = self._reserve_ai(user, guest_id, client_ip, "ai_generation")
                     try:
@@ -1088,6 +1104,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                             is_public=bool(is_public),
                             persist=bool(user),
                             client_ip=client_ip,
+                            on_progress=on_progress,
                         )
                     except Exception:
                         if reservation:
@@ -1181,7 +1198,7 @@ class QuizHandler(BaseHTTPRequestHandler):
             HTTPMiddleware.send_json_response(self, status, data)
 
         except AIQuotaExceededError as e:
-            _rate_limited_response(self, max(1, int(getattr(e, "retry_after", 60))), str(e) or None)
+            _rate_limited_response(self, max(1, e.retry_after), str(e) or None)
         except QuizAPIException as e:
             status, data = ResponseFormatter.error(e.message, e.error_code, e.status_code)
             HTTPMiddleware.send_json_response(self, status, data, clear_cookie=(e.status_code == 401))
@@ -1344,8 +1361,11 @@ class QuizHandler(BaseHTTPRequestHandler):
         if not created:
             if job["status"] == "done":
                 return self._replay_job(job, guest_id)
+            running_data = {"request_id": raw_id, "status": "running"}
+            if job.get("progress"):
+                running_data["progress"] = job["progress"]
             return ResponseFormatter.success(
-                {"request_id": raw_id, "status": "running"}, "O pedido ainda está em andamento.", 202
+                running_data, "O pedido ainda está em andamento.", 202
             )
         try:
             status, body = run()
@@ -1382,12 +1402,14 @@ class QuizHandler(BaseHTTPRequestHandler):
         user = self._get_current_user_or_none()
         guest_id = None if user else HTTPMiddleware.get_guest_id(self)
         job = ai_job_repo.get(job_id) if is_valid_job_id(job_id) else None
-        owner = ("user", str(user["id"])) if user else ("guest", str(guest_id)) if guest_id else None
+        owner = ("user", str(user["id"])) if user else ("guest", guest_id) if guest_id else None
         if not job or not owner or (job["owner_kind"], job["owner_id"]) != owner:
             status, data = ResponseFormatter.not_found("Pedido não encontrado")
             HTTPMiddleware.send_json_response(self, status, data)
             return
         info = {"request_id": job_id, "kind": job["kind"], "status": job["status"]}
+        if job["status"] == "running" and job.get("progress"):
+            info["progress"] = job["progress"]
         if job["status"] == "done":
             _status, body = self._replay_job(job, guest_id)
             info["result"] = body.get("data")

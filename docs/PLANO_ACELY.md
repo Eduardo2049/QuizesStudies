@@ -218,16 +218,18 @@ Endereços (formato OpenAI):
 **Ganho rápido sem código:** comprar US$ 10 de crédito no OpenRouter uma única vez sobe o limite
 dos modelos gratuitos de 50 para 1.000 pedidos/dia (os créditos não são gastos com modelos `:free`).
 
-### Fase 3 — Geração em partes com progresso
-Branch sugerida: `feature/ia-geracao-em-partes`
+### Fase 3 — Geração em partes com progresso ✅
+Branch: `feature/ia-geracao-em-partes` (concluída em 23/11/2026)
 
-1. Para mais de 5 questões, dividir em partes de 5 e gerar em paralelo
-   (`concurrent.futures.ThreadPoolExecutor`, no máximo 3 ao mesmo tempo), cada parte com um foco
-   diferente do tema (índice da parte no prompt) e remoção de enunciados repetidos no servidor.
-2. Gravar o andamento no job (`progress: {done: 2, total: 4}`); a tela mostra "2 de 4 partes".
-3. Mostrar as questões da primeira parte assim que chegarem (opcional, depois do progresso).
-
-**Pronto quando** um simulado de 20 questões mostra progresso e não depende de uma única resposta.
+1. Para mais de 5 questões, divide em partes de 5 (`TOPIC_CHUNK_SIZE = 5`) executadas em paralelo
+   (`ThreadPoolExecutor`, até `TOPIC_CHUNK_MAX_WORKERS = 3` simultâneas), com índice da parte no
+   prompt, remoção de enunciados repetidos no servidor (`_deduplicate_questions`) e resiliência a
+   falha parcial de uma parte.
+2. Grava o andamento em `ai_jobs.progress` (`{"done": 2, "total": 4}`, coluna idempotente em
+   `migrations.py`), devolvido em `GET /api/quiz/jobs/<id>` e exibido no navegador como
+   `"Gerando simulado: 2 de 4 partes…"` (com tradução em `en.js`).
+3. Testes automatizados em `tests/test_ia_geracao_em_partes.py` (20 questões em 4 partes, limite
+   de 3 workers, deduplicação, falha parcial/total e progresso em `AIJobRepository`).
 
 ### Fase 4 — Qualidade: menos respostas erradas ou fora do tema
 Branch sugerida: `feature/ia-qualidade`
