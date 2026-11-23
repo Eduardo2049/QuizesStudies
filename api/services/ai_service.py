@@ -1226,7 +1226,7 @@ def _deduplicate_questions(questions: list[dict], limit: int | None = None) -> l
     seen: set[str] = set()
     unique: list[dict] = []
     for item in questions:
-        key = _normalize_question_key(item.get("question", ""))
+        key = _normalize_question_key(str(item.get("question") or ""))
         if not key or key in seen:
             continue
         seen.add(key)
@@ -1237,7 +1237,7 @@ def _deduplicate_questions(questions: list[dict], limit: int | None = None) -> l
     return unique
 
 
-def _merge_usage(usages: list[dict]) -> dict:
+def _merge_usage(usages: list[dict | None]) -> dict:
     """Soma as contagens de tokens de várias chamadas de IA."""
     merged: dict[str, int] = {}
     for usage in usages:
