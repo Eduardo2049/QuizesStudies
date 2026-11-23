@@ -13,7 +13,15 @@ from threading import Lock
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
-from api.utils.config import ROOT, WEB_DIR, DEBUG, COOKIE_SECURE, AUTO_MIGRATE, PORT
+from api.utils.config import (
+    ROOT,
+    WEB_DIR,
+    DEBUG,
+    COOKIE_SECURE,
+    AUTO_MIGRATE,
+    PORT,
+    AI_USER_REQUESTS_PER_MINUTE,
+)
 from api.controllers.quiz_controller import QuizController, UploadController
 from api.controllers.auth_controller import AuthController
 from api.exceptions.quiz_exceptions import QuizAPIException, AuthOrGuestRequired
@@ -157,17 +165,21 @@ _rl_submit = RateLimiter(limit=30, window_seconds=15 * 60, repo=rate_limit_repo)
 _rl_upload = RateLimiter(limit=5, window_seconds=60, repo=rate_limit_repo)         # upload: 5/min
 _rl_generate = RateLimiter(limit=10, window_seconds=60, repo=rate_limit_repo)      # generate IA: 10/min
 _rl_remix = RateLimiter(limit=10, window_seconds=60, repo=rate_limit_repo)         # remix IA: 10/min
+# Limite unificado de chamadas de IA por minuto por usuário/convidado (configurável via AI_USER_REQUESTS_PER_MINUTE)
+_rl_ai_user_per_minute = RateLimiter(
+    limit=max(1, AI_USER_REQUESTS_PER_MINUTE), window_seconds=60, repo=rate_limit_repo
+)
 _rl_read = RateLimiter(limit=120, window_seconds=60, repo=rate_limit_repo)         # leitura geral: 120/min
 # novas sessões de convidado: 60/15min por IP. Folgado para uma sala de aula atrás do mesmo IP;
 # quem renova o cookie para ganhar cota esbarra no teto por IP do GuestService (GUEST_AI_IP_LIMIT).
 _rl_guest_start = RateLimiter(limit=60, window_seconds=15 * 60, repo=rate_limit_repo)
 
 
-def _rate_limited_response(handler, retry_after: int) -> None:
+def _rate_limited_response(handler, retry_after: int, message: str | None = None) -> None:
     """Envia resposta 429 com header Retry-After."""
     from api.middleware.http_middleware import ResponseFormatter
     status, data = ResponseFormatter.error(
-        f"Muitas requisições. Tente novamente em {retry_after} segundo(s).",
+        message or f"Muitas requisições. Tente novamente em {retry_after} segundo(s).",
         "RATE_LIMITED",
         429,
     )
@@ -721,7 +733,7 @@ class QuizHandler(BaseHTTPRequestHandler):
             HTTPMiddleware.send_json_response(self, status, data)
 
         except AIQuotaExceededError as e:
-            _rate_limited_response(self, max(1, int(getattr(e, "retry_after", 60))))
+            _rate_limited_response(self, max(1, int(getattr(e, "retry_after", 60))), str(e) or None)
         except QuizAPIException as e:
             status, data = ResponseFormatter.error(e.message, e.error_code, e.status_code)
             HTTPMiddleware.send_json_response(self, status, data, clear_cookie=(e.status_code == 401))
@@ -1169,7 +1181,7 @@ class QuizHandler(BaseHTTPRequestHandler):
             HTTPMiddleware.send_json_response(self, status, data)
 
         except AIQuotaExceededError as e:
-            _rate_limited_response(self, max(1, int(getattr(e, "retry_after", 60))))
+            _rate_limited_response(self, max(1, int(getattr(e, "retry_after", 60))), str(e) or None)
         except QuizAPIException as e:
             status, data = ResponseFormatter.error(e.message, e.error_code, e.status_code)
             HTTPMiddleware.send_json_response(self, status, data, clear_cookie=(e.status_code == 401))
@@ -1265,6 +1277,16 @@ class QuizHandler(BaseHTTPRequestHandler):
                 reservation = guest_service.reservation(guest_id, client_ip)
             else:
                 reservation = None
+            def acquire_upload_ai():
+                if reservation:
+                    reservation.acquire()
+                try:
+                    self._enforce_ai_user_rpm(user, guest_id, client_ip)
+                except Exception:
+                    if reservation:
+                        reservation.refund()
+                    raise
+
             try:
                 response = self.upload_controller.upload_file(
                     filename,
@@ -1277,7 +1299,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                     num_questions=num_questions,
                     context=context,
                     language=language,
-                    ai_gate=reservation.acquire if reservation else None,
+                    ai_gate=acquire_upload_ai if (user or guest_id) else None,
                 )
             except Exception:
                 if reservation:
@@ -1450,6 +1472,26 @@ class QuizHandler(BaseHTTPRequestHandler):
         return None, guest_id
 
     @staticmethod
+    def _enforce_ai_user_rpm(user, guest_id: str | None, client_ip: str) -> None:
+        """Limita o número de chamadas de IA por minuto por usuário (ou convidado)."""
+        if AI_USER_REQUESTS_PER_MINUTE <= 0:
+            return
+        _rl_ai_user_per_minute.limit = AI_USER_REQUESTS_PER_MINUTE
+        if user:
+            key = f"ai_rpm:user:{user['id']}"
+        elif guest_id:
+            key = f"ai_rpm:guest:{guest_id}"
+        else:
+            key = f"ai_rpm:ip:{client_ip}"
+        allowed, retry_after = _rl_ai_user_per_minute.is_allowed(key)
+        if not allowed:
+            raise AIQuotaExceededError(
+                f"Limite de {AI_USER_REQUESTS_PER_MINUTE} usos de IA por minuto atingido. "
+                f"Aguarde {retry_after} segundo(s) e tente novamente.",
+                retry_after=retry_after,
+            )
+
+    @staticmethod
     def _reserve_ai(user, guest_id: str | None, client_ip: str, metric: str):
         """Reserva um uso de IA: da cota mensal do plano (conta) ou da cota do convidado."""
         if user:
@@ -1459,6 +1501,11 @@ class QuizHandler(BaseHTTPRequestHandler):
         else:
             return None
         reservation.acquire()
+        try:
+            QuizHandler._enforce_ai_user_rpm(user, guest_id, client_ip)
+        except Exception:
+            reservation.refund()
+            raise
         return reservation
 
     @staticmethod

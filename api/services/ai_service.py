@@ -29,6 +29,12 @@ from api.utils.config import (
     AI_ATTEMPT_TIMEOUT,
     AI_DAILY_CALL_LIMIT,
     AI_PROVIDERS,
+    CODEX_API_KEY,
+    CODEX_BASE_URL,
+    CODEX_MODELS,
+    CODEX_API_MODE,
+    CODEX_DAILY_REQUESTS,
+    CODEX_DAILY_TOKENS,
     GROQ_API_KEY,
     GROQ_BASE_URL,
     GROQ_MODELS,
@@ -513,6 +519,85 @@ def _read_event_stream(resp, attempt_timeout: float, deadline: float) -> dict:
     return {"choices": [{"message": {"content": "".join(parts)}}], "usage": usage}
 
 
+def _extract_responses_text(data: dict) -> str:
+    """Extrai o texto final de um payload JSON da OpenAI Responses API (/v1/responses)."""
+    direct = data.get("output_text")
+    if isinstance(direct, str) and direct:
+        return direct
+    parts: list[str] = []
+    for item in data.get("output") or []:
+        if not isinstance(item, dict):
+            continue
+        for block in item.get("content") or []:
+            if isinstance(block, dict):
+                text = block.get("text")
+                if isinstance(text, str) and text:
+                    parts.append(text)
+    return "".join(parts)
+
+
+def _read_responses_response(resp, attempt_timeout: float, deadline: float) -> tuple[str, dict]:
+    """Lê a resposta de /v1/responses (streaming SSE ou JSON direto) devolvendo (texto, usage)."""
+    try:
+        content_type = str(resp.headers.get("Content-Type") or "")
+    except Exception:  # noqa: BLE001
+        content_type = ""
+    if "text/event-stream" not in content_type:
+        data = resp.json()
+        return _extract_responses_text(data), (data.get("usage") or {})
+
+    try:
+        return _read_responses_event_stream(resp, attempt_timeout, deadline)
+    finally:
+        _close_quietly(resp)
+
+
+def _read_responses_event_stream(resp, attempt_timeout: float, deadline: float) -> tuple[str, dict]:
+    started = time.monotonic()
+    parts: list[str] = []
+    usage: dict = {}
+    alive = False
+    for line in resp.iter_lines(chunk_size=1024):
+        now = time.monotonic()
+        if now > deadline or (not alive and now - started > attempt_timeout):
+            raise _AttemptTimeout()
+        if not line or line.startswith(b":") or not line.startswith(b"data:"):
+            continue
+        raw = line[5:].strip()
+        if raw == b"[DONE]":
+            break
+        try:
+            event = json.loads(raw)
+        except ValueError:
+            continue
+        ev_type = str(event.get("type") or "")
+        if ev_type in ("error", "response.failed"):
+            err = event.get("error") or (event.get("response") or {}).get("error") or ev_type
+            raise _StreamError(str(err.get("message") if isinstance(err, dict) else err))
+        if ev_type == "response.output_text.delta":
+            piece = event.get("delta")
+            if isinstance(piece, str) and piece:
+                parts.append(piece)
+                alive = True
+        elif ev_type in ("response.reasoning_text.delta", "response.reasoning_summary_text.delta"):
+            alive = True
+        elif ev_type == "response.output_text.done" and not parts:
+            text = event.get("text")
+            if isinstance(text, str) and text:
+                parts.append(text)
+                alive = True
+        elif ev_type == "response.completed":
+            completed = event.get("response") or {}
+            if completed.get("usage"):
+                usage = completed["usage"]
+            if not parts:
+                fallback_text = _extract_responses_text(completed)
+                if fallback_text:
+                    parts.append(fallback_text)
+            break
+    return "".join(parts), usage
+
+
 def _call_openrouter(
     messages: list[dict],
     temperature: float,
@@ -668,6 +753,7 @@ class Provider:
     daily_tokens: int = 0
     max_tokens_field: str = "max_tokens"
     json_mode: bool = True
+    api_mode: str = "chat"        # "chat", "responses" ou "auto"
 
 
 class _ProviderSkip(Exception):
@@ -679,14 +765,29 @@ class _ProviderSkip(Exception):
 
 # Provedor pausado: nome -> (até quando, mensagem para a pessoa se todos estiverem pausados)
 _provider_pause: dict[str, tuple[float, str]] = {}
-# Modelos que recusaram parâmetros opcionais: tentados de novo sem eles
+# Modelos que recusaram parâmetros opcionais ou exigem outro endpoint: tentados de novo ajustados
 _no_reasoning_param: set[str] = set()
 _no_json_mode: set[str] = set()
+_no_temperature_param: set[str] = set()
+_force_responses_api: set[str] = set()
+_force_chat_api: set[str] = set()
+
+
+def _uses_responses_api(provider: Provider, model: str, key: str) -> bool:
+    """Define se o modelo deve chamar /v1/responses ou /v1/chat/completions."""
+    if provider.api_mode == "responses" or key in _force_responses_api:
+        return True
+    if provider.api_mode == "chat" or key in _force_chat_api:
+        return False
+    return "codex" in model.lower()
 
 
 def _configured_providers() -> list[Provider]:
     """Provedores com chave, na ordem de AI_PROVIDERS (lidos na hora: os testes trocam as chaves)."""
     table = {
+        "codex": Provider("codex", "Codex", CODEX_BASE_URL, CODEX_API_KEY, tuple(CODEX_MODELS),
+                          CODEX_DAILY_REQUESTS, CODEX_DAILY_TOKENS,
+                          max_tokens_field="max_completion_tokens", api_mode=CODEX_API_MODE),
         # Groq não aceita o modo JSON junto com a resposta em partes: vale o prompt + leitura tolerante
         "groq": Provider("groq", "Groq", GROQ_BASE_URL, GROQ_API_KEY, tuple(GROQ_MODELS),
                          GROQ_DAILY_REQUESTS, GROQ_DAILY_TOKENS, json_mode=False),
@@ -770,7 +871,7 @@ def _call_compatible(
     nenhum responde, para `_call_ai` passar ao próximo provedor.
     """
     session = _get_http_session()
-    url = f"{provider.base_url.rstrip('/')}/chat/completions"
+    base = provider.base_url.rstrip("/")
     headers = {"Authorization": f"Bearer {provider.api_key}", "Content-Type": "application/json"}
     prompt_chars = sum(len(str(m.get("content") or "")) for m in messages)
 
@@ -790,20 +891,39 @@ def _call_compatible(
         if remaining < 5:
             break
 
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            provider.max_tokens_field: max_tokens,
-            "stream": True,
-        }
-        if provider.json_mode and key not in _no_json_mode:
-            payload["response_format"] = {"type": "json_object"}
-        if "gpt-oss" in model and key not in _no_reasoning_param:
-            # gpt-oss raciocina antes de responder e o raciocínio gasta o mesmo limite: esforço
-            # baixo e folga no limite (o mesmo cuidado dos modelos gratuitos do OpenRouter)
-            payload["reasoning_effort"] = "low"
-            payload[provider.max_tokens_field] = int(max_tokens * _REASONING_TOKEN_HEADROOM)
+        use_responses = _uses_responses_api(provider, model, key)
+        model_lower = model.lower()
+        if use_responses:
+            url = f"{base}/responses"
+            payload = {
+                "model": model,
+                "input": messages,
+                "max_output_tokens": max_tokens,
+                "stream": True,
+            }
+            if key not in _no_temperature_param:
+                payload["temperature"] = temperature
+            if provider.json_mode and key not in _no_json_mode:
+                payload["text"] = {"format": {"type": "json_object"}}
+            if ("codex" in model_lower or "gpt-5" in model_lower) and key not in _no_reasoning_param:
+                payload["reasoning"] = {"effort": "low"}
+                payload["max_output_tokens"] = int(max_tokens * _REASONING_TOKEN_HEADROOM)
+        else:
+            url = f"{base}/chat/completions"
+            payload = {
+                "model": model,
+                "messages": messages,
+                provider.max_tokens_field: max_tokens,
+                "stream": True,
+            }
+            if key not in _no_temperature_param:
+                payload["temperature"] = temperature
+            if provider.json_mode and key not in _no_json_mode:
+                payload["response_format"] = {"type": "json_object"}
+            if ("gpt-oss" in model_lower or "gpt-5" in model_lower) and key not in _no_reasoning_param:
+                # modelos com raciocínio gastam o mesmo limite: esforço baixo e folga no limite
+                payload["reasoning_effort"] = "low"
+                payload[provider.max_tokens_field] = int(max_tokens * _REASONING_TOKEN_HEADROOM)
 
         attempt_timeout = min(float(AI_ATTEMPT_TIMEOUT), remaining)
         started = time.monotonic()
@@ -818,8 +938,12 @@ def _call_compatible(
 
         if resp.ok:
             try:
-                data = _read_chat_response(resp, attempt_timeout, deadline)
-                content = data["choices"][0]["message"].get("content") or ""
+                if use_responses:
+                    content, usage = _read_responses_response(resp, attempt_timeout, deadline)
+                else:
+                    data = _read_chat_response(resp, attempt_timeout, deadline)
+                    content = data["choices"][0]["message"].get("content") or ""
+                    usage = data.get("usage") or {}
                 parse_json_response(content)
             except (_AttemptTimeout, _StreamError, requests.exceptions.RequestException) as e:
                 _close_quietly(resp)
@@ -831,7 +955,6 @@ def _call_compatible(
                 _log_latency(model, "fora do formato", started, provider.name)
                 _log_ai(f"[IA AVISO] {provider.label} '{model}' respondeu fora do formato JSON ({e})")
                 continue
-            usage = data.get("usage") or {}
             tokens = int(usage.get("total_tokens") or 0) or (prompt_chars + len(content)) // 4
             _record_budget(provider, model, tokens=tokens)
             _log_latency(model, "ok", started, provider.name)
@@ -842,11 +965,36 @@ def _call_compatible(
         status = resp.status_code
         _log_latency(model, f"HTTP {status}", started, provider.name)
 
-        if status == 400 and "reasoning" in lower and "reasoning_effort" in payload:
+        if provider.api_mode == "auto" and status in (400, 404, 405):
+            if (
+                not use_responses
+                and ("v1/responses" in lower or "not a chat model" in lower or "responses api" in lower)
+                and key not in _force_responses_api
+            ):
+                _force_responses_api.add(key)
+                queue.insert(0, model)
+                continue
+            if (
+                use_responses
+                and (status == 405 or "unknown url" in lower or "not found" in lower)
+                and key not in _force_chat_api
+            ):
+                _force_chat_api.add(key)
+                queue.insert(0, model)
+                continue
+        if status == 400 and "temperature" in lower and "temperature" in payload:
+            _no_temperature_param.add(key)
+            queue.insert(0, model)
+            continue
+        if status == 400 and "reasoning" in lower and ("reasoning_effort" in payload or "reasoning" in payload):
             _no_reasoning_param.add(key)
             queue.insert(0, model)
             continue
-        if status == 400 and ("response_format" in lower or "json" in lower) and "response_format" in payload:
+        if (
+            status == 400
+            and ("response_format" in lower or "text.format" in lower or "json" in lower)
+            and ("response_format" in payload or "text" in payload)
+        ):
             _no_json_mode.add(key)
             queue.insert(0, model)
             continue
@@ -887,7 +1035,7 @@ def _call_ai(
     """
     providers = _configured_providers()
     if not providers:
-        _log_ops("nenhuma chave de IA configurada (defina GROQ_API_KEY, GEMINI_API_KEY ou OPENROUTER_API_KEY)")
+        _log_ops("nenhuma chave de IA configurada (defina CODEX_API_KEY, GROQ_API_KEY, GEMINI_API_KEY ou OPENROUTER_API_KEY)")
         raise AIServiceError(AI_UNAVAILABLE_MESSAGE)
 
     now = time.time()
