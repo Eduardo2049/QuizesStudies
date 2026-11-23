@@ -1075,6 +1075,13 @@ class QuizHandler(BaseHTTPRequestHandler):
                 if user:
                     entitlements_service.check_questions(user, num_questions)
 
+                raw_request_id = payload.get("request_id")
+                on_progress = (
+                    (lambda done, total: ai_job_repo.update_progress(raw_request_id, done, total))
+                    if is_valid_job_id(raw_request_id)
+                    else None
+                )
+
                 def run_generate():
                     reservation = self._reserve_ai(user, guest_id, client_ip, "ai_generation")
                     try:
@@ -1088,6 +1095,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                             is_public=bool(is_public),
                             persist=bool(user),
                             client_ip=client_ip,
+                            on_progress=on_progress,
                         )
                     except Exception:
                         if reservation:
@@ -1344,8 +1352,11 @@ class QuizHandler(BaseHTTPRequestHandler):
         if not created:
             if job["status"] == "done":
                 return self._replay_job(job, guest_id)
+            running_data = {"request_id": raw_id, "status": "running"}
+            if job.get("progress"):
+                running_data["progress"] = job["progress"]
             return ResponseFormatter.success(
-                {"request_id": raw_id, "status": "running"}, "O pedido ainda está em andamento.", 202
+                running_data, "O pedido ainda está em andamento.", 202
             )
         try:
             status, body = run()
@@ -1388,6 +1399,8 @@ class QuizHandler(BaseHTTPRequestHandler):
             HTTPMiddleware.send_json_response(self, status, data)
             return
         info = {"request_id": job_id, "kind": job["kind"], "status": job["status"]}
+        if job["status"] == "running" and job.get("progress"):
+            info["progress"] = job["progress"]
         if job["status"] == "done":
             _status, body = self._replay_job(job, guest_id)
             info["result"] = body.get("data")

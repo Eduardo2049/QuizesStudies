@@ -74,13 +74,36 @@ class AIJobRepository:
     def fail(self, job_id: str, message: str, code: str = "ERROR", status: int = 422) -> None:
         self._update(job_id, "failed", error=message, error_code=code, error_status=status)
 
+    def update_progress(self, job_id: str, done: int, total: int) -> None:
+        """Registra o andamento parcial de um job em partes (ex: 2 de 4 partes)."""
+        progress = {"done": max(0, int(done)), "total": max(1, int(total))}
+        try:
+            with get_cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE ai_jobs SET progress = %s::jsonb, updated_at = NOW()
+                    WHERE id = %s AND status = 'running'
+                    RETURNING id
+                    """,
+                    (json.dumps(progress), job_id),
+                )
+                if cur.fetchone():
+                    return
+        except Exception as e:  # noqa: BLE001
+            self._debug(f"update_progress no banco falhou ({e}), usando memória")
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is not None and job.get("status") == "running":
+                job["progress"] = progress
+                job["updated_ts"] = time.time()
+
     def get(self, job_id: str) -> dict | None:
         """Job pelo id, ou None. Um "running" abandonado aparece como "failed"."""
         try:
             with get_cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, owner_kind, owner_id, kind, params_hash, status, result, error,
+                    SELECT id, owner_kind, owner_id, kind, params_hash, status, progress, result, error,
                            error_code, error_status,
                            EXTRACT(EPOCH FROM (NOW() - updated_at)) AS age
                     FROM ai_jobs WHERE id = %s
@@ -175,7 +198,7 @@ class AIJobRepository:
             # reiniciam o mesmo job duas vezes.
             cur.execute(
                 """
-                SELECT id, owner_kind, owner_id, kind, params_hash, status, result, error,
+                SELECT id, owner_kind, owner_id, kind, params_hash, status, progress, result, error,
                        error_code, error_status,
                        EXTRACT(EPOCH FROM (NOW() - updated_at)) AS age
                 FROM ai_jobs WHERE id = %s FOR UPDATE
@@ -190,7 +213,7 @@ class AIJobRepository:
             if job["status"] == "failed":
                 cur.execute(
                     """
-                    UPDATE ai_jobs SET status = 'running', result = NULL, error = NULL,
+                    UPDATE ai_jobs SET status = 'running', progress = NULL, result = NULL, error = NULL,
                            error_code = NULL, error_status = NULL, updated_at = NOW()
                     WHERE id = %s
                     """,
@@ -206,8 +229,8 @@ class AIJobRepository:
             if existing is None:
                 self._jobs[job_id] = {
                     "id": job_id, "owner_kind": owner_kind, "owner_id": owner_id, "kind": kind,
-                    "params_hash": params_hash, "status": "running", "result": None, "error": None,
-                    "error_code": None, "error_status": None, "updated_ts": now, "created_ts": now,
+                    "params_hash": params_hash, "status": "running", "progress": None, "result": None,
+                    "error": None, "error_code": None, "error_status": None, "updated_ts": now, "created_ts": now,
                 }
                 self._prune_memory(now)
                 return True, {"id": job_id, "status": "running"}
@@ -216,7 +239,7 @@ class AIJobRepository:
             job = self._normalize(job)
             self._check_same_request(job, owner_kind, owner_id, kind, params_hash)
             if job["status"] == "failed":
-                existing.update(status="running", result=None, error=None, error_code=None,
+                existing.update(status="running", progress=None, result=None, error=None, error_code=None,
                                 error_status=None, updated_ts=now)
                 return True, {"id": job_id, "status": "running"}
             return False, job
@@ -254,6 +277,7 @@ class AIJobRepository:
             raise JobConflict("request_id reutilizado com outros parâmetros")
 
     def _normalize(self, job: dict) -> dict:
+        job["progress"] = self._load_json(job.get("progress"))
         job["result"] = self._load_json(job.get("result"))
         age = float(job.pop("age", 0) or 0)
         if job.get("status") == "running" and age > JOB_STALE_SECONDS:

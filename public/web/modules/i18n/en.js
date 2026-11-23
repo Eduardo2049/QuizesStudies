@@ -520,6 +520,7 @@ export default {
     'You can reload the page: the quiz keeps being prepared and shows up here.',
   'Seu simulado ainda está sendo gerado. Continuando de onde parou…':
     'Your quiz is still being generated. Picking up where it left off…',
+  'Gerando simulado: {0} de {1} partes…': 'Generating quiz: {0} of {1} parts…',
   'A geração demorou demais e foi cancelada. Tente novamente.':
     'The generation took too long and was cancelled. Please try again.',
   'O envio do arquivo foi interrompido antes de chegar. Escolha o arquivo e envie de novo.':
