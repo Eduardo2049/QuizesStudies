@@ -7,7 +7,9 @@ valendo e se encaixam nas fases deste plano). Cada fase vira **uma branch `featu
 
 ---
 
-## 0. Decisões já tomadas (09/11/2026)
+## 0. Decisões já tomadas (atualizado em 23/11/2026)
+
+> **Estado em 23/11/2026:** Fases **S0** (licença no código), **S1** (planos e limites no servidor) e **S6** (página inicial `/` com tema claro/escuro e `/app` em layout estúdio) estão concluídas e unificadas em `develop`/`homolog`/`main`. Próximas fases de produto no código: **S2** (Workspaces de equipe) → **S3** (Atribuições e painel do gestor) → **S4** (Cobrança) → **S5** (IA paga por plano).
 
 | Tema | Decisão |
 |---|---|
