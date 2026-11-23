@@ -1,8 +1,8 @@
 # PLANO_SAAS.md: Acely como produto (SaaS individual e para equipes)
 
 Documento de passagem para quem continuar o trabalho (pessoa ou agente). Escrito em 09/11/2026.
-Antes de qualquer fase, leia o `AGENTS.md` e o `docs/PLANO_ACELY.md` (as fases de IA de lá continuam
-valendo e se encaixam nas fases deste plano). Cada fase vira **uma branch `feature/*` e um PR para a
+Antes de qualquer fase, leia o `AGENTS.md` e o `docs/ARQUITETURA.md` (as 5 fases de IA já foram
+concluídas e integradas). Cada fase vira **uma branch `feature/*` e um PR para a
 `develop`**, pelo fluxo `feature/*` → `develop` → `homolog` → `main`.
 
 ---
@@ -204,7 +204,7 @@ Branch sugerida: `feature/saas-cobranca`
    Simples, Anexo III com Fator R) antes do primeiro pagamento.
 
 ### Fase S5: IA paga por plano
-Junto com as Fases 3 e 4 do `PLANO_ACELY.md`.
+Usa a conferência de gabarito por segundo modelo (`AI_CROSS_CHECK`) já implementada.
 1. `AI_PROVIDERS_FREE` e `AI_PROVIDERS_PAID`; chaves pagas só em produção.
 2. Conferência por segundo modelo ligada para planos pagos (`AI_CROSS_CHECK=paid`).
 3. Selo "gabarito conferido" nas questões; métricas de custo por workspace no admin.
