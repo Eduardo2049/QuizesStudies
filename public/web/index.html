@@ -33,7 +33,7 @@
     ]
   }
   </script>
-  <link rel="stylesheet" href="/web/styles.css?v=32">
+  <link rel="stylesheet" href="/web/styles.css?v=33">
   <!-- Desempenho: a fonte do texto e os módulos do app.js começam a baixar junto com o CSS,
        em vez de em cascata depois do app.js (manter os ?v= iguais aos dos imports) -->
   <link rel="preload" href="/web/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -230,9 +230,20 @@
 
   <!-- ── Modal de Upload / Gerar Quiz ──────────────────────────────────── -->
   <div id="uploadModal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="modalTitle">
-    <div class="modal">
+    <div class="modal modal--create">
       <button class="modal-close" id="closeModal" aria-label="Fechar"><svg class="ui-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-      <h2 id="modalTitle" class="modal-title">Novo simulado</h2>
+
+      <div class="modal-create-head">
+        <h2 id="modalTitle" class="modal-title">Novo simulado</h2>
+        <nav class="modal-tabs" aria-label="Opções para adicionar quiz">
+          <button type="button" class="modal-tab-btn active" id="tabUploadFile" data-target="panelUpload">
+            <span>Enviar arquivo</span>
+          </button>
+          <button type="button" class="modal-tab-btn" id="tabGenerateTopic" data-target="panelTopic">
+            <span>Gerar por tema</span>
+          </button>
+        </nav>
+      </div>
 
       <!-- Aviso do modo convidado: cota de IA e onde os simulados ficam -->
       <p id="guestAiNotice" class="guest-ai-notice" role="status" hidden>
@@ -240,28 +251,17 @@
         <a href="/register" class="guest-ai-notice-link" data-auth-link="/register">Criar conta grátis</a>
       </p>
 
-      <!-- Alternador de Abas: Upload vs Gerar por Tema -->
-      <nav class="modal-tabs" aria-label="Opções para adicionar quiz">
-        <button type="button" class="modal-tab-btn active" id="tabUploadFile" data-target="panelUpload">
-          <span><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg> Enviar arquivo</span>
-        </button>
-        <button type="button" class="modal-tab-btn" id="tabGenerateTopic" data-target="panelTopic">
-          <span><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17v4M17 19h4"/></svg> Gerar por tema</span>
-        </button>
-      </nav>
-
       <!-- Painel 1: Upload de Arquivo -->
       <div id="panelUpload" class="modal-panel">
-        <p class="modal-subtitle">Envie um arquivo <strong>TXT</strong>, <strong>PDF</strong> ou <strong>DOCX</strong> com questões ou material de estudo. A IA estrutura as questões, gera o gabarito e adapta na quantidade desejada.</p>
-
-        <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="Arraste ou clique para selecionar arquivo">
-          <div class="drop-zone-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg></div>
-          <p class="drop-zone-label">Arraste o arquivo aqui</p>
-          <p class="drop-zone-hint">ou clique para selecionar</p>
-          <p class="drop-zone-types">TXT · PDF · DOCX &nbsp;|&nbsp; Máx. <span id="uploadSizeLimit">20 MB</span></p>
+        <div id="dropZone" class="drop-zone drop-zone--compact" role="button" tabindex="0" aria-label="Arraste ou clique para selecionar arquivo">
+          <div class="drop-zone-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg></div>
+          <div class="drop-zone-copy">
+            <p class="drop-zone-label">Arraste o arquivo aqui</p>
+            <p class="drop-zone-hint">ou clique para selecionar</p>
+          </div>
+          <p class="drop-zone-types">TXT · PDF · DOCX | Máx. <span id="uploadSizeLimit">20 MB</span></p>
           <input type="file" id="fileInput" accept=".txt,.pdf,.docx" hidden>
         </div>
-        <p class="upload-ai-hint">Arquivo que já tem as questões e o gabarito vira simulado na hora e não gasta usos de IA.</p>
 
         <div id="filePreview" class="file-preview" hidden>
           <span class="file-preview-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11l-8.5 8.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L14 7"/></svg></span>
@@ -291,16 +291,19 @@
           </div>
         </div>
 
-        <div class="form-group modal-form-group">
-          <label for="uploadContext">Foco ou instruções para a IA (opcional)</label>
-          <input type="text" id="uploadContext" placeholder="Ex: Adaptar texto em questões de concurso, focar em conceitos centrais...">
-        </div>
+        <details class="modal-optional">
+          <summary>Instruções adicionais (opcional)</summary>
+          <div class="form-group modal-optional-body">
+            <label for="uploadContext" class="sr-only">Foco ou instruções para a IA (opcional)</label>
+            <input type="text" id="uploadContext" placeholder="Ex: Adaptar texto em questões de concurso, focar em conceitos centrais...">
+          </div>
+        </details>
+
+        <p class="upload-ai-hint">Arquivo que já tem as questões e o gabarito vira simulado na hora e não gasta usos de IA.</p>
       </div>
 
       <!-- Painel 2: Gerar por Tema (IA) -->
       <div id="panelTopic" class="modal-panel" hidden>
-        <p class="modal-subtitle">Sem arquivo em mãos? Escolha um tema ou matéria e nossa IA criará um simulado completo com gabarito e explicações didáticas.</p>
-
         <div class="form-group modal-form-group">
           <label for="topicInput">Tema ou assunto do simulado <span class="required">*</span></label>
           <input type="text" id="topicInput" maxlength="300" placeholder="Ex: Raciocínio Lógico Proposicional, Python Básico, História do Brasil..." autocomplete="off">
@@ -344,10 +347,13 @@
           </div>
         </div>
 
-        <div class="form-group modal-form-group">
-          <label for="topicContext">Foco ou diretrizes adicionais (opcional)</label>
-          <input type="text" id="topicContext" maxlength="2000" placeholder="Ex: Focar em tabela-verdade, questões estilo concurso público, etc.">
-        </div>
+        <details class="modal-optional">
+          <summary>Instruções adicionais (opcional)</summary>
+          <div class="form-group modal-optional-body">
+            <label for="topicContext" class="sr-only">Foco ou diretrizes adicionais (opcional)</label>
+            <input type="text" id="topicContext" maxlength="2000" placeholder="Ex: Focar em tabela-verdade, questões estilo concurso público, etc.">
+          </div>
+        </details>
       </div>
 
       <!-- Feedback de status comum -->
