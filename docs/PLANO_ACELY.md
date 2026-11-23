@@ -7,15 +7,22 @@ pelo fluxo `feature/*` → `develop` → `homolog` → `main` descrito em `docs/
 
 ---
 
-## 0. Estado das branches (atualizado em 18/11/2026)
+## 0. Estado das branches (atualizado em 23/11/2026)
 
-Em `18/11/2026`, `develop` está em `e8853de` (após a integração da página inicial na raiz pelo PR #85 `feature/inicio-na-raiz`); anteriormente (`06/11/2026`), a rebrand Acely e a `feature/banco-credenciais` já haviam sido integradas (PR #67).
+Em `23/11/2026`, todos os PRs anteriores foram unificados e promovidos: `develop` (`cb33d74`), `homolog` (`2d84dd4`) e `main` (`822f9c8`) estão alinhados e sem branches antigas abertas no remoto.
+
+**Já integradas em `develop` / `main`:**
+- Marca Acely + domínio (`feature/rebrand-acely`) e credenciais de banco (`feature/banco-credenciais`).
+- **Fase 1** (`feature/ia-tarefas-persistentes`) e **Fase 2** (`feature/ia-multiprovedor`) + provedor OpenAI/Codex e limite por minuto por usuário (`feature/ia-provedor-codex`, PRs #92/#95).
+- **Fase S1** (`feature/saas-planos-limites`) e **Fase S6** (`feature/inicio-na-raiz`, PR #85).
+- **Missão 1** (`feature/quiz-visual-dashboard`) e **Estúdio `/app` + modais responsivos + tema claro na home `/`** (`feature/app-design-pro`, PR #97).
 
 | Branch | Conteúdo | O que fazer |
 |---|---|---|
-| `feature/ia-tarefas-persistentes` | **Fase 1** (seção 3): `request_id`, `ai_jobs`/`ai_cache`, `GET /api/quiz/jobs/<id>`, streaming com `AI_ATTEMPT_TIMEOUT`, retomada no navegador | Revisar e abrir PR para a `develop`. |
-| `feature/ia-multiprovedor` | **Fase 2** (seção 3), criada a partir da Fase 1: Groq, Gemini, Cerebras e OpenRouter em sequência | Abrir PR para a `develop` depois do merge da Fase 1 (o PR mostra só a Fase 2). |
-| `feature/quiz-visual-dashboard` | **Missão 1** (seção 6): redesign visual de `/app` alinhado a `/`, criado a partir de `develop` (`e8853de`), implementado e aprovado na revisão C | Commitar, executar `capture_baseline.py --label after` (PT e EN) e `unittest discover tests` fora do sandbox, fazer `push` e abrir PR para a `develop`. |
+| `feature/modal-geracao-estudio` | **Seção 6.3 (em andamento):** redesign compacto do modal *Novo simulado* (`#uploadModal` — Enviar arquivo e Gerar por tema) alinhado ao layout estúdio, removendo padrões de template IA e excesso de blocos | Implementar, validar testes de contrato/i18n e abrir PR para `develop`. |
+| *(próxima — IA)* `feature/ia-geracao-em-partes` | **Fase 3** (seção 3): geração paralela em lotes de 5 questões com progresso em tempo real | Abrir a partir de `develop` após o PR atual. |
+| *(próxima — IA)* `feature/ia-qualidade` | **Fase 4** (seção 3): saída estruturada (`json_schema`), validação no servidor e conferência por segundo modelo | Após Fase 3. |
+| *(próxima — Infra)* `chore/dockerfile-python-3.15` | **Seção 7.4:** retorno do `Dockerfile` de `python:3.16.0a1-slim` para série estável `python:3.15-slim` | Tarefa independente a partir de `develop`. |
 
 Para criar a próxima branch: `git checkout develop && git pull && git checkout -b feature/<nome>`.
 
@@ -373,6 +380,13 @@ consolidação e baseline está registrada em `docs/missoes/m1/` (`features.md`,
      (PT e `--lang en`, gerando 180 PNGs com 0 falhas `LAYOUT` e 0 avisos `< 44px`) e
      `python -m unittest discover tests` com `$env:E2E_PORT = "8015"`.
   3. Executar `git push -u origin feature/quiz-visual-dashboard` e abrir o PR para `develop`.
+
+### 6.3 Evolução Estúdio Acely — `/app`, tema claro na home e modal de geração compacto (23/11/2026)
+
+- **Integrado no PR #97 (`feature/app-design-pro`):**
+  - Workspace de `/app` em 2 colunas no desktop (painel lateral fixo + área de questão acima da dobra), WebGL mantido no lobby, remoção da pílula duplicada `.user-profile-badge` na barra, escala proporcional de todos os modais para computador (`>= 1440px`) e mobile (`<= 768px`), e tema claro completo na página inicial (`/`, `inicio.css`, `mural.js`, `inicio.html`, `inicio.js`).
+- **Em desenvolvimento (`feature/modal-geracao-estudio`):**
+  - Compactação editorial do modal *Novo simulado* (`#uploadModal` — abas *Enviar arquivo* e *Gerar por tema*): cabeçalho único com seletor segmentado limpo (sem ícone de estrelinha de IA), remoção de subtítulos redundantes, zona de upload horizontal compacta, linha única de parâmetros e instruções adicionais recolhidas em `<details>` opcional, preservando 100% dos IDs do DOM e traduções em `en.js`.
 
 ---
 

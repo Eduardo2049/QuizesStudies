@@ -132,6 +132,7 @@ export default {
   'Arraste o arquivo aqui': 'Drag the file here',
   'ou clique para selecionar': 'or click to select',
   'TXT · PDF · DOCX | Máx.': 'TXT · PDF · DOCX | Max.',
+  'Instruções adicionais (opcional)': 'Additional instructions (optional)',
   'Remover arquivo': 'Remove file',
   'Quantidade de questões': 'Number of questions',
   'Todas do arquivo (Automático)': 'All from the file (automatic)',
