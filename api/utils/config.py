@@ -120,6 +120,11 @@ CODEX_MODELS = _env_list("CODEX_MODELS", "gpt-5-nano,gpt-5-mini,codex-mini-lates
 _codex_mode = (os.getenv("CODEX_API_MODE") or "auto").strip().lower()
 CODEX_API_MODE = _codex_mode if _codex_mode in ("auto", "responses", "chat") else "auto"
 
+# Conferência de gabarito por um segundo modelo (docs/PLANO_ACELY.md, Fase 4).
+# "account" (padrão): só quem tem conta; "all": conta e convidado; "off": desligada.
+_cross_check_mode = (os.getenv("AI_CROSS_CHECK") or "account").strip().lower()
+AI_CROSS_CHECK = _cross_check_mode if _cross_check_mode in ("account", "all", "off") else "account"
+
 
 # Groq (console.groq.com): rápido; não usa os dados para treino. Limite grátis por modelo:
 # ~1.000 pedidos/dia, 200 mil tokens/dia e 8 mil tokens/min (conferir no painel).

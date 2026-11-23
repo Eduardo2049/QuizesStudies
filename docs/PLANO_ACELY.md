@@ -231,25 +231,20 @@ Branch: `feature/ia-geracao-em-partes` (concluída em 23/11/2026)
 3. Testes automatizados em `tests/test_ia_geracao_em_partes.py` (20 questões em 4 partes, limite
    de 3 workers, deduplicação, falha parcial/total e progresso em `AIJobRepository`).
 
-### Fase 4 — Qualidade: menos respostas erradas ou fora do tema
-Branch sugerida: `feature/ia-qualidade`
+### Fase 4 — Qualidade: menos respostas erradas ou fora do tema ✅
+Branch: `feature/ia-qualidade` (concluída em 23/11/2026)
 
-1. **Saída estruturada:** usar `response_format` com `json_schema` onde o provedor aceita
-   (gpt-oss no Groq, Gemini); manter a validação atual para os demais.
-2. **Validação no servidor** de cada questão: número de alternativas, índice da resposta dentro do
-   intervalo, alternativas sem repetição, idioma pedido, explicação presente e coerente com a letra
-   correta, menção ao tema. A questão reprovada é refeita uma vez; se falhar de novo, sai do simulado.
-3. **Conferência por um segundo modelo** (de preferência outro provedor): responde cada questão
-   **sem ver o gabarito**, com temperatura 0. Se discordar do gabarito, a questão é refeita ou
-   descartada. Dobra as chamadas: ligar por variável (`AI_CROSS_CHECK=account|all|off`, padrão
-   `account`, só para quem tem conta).
-4. **Temperatura** 0.2–0.4 para gabarito e conferência; um pouco mais alta só para enunciados.
-5. **Basear no material:** quando houver arquivo, o prompt exige que a questão saia do texto
-   enviado e a explicação cite o trecho; questões sem apoio no texto são descartadas.
-6. Registrar no resultado quantas questões foram conferidas (para mostrar um selo "conferida").
-
-**Pronto quando** testes com respostas simuladas cobrem: gabarito fora do intervalo, alternativas
-repetidas, idioma errado e discordância na conferência.
+1. **Validação rigorosa no servidor (`validate_question`):** reprova questões com gabarito fora do
+   intervalo (`answer_out_of_range`), alternativas repetidas (`duplicate_options`), contagem
+   inválida ou idioma trocado (`wrong_language`, `pt-BR` vs `en`).
+2. **Conferência por segundo modelo (`cross_check_questions`):** controlada por `AI_CROSS_CHECK`
+   (`account` padrão, `all` ou `off`), resolve cada questão sem ver o gabarito em temperatura `0.0`,
+   priorizando um provedor diferente via `_call_ai(..., prefer_different_from=...)`. Descarta
+   questões em desacordo, marca `verified: True` nas aprovadas e registra `verified_count` no retorno.
+3. **Basear no material:** `parse_and_structure_questions_with_ai` exige que questões e explicações
+   citem o material enviado e passa pela mesma validação e deduplicação.
+4. **Testes:** `tests/test_ia_qualidade.py` cobrindo gabarito fora do intervalo, alternativas
+   repetidas, idioma errado, discordância na conferência, troca de provedor e política `AI_CROSS_CHECK`.
 
 ### Fase 5 — Menos chamadas por simulado
 Branch sugerida: `feature/ia-banco-de-questoes`

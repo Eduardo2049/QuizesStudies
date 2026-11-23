@@ -30,6 +30,7 @@ from api.utils.config import (
     OPENROUTER_DISCOVER_FREE_MODELS,
     OPENROUTER_MAX_ATTEMPTS,
     AI_ATTEMPT_TIMEOUT,
+    AI_CROSS_CHECK,
     AI_DAILY_CALL_LIMIT,
     AI_PROVIDERS,
     CODEX_API_KEY,
@@ -1034,11 +1035,13 @@ def _call_ai(
     temperature: float,
     max_tokens: int,
     timeout: int = 75,
+    prefer_different_from: str | None = None,
 ) -> tuple[str, str, dict, str]:
     """Pede a resposta ao primeiro provedor que conseguir, na ordem de AI_PROVIDERS.
 
-    `timeout` é o tempo total, somando provedores e modelos. Retorna
-    (content, modelo, usage, nome do provedor).
+    `timeout` é o tempo total, somando provedores e modelos. Quando `prefer_different_from`
+    é informado (conferência por segundo modelo), provedores diferentes são tentados antes.
+    Retorna (content, modelo, usage, nome do provedor).
     """
     providers = _configured_providers()
     if not providers:
@@ -1051,6 +1054,12 @@ def _call_ai(
         # Todos pausados: a mensagem é a do que volta primeiro
         soonest = min(providers, key=lambda p: _provider_pause[p.name][0])
         raise AIServiceError(_provider_pause[soonest.name][1])
+
+    if prefer_different_from and len(ready) > 1:
+        excluded = prefer_different_from.strip().lower()
+        others = [p for p in ready if p.name.lower() != excluded and p.label.lower() != excluded]
+        same = [p for p in ready if p not in others]
+        ready = others + same
 
     _check_daily_ai_budget()
     deadline = time.monotonic() + timeout
@@ -1312,7 +1321,200 @@ def _build_topic_prompt(
     return "\n".join(prompt_lines)
 
 
-def _parse_topic_questions(content: str, clean_topic: str) -> tuple[str, list[dict]]:
+_PT_STOPWORDS = frozenset({
+    "qual", "quais", "sobre", "para", "como", "entre", "pelo", "pela", "pelos", "pelas",
+    "isso", "esta", "este", "esse", "essa", "mais", "menos", "pode", "devem", "deve",
+    "correta", "incorreta", "alternativa", "questao", "assinale", "indique", "segundo",
+    "conforme", "porque", "quando", "onde", "numa", "num", "uma", "uns", "umas", "nao",
+})
+_EN_STOPWORDS = frozenset({
+    "which", "what", "about", "with", "from", "that", "this", "these", "those", "their",
+    "there", "where", "when", "does", "should", "would", "could", "following", "correct",
+    "incorrect", "statement", "option", "choose", "select", "according", "between", "under",
+})
+
+
+def should_cross_check(has_account: bool) -> bool:
+    """Decide se a conferência por segundo modelo deve rodar (AI_CROSS_CHECK=account|all|off)."""
+    mode = (AI_CROSS_CHECK or "account").strip().lower()
+    if mode == "all":
+        return True
+    if mode == "account":
+        return bool(has_account)
+    return False
+
+
+def _matches_requested_language(text: str, language: str) -> bool:
+    """Heurística leve para detectar idioma claramente trocado (pt-BR vs en)."""
+    norm = _normalize_question_key(text)
+    tokens = [t for t in norm.split() if len(t) >= 3]
+    if len(tokens) < 4:
+        return True
+    pt_hits = sum(1 for t in tokens if t in _PT_STOPWORDS)
+    en_hits = sum(1 for t in tokens if t in _EN_STOPWORDS)
+    lang = normalize_language(language)
+    if lang == "pt-BR":
+        return not (en_hits >= 2 and pt_hits == 0)
+    if lang == "en":
+        return not (pt_hits >= 2 and en_hits == 0)
+    return True
+
+
+def validate_question(
+    item: dict,
+    language: str = DEFAULT_AI_LANGUAGE,
+    require_explanation: bool = False,
+) -> tuple[bool, str]:
+    """Valida uma questão gerada no servidor (docs/PLANO_ACELY.md, Fase 4).
+
+    Retorna (valida, motivo). Reprova: enunciado vazio, menos de 2 ou mais de 5 alternativas,
+    alternativas repetidas, gabarito fora do intervalo, idioma trocado ou explicação ausente
+    (quando exigida).
+    """
+    q_text = str(item.get("question") or "").strip()
+    if not q_text:
+        return False, "empty_question"
+
+    options = item.get("options")
+    if not isinstance(options, list) or len(options) < 2 or len(options) > 5:
+        return False, "invalid_options_count"
+
+    norm_opts: set[str] = set()
+    for opt in options:
+        opt_text = str(opt or "").strip()
+        opt_key = _normalize_question_key(opt_text)
+        if not opt_text or not opt_key:
+            return False, "empty_option"
+        if opt_key in norm_opts:
+            return False, "duplicate_options"
+        norm_opts.add(opt_key)
+
+    answer = item.get("answer")
+    if not isinstance(answer, int) or isinstance(answer, bool) or answer < 0 or answer >= len(options):
+        return False, "answer_out_of_range"
+
+    if require_explanation:
+        explanation = str(item.get("explanation") or "").strip()
+        if len(explanation) < 8:
+            return False, "missing_explanation"
+
+    combined = " ".join([q_text, *[str(o) for o in options]])
+    if not _matches_requested_language(combined, language):
+        return False, "wrong_language"
+
+    return True, "ok"
+
+
+def _parse_raw_answer_index(raw_answer: Any) -> int | None:
+    """Converte índice/letra de gabarito em int sem mascarar valores inválidos."""
+    if isinstance(raw_answer, bool) or raw_answer is None:
+        return None
+    if isinstance(raw_answer, int):
+        return raw_answer
+    if isinstance(raw_answer, str):
+        cleaned = raw_answer.strip().upper()
+        if len(cleaned) == 1 and "A" <= cleaned <= "E":
+            return ord(cleaned) - ord("A")
+        try:
+            return int(cleaned)
+        except ValueError:
+            return None
+    return None
+
+
+def cross_check_questions(
+    questions: list[dict],
+    language: str = DEFAULT_AI_LANGUAGE,
+    source_provider: str | None = None,
+    client_ip: str | None = None,
+) -> tuple[list[dict], int, dict]:
+    """Confere o gabarito de cada questão com um segundo modelo (temperatura 0), sem mostrar o gabarito.
+
+    Questões em que o segundo modelo concorda recebem `verified=True`. Questões em que discorda
+    são descartadas (exceto se todas discordarem, caso em que devolve as originais sem selo).
+    Em erro de rede/IA, faz fallback gracioso mantendo as questões originais com `verified_count=0`.
+    """
+    if not questions:
+        return [], 0, {}
+
+    items_for_prompt = [
+        {"id": q["id"], "question": q["question"], "options": q["options"]}
+        for q in questions
+    ]
+    prompt = "\n".join([
+        "Você é um revisor rigoroso de provas e simulados.",
+        "Resolva cada questão abaixo de forma independente e retorne APENAS o índice (base 0) da alternativa correta.",
+        f"{_language_rule(language, 'a análise')}",
+        "Retorne SOMENTE um objeto JSON válido no formato:",
+        '{"answers": [{"id": 1, "answer": 0}]}',
+        "",
+        json.dumps(items_for_prompt, ensure_ascii=False),
+    ])
+
+    try:
+        check_ai_token_quota(prompt, ip=client_ip)
+        max_tokens = min(2048, max(300, len(questions) * 40))
+        call_res = _call_ai(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            max_tokens=max_tokens,
+            timeout=45,
+            prefer_different_from=source_provider,
+        )
+        content, _model, usage, _provider = _unpack_call_result(call_res)
+        parsed = parse_json_response(content)
+        raw_answers = (
+            parsed.get("answers")
+            if isinstance(parsed, dict)
+            else parsed
+        )
+        if not isinstance(raw_answers, list):
+            return questions, 0, usage
+    except Exception as e:  # noqa: BLE001 - falha na conferência não bloqueia o simulado
+        _log_ops(f"conferência de gabarito ignorada ({e})")
+        return questions, 0, {}
+
+    checked_by_id: dict[int, int] = {}
+    for entry in raw_answers:
+        if not isinstance(entry, dict):
+            continue
+        qid = entry.get("id")
+        ans = _parse_raw_answer_index(entry.get("answer"))
+        if isinstance(qid, int) and ans is not None:
+            checked_by_id[qid] = ans
+
+    if not checked_by_id:
+        return questions, 0, usage
+
+    kept: list[dict] = []
+    verified_count = 0
+    for q in questions:
+        qid = q["id"]
+        if qid in checked_by_id:
+            if checked_by_id[qid] == q["answer"]:
+                kept.append({**q, "verified": True})
+                verified_count += 1
+            else:
+                _log_ai(f"[IA] conferência descartou questão {qid} (gabarito {q['answer']} != {checked_by_id[qid]})")
+        else:
+            kept.append({**q, "verified": False})
+
+    if not kept:
+        # Evita devolver simulado vazio se o segundo modelo divergir de todas
+        return [{**q, "verified": False} for q in questions], 0, usage
+
+    renumbered = [
+        {**q, "id": idx, "question_number": idx}
+        for idx, q in enumerate(kept, start=1)
+    ]
+    return renumbered, verified_count, usage
+
+
+def _parse_topic_questions(
+    content: str,
+    clean_topic: str,
+    language: str = DEFAULT_AI_LANGUAGE,
+) -> tuple[str, list[dict]]:
     try:
         parsed = parse_json_response(content)
         if isinstance(parsed, list):
@@ -1346,34 +1548,19 @@ def _parse_topic_questions(content: str, clean_topic: str) -> tuple[str, list[di
             continue
 
         # Limpar texto de opções caso venham com prefixos como a), A - , etc.
-        cleaned_options = []
-        for opt in options:
-            opt_str = re.sub(r"^[a-eA-E][\)\.\-]\s*", "", str(opt).strip())
-            cleaned_options.append(opt_str)
+        cleaned_options = [
+            re.sub(r"^[a-eA-E][\)\.\-]\s*", "", str(opt).strip())
+            for opt in options
+        ]
 
-        # Tratar índice da resposta correta
         raw_answer = item.get("answer") if "answer" in item else item.get("resposta")
-        answer_idx = 0
-        if isinstance(raw_answer, int):
-            answer_idx = raw_answer
-        elif isinstance(raw_answer, str):
-            raw_answer_clean = raw_answer.strip().upper()
-            if len(raw_answer_clean) == 1 and "A" <= raw_answer_clean <= "E":
-                answer_idx = ord(raw_answer_clean) - ord("A")
-            else:
-                try:
-                    answer_idx = int(raw_answer_clean)
-                except ValueError:
-                    answer_idx = 0
-
-        if answer_idx < 0 or answer_idx >= len(cleaned_options):
-            answer_idx = 0
+        answer_idx = _parse_raw_answer_index(raw_answer)
 
         explanation = str(item.get("explanation") or item.get("explicacao") or "").strip()
         section = str(item.get("section") or item.get("secao") or clean_topic).strip()
         item_context = str(item.get("context") or item.get("contexto") or "").strip()
 
-        valid_questions.append({
+        candidate = {
             "id": idx,
             "question_number": idx,
             "section": section or clean_topic,
@@ -1382,7 +1569,12 @@ def _parse_topic_questions(content: str, clean_topic: str) -> tuple[str, list[di
             "options": cleaned_options,
             "answer": answer_idx,
             "explanation": explanation or "Resposta correta conforme gabarito oficial.",
-        })
+        }
+        is_valid, reason = validate_question(candidate, language=language, require_explanation=False)
+        if not is_valid:
+            _log_ai(f"[IA] questão {idx} descartada na validação ({reason})")
+            continue
+        valid_questions.append(candidate)
 
     if not valid_questions:
         raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
@@ -1415,7 +1607,7 @@ def _generate_topic_part(
     content, used_model, usage, provider_name = _unpack_call_result(call_res)
     if DEBUG:
         print(f"🤖 IA Quiz Gerado [{used_model}]:\n{content[:300]}")
-    title, valid_questions = _parse_topic_questions(content, clean_topic)
+    title, valid_questions = _parse_topic_questions(content, clean_topic, language=lang)
     return {
         "title": title,
         "questions": valid_questions,
@@ -1433,6 +1625,7 @@ def generate_quiz_by_topic(
     client_ip: str | None = None,
     language: str = DEFAULT_AI_LANGUAGE,
     on_progress=None,
+    cross_check: bool = False,
 ) -> dict:
     """
     Gera um conjunto completo de questões de quiz sobre um tema especificado.
@@ -1440,6 +1633,8 @@ def generate_quiz_by_topic(
     Para mais de 5 questões, divide em partes de 5 executadas em paralelo (até 3
     simultâneas), reportando progresso via `on_progress(done, total)` e removendo
     enunciados repetidos no servidor (docs/PLANO_ACELY.md, Fase 3).
+    Quando `cross_check=True` (Fase 4), um segundo modelo confere o gabarito sem
+    ver a resposta original e registra `verified_count`.
     """
     if not ai_configured():
         _log_ops("nenhuma chave de IA configurada (defina GROQ_API_KEY, GEMINI_API_KEY ou OPENROUTER_API_KEY)")
@@ -1459,8 +1654,9 @@ def generate_quiz_by_topic(
     lang = normalize_language(language)
 
     # ── Cache de simulação para evitar requisições idênticas duplicadas ──────
+    cache_suffix = ":cc" if cross_check else ""
     cache_key = hashlib.sha256(
-        f"{clean_topic.lower()}:{qty}:{diff}:{context_str.lower()}:{lang}".encode("utf-8")
+        f"{clean_topic.lower()}:{qty}:{diff}:{context_str.lower()}:{lang}{cache_suffix}".encode("utf-8")
     ).hexdigest()
 
     now = time.time()
@@ -1563,6 +1759,18 @@ def generate_quiz_by_topic(
             "provider": first_part["provider"],
             "parts": {"done": len(ordered_parts), "total": total_parts},
         }
+
+    if cross_check and result.get("questions"):
+        checked_questions, verified_count, check_usage = cross_check_questions(
+            result["questions"],
+            language=lang,
+            source_provider=result.get("provider"),
+            client_ip=client_ip,
+        )
+        result["questions"] = checked_questions
+        result["verified_count"] = verified_count
+        if check_usage:
+            result["usage"] = _merge_usage([result.get("usage"), check_usage])
 
     # Armazena nos dois níveis de cache
     with _quiz_cache_lock:
@@ -1730,7 +1938,7 @@ def parse_and_structure_questions_with_ai(
         "4. Resposta ('answer'):",
         "   - Se o documento contiver gabarito explícito para aquela questão, utilize-o.",
         "   - Se o documento NÃO contiver resposta/gabarito ou for um texto teórico adaptado, você DEVE resolver a questão com precisão, definindo em 'answer' o índice numérico (base 0) da alternativa correta.",
-        "5. Forneça no campo 'explanation' uma explicação didática detalhada (2 a 4 frases) justificando por que aquela alternativa é a correta.",
+        "5. Baseie todas as questões estritamente no documento enviado; na 'explanation' (2 a 4 frases), cite o conceito ou trecho do material que justifica a alternativa correta.",
         "6. Identifique a disciplina ou subtema no campo 'section' (ex: 'Raciocínio Lógico', 'Português', 'Direito', ou tema central se for texto geral).",
         "",
         "IMPORTANTE: Retorne SOMENTE um objeto JSON válido, sem texto adicional, no formato estrito:",
@@ -1778,15 +1986,9 @@ def parse_and_structure_questions_with_ai(
             continue
 
         clean_opts = [re.sub(r"^[a-eA-E0-9][)\s\-\.:]+", "", str(o)).strip() for o in opts]
-        try:
-            ans = int(item.get("answer", 0))
-        except (ValueError, TypeError):
-            ans = 0
+        ans = _parse_raw_answer_index(item.get("answer"))
 
-        if ans < 0 or ans >= len(clean_opts):
-            ans = 0
-
-        structured_questions.append({
+        candidate = {
             "id": idx,
             "question_number": idx,
             "section": str(item.get("section") or "Geral").strip(),
@@ -1796,18 +1998,18 @@ def parse_and_structure_questions_with_ai(
             "answer": ans,
             "explanation": str(item.get("explanation") or "").strip(),
             "ai_generated": True,
-        })
+        }
+        is_valid, reason = validate_question(candidate, language=language, require_explanation=False)
+        if not is_valid:
+            _log_ai(f"[IA] questão de arquivo {idx} descartada na validação ({reason})")
+            continue
+        structured_questions.append(candidate)
 
+    structured_questions = _deduplicate_questions(structured_questions, limit=target_count)
     if not structured_questions:
         raise AIServiceError(
             "A inteligência artificial não conseguiu identificar ou gerar questões válidas para o texto fornecido."
         )
-
-    if target_count and len(structured_questions) > target_count:
-        structured_questions = structured_questions[:target_count]
-        for idx, q in enumerate(structured_questions, start=1):
-            q["id"] = idx
-            q["question_number"] = idx
 
     return structured_questions
 
