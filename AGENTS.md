@@ -30,7 +30,7 @@ Este documento é a referência primária e fixa de arquitetura, permissões, li
 | **Planos, limites e cota mensal de quem tem conta (`GET /api/me/plan`, `PLAN_LIMIT_REACHED`)** | `api/utils/plans.py` (planos e limites iniciais)<br>`api/services/entitlements_service.py`<br>`api/repositories/plan_repository.py`<br>`tests/test_planos_limites.py` | `public/web/styles.css`<br>`api/services/ai_service.py` |
 | **Página de produto e planos (/produto, /planos), plano SaaS** | `public/web/produto.html`<br>`public/web/produto.css`<br>`public/web/modules/produto.js`<br>`docs/PLANO_SAAS.md` (fases: planos, equipes, cobrança) | `public/web/app.js`<br>`api/repositories/` |
 | **Página inicial na raiz `/` (apelido `/inicio`; os simulados ficam em `/app`): estilo estúdio escuro, rolagem suave, cartão-resposta animado, atalhos para o app** | `public/web/inicio.html`<br>`public/web/inicio.css`<br>`public/web/modules/inicio.js`<br>`public/web/modules/smooth-scroll.js` (rolagem no estilo Lenis, sem dependência)<br>`public/web/modules/mural.js` (canvas do topo)<br>`public/web/app.js` (links diretos `/app?abrir=criar|arquivo|tema|explorar`, `&tema=`, `?simulado=`)<br>`vercel.json` e `quiz_handler.py` (`/` → `inicio.html`; `/app` e links antigos `/?abrir=`, `/?simulado=`, `/?email=` → `index.html`)<br>`tests/test_pagina_inicio.py` | `api/`<br>`public/web/produto.css` |
-| **Plano em andamento (marca Acely, IA mais rápida e multiprovedor)** | `docs/PLANO_ACELY.md` (ler antes de começar uma fase) | Código fora da fase em execução |
+| **Plano em andamento (SaaS: equipes, atribuições e cobrança)** | `docs/PLANO_SAAS.md` (ler antes de começar uma fase) | Código fora da fase em execução |
 | **Arquitetura detalhada (camadas, rotas, decisões de segurança)** | `docs/ARQUITETURA.md` | Código, quando a dúvida for só de localização |
 | **Scripts de manutenção e teste de carga** | `scripts/` | `public/web/` |
 | **Testes unitários e de integração** | `tests/` (execute o teste específico ou a suíte) | `public/web/` |
@@ -90,7 +90,7 @@ O agente tem total liberdade para:
 
 ## 🎨 5. Regras para Redesign de Interface (`public/web/`)
 
-Referência completa: `docs/DESIGN_UPGRADE.md` e a skill de design adotada, traduzida para este projeto em `docs/DESIGN_SKILLS.md` (cópia original em `.claude/skills/landing-page-design/`). Resumo obrigatório:
+Referência completa: a skill de design adotada, traduzida para este projeto em `docs/DESIGN_SKILLS.md` (cópia original em `.claude/skills/landing-page-design/`). Resumo obrigatório:
 
 - Seguir a skill `landing-page-design` pela tabela de tradução de `docs/DESIGN_SKILLS.md`: um CTA principal por tela, textos em caixa normal e sem exclamação, só Manrope (mono só em números), sem itálico, peso máximo 700, transições com `--ease-out` e nunca abaixo de 200ms.
 - Os simulados (`/app`) são abertos: nada de redirecionar visitantes para `/login`. Ações que exigem identidade abrem o modal de acesso (`#accessModal`).
