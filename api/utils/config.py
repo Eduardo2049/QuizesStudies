@@ -98,25 +98,38 @@ OPENROUTER_DISCOVER_FREE_MODELS = os.getenv("OPENROUTER_DISCOVER_FREE_MODELS", "
 # resposta, passa ao próximo. Provedor sem chave fica de fora: sem CODEX/GROQ/GEMINI/CEREBRAS,
 # o comportamento é o de antes (só OpenRouter).
 _KNOWN_AI_PROVIDERS = ("codex", "groq", "gemini", "cerebras", "openrouter")
-AI_PROVIDERS = [
-    name for name in (
-        p.strip().lower() for p in (os.getenv("AI_PROVIDERS") or "codex,groq,gemini,cerebras,openrouter").split(",")
-    )
-    if name in _KNOWN_AI_PROVIDERS
-] or ["openrouter"]
+_AI_PROVIDER_ALIASES = {"openai": "codex", "google": "gemini"}
+
+
+def _parse_ai_providers(raw: str | None) -> list[str]:
+    """Lê a ordem de prioridade dos provedores de IA (aceita 'openai' como apelido de 'codex')."""
+    source = raw if raw is not None and raw.strip() else "codex,groq,gemini,cerebras,openrouter"
+    ordered: list[str] = []
+    for item in source.split(","):
+        name = _AI_PROVIDER_ALIASES.get(item.strip().lower(), item.strip().lower())
+        if name in _KNOWN_AI_PROVIDERS and name not in ordered:
+            ordered.append(name)
+    return ordered or ["openrouter"]
+
+
+AI_PROVIDERS = _parse_ai_providers(os.getenv("AI_PROVIDERS"))
 
 
 def _env_list(name: str, default: str) -> list[str]:
     return [item.strip() for item in (os.getenv(name) or default).split(",") if item.strip()]
 
 
-# OpenAI / Codex API (platform.openai.com): usado primeiro quando CODEX_API_KEY (ou
-# OPENAI_API_KEY) estiver configurada; vazio = pulado sem afetar os provedores gratuitos.
+# OpenAI / Codex API (platform.openai.com): usado primeiro quando OPENAI_API_KEY ou
+# CODEX_API_KEY estiver configurada; vazio = pulado. Para usar SOMENTE OpenAI sem depender
+# do OpenRouter, defina AI_PROVIDERS=openai no .env ou nas variáveis de ambiente.
 # CODEX_API_MODE: "auto" (usa /responses em modelos *codex* e /chat/completions nos demais,
 # com fallback automático), "responses" ou "chat".
-CODEX_API_KEY = (os.getenv("CODEX_API_KEY") or os.getenv("OPENAI_API_KEY") or "").strip()
-CODEX_BASE_URL = (os.getenv("CODEX_BASE_URL") or "https://api.openai.com/v1").strip()
-CODEX_MODELS = _env_list("CODEX_MODELS", "gpt-5-nano,gpt-5-mini,codex-mini-latest")
+CODEX_API_KEY = (os.getenv("OPENAI_API_KEY") or os.getenv("CODEX_API_KEY") or "").strip()
+CODEX_BASE_URL = (os.getenv("OPENAI_BASE_URL") or os.getenv("CODEX_BASE_URL") or "https://api.openai.com/v1").strip()
+CODEX_MODELS = _env_list(
+    "OPENAI_MODELS",
+    os.getenv("CODEX_MODELS") or "gpt-5-nano,gpt-4o-mini,gpt-5-mini,codex-mini-latest",
+)
 _codex_mode = (os.getenv("CODEX_API_MODE") or "auto").strip().lower()
 CODEX_API_MODE = _codex_mode if _codex_mode in ("auto", "responses", "chat") else "auto"
 
