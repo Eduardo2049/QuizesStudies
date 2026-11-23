@@ -281,6 +281,13 @@ class TestCodexProvider(_ProvidersTestCase):
         _c, model, _u, provider = self.call()
         self.assertEqual((provider, model), ("Groq", "openai/gpt-oss-120b"))
 
+    def test_openai_alias_and_priority_order(self):
+        from api.utils.config import _parse_ai_providers
+
+        self.assertEqual(_parse_ai_providers("openai"), ["codex"])
+        self.assertEqual(_parse_ai_providers("openai,google,groq"), ["codex", "gemini", "groq"])
+        self.assertEqual(_parse_ai_providers("openai,codex,openrouter"), ["codex", "openrouter"])
+
 
 class TestAIUserRateLimitPerMinute(unittest.TestCase):
 
