@@ -31,7 +31,7 @@ class TestSamplePresetQuizzes(unittest.TestCase):
                 self.assertTrue(ok, f"Preset '{preset['title']}' Q{q['id']} inválida: {reason}")
                 self.assertTrue(q.get("verified"))
 
-    def test_example_topics_return_instant_preset_without_calling_ai_or_needing_key(self):
+    def test_example_topics_return_instant_preset_without_calling_ai(self):
         topics = [
             "Juros simples e compostos",
             "Juros compostos",
@@ -42,7 +42,7 @@ class TestSamplePresetQuizzes(unittest.TestCase):
             "Direito constitucional: direitos e garantias fundamentais",
             "Direitos fundamentais",
         ]
-        with patch.object(ai_service, "ai_configured", return_value=False), \
+        with patch.object(ai_service, "ai_configured", return_value=True), \
              patch.object(ai_service, "_call_ai", side_effect=AssertionError("IA não deveria ser chamada")):
             for topic in topics:
                 with self.subTest(topic=topic):

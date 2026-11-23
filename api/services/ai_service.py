@@ -1641,6 +1641,10 @@ def generate_quiz_by_topic(
     Quando `cross_check=True` (Fase 4), um segundo modelo confere o gabarito sem
     ver a resposta original e registra `verified_count`.
     """
+    if not ai_configured():
+        _log_ops("nenhuma chave de IA configurada (defina GROQ_API_KEY, GEMINI_API_KEY ou OPENROUTER_API_KEY)")
+        raise AIServiceError(AI_UNAVAILABLE_MESSAGE)
+
     clean_topic = topic.strip() if topic else ""
     if not clean_topic:
         raise AIServiceError("Por favor, informe um tema ou assunto para gerar o quiz.")
@@ -1660,10 +1664,6 @@ def generate_quiz_by_topic(
     preset = get_preset_quiz(clean_topic, qty=qty, difficulty=diff, context=context_str, language=lang)
     if preset is not None:
         return preset
-
-    if not ai_configured():
-        _log_ops("nenhuma chave de IA configurada (defina GROQ_API_KEY, GEMINI_API_KEY ou OPENROUTER_API_KEY)")
-        raise AIServiceError(AI_UNAVAILABLE_MESSAGE)
 
     # ── Cache de simulação para evitar requisições idênticas duplicadas ──────
     cache_suffix = ":cc" if cross_check else ""
