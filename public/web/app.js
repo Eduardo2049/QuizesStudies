@@ -1746,6 +1746,16 @@ const RESUME_PROGRESS_STEPS = [
 const HINT_KEEP_PAGE = 'Não feche nem recarregue a página enquanto o simulado é preparado.';
 const HINT_RELOAD_OK = 'Pode recarregar a página: o simulado continua sendo preparado e aparece aqui.';
 let stopProgress = null;
+let livePartProgress = null;
+let renderProgressNow = null;
+
+function setPartProgress(progress) {
+  if (!progress || Number(progress.total) <= 1) return;
+  const done = Math.max(0, Math.min(Number(progress.done) || 0, Number(progress.total)));
+  const total = Number(progress.total);
+  livePartProgress = { done, total };
+  if (renderProgressNow) renderProgressNow();
+}
 
 function confirmLeaveWhileBusy(event) {
   event.preventDefault();
@@ -1762,11 +1772,16 @@ function startProgressMessages(steps, { startedAt = Date.now(), confirmLeave = t
   const render = () => {
     const elapsed = Math.floor((Date.now() - startedAt) / 1000);
     let text = steps[0][1];
-    for (const [from, message] of steps) {
-      if (elapsed >= from) text = message;
+    if (livePartProgress && livePartProgress.total > 1) {
+      text = `Gerando simulado: ${livePartProgress.done} de ${livePartProgress.total} partes…`;
+    } else {
+      for (const [from, message] of steps) {
+        if (elapsed >= from) text = message;
+      }
     }
     uploadStatusText.textContent = elapsed >= 3 ? `${text} · ${elapsed} s` : text;
   };
+  renderProgressNow = render;
   render();
   const timer = setInterval(render, 1000);
   if (uploadStatusHint) {
@@ -1776,6 +1791,8 @@ function startProgressMessages(steps, { startedAt = Date.now(), confirmLeave = t
   if (confirmLeave) window.addEventListener('beforeunload', confirmLeaveWhileBusy);
   stopProgress = () => {
     clearInterval(timer);
+    renderProgressNow = null;
+    livePartProgress = null;
     window.removeEventListener('beforeunload', confirmLeaveWhileBusy);
     if (uploadStatusHint) uploadStatusHint.hidden = true;
   };
@@ -1842,6 +1859,7 @@ async function waitForJob(requestId, startedAt = Date.now()) {
     if (response.status === 404) return { ok: false, notFound: true, raw: {} };
     if (!response.ok) continue;
     const info = (await readJson(response)).data || {};
+    if (info.status === 'running' && info.progress) setPartProgress(info.progress);
     if (info.status === 'done') return { ok: true, data: info.result || {}, raw: { data: info.result } };
     if (info.status === 'failed') {
       const raw = { error: info.error, message: info.message, data: { message: info.message } };
@@ -2848,6 +2866,21 @@ async function doGenerateTopic() {
 
 /** Envia (ou reenvia, ao retomar) o pedido de tema e mostra o resultado. */
 async function finishTopicJob(job) {
+  let progressPoller = null;
+  if (Number(job.payload?.num_questions) > 5 && job.id) {
+    const poll = async () => {
+      try {
+        const resp = await fetch(`/api/quiz/jobs/${encodeURIComponent(job.id)}`, {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
+        if (!resp.ok) return;
+        const info = (await readJson(resp)).data || {};
+        if (info.status === 'running' && info.progress) setPartProgress(info.progress);
+      } catch (_) {}
+    };
+    progressPoller = setInterval(poll, 2500);
+  }
   try {
     const result = await runAiRequest('/api/quiz/generate', {
       method: 'POST',
@@ -2855,6 +2888,7 @@ async function finishTopicJob(job) {
       credentials: 'same-origin',
       body: JSON.stringify(job.payload),
     }, job.id, job.startedAt);
+    if (progressPoller) clearInterval(progressPoller);
     clearPendingJob();
     stopProgressMessages();
 
@@ -2868,6 +2902,7 @@ async function finishTopicJob(job) {
 
     await showCreatedQuiz(result.data, 1400);
   } catch (err) {
+    if (progressPoller) clearInterval(progressPoller);
     clearPendingJob();
     stopProgressMessages();
     showUploadError('Falha na conexão. Verifique o servidor ou a chave de IA.');

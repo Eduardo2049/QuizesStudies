@@ -163,6 +163,7 @@ class QuizController:
         persist: bool = True,
         client_ip: str | None = None,
         language: str = "",
+        on_progress=None,
     ) -> dict:
         """Gera quiz por tema utilizando IA"""
         from api.services.ai_service import generate_quiz_by_topic, normalize_language, AIServiceError
@@ -176,6 +177,7 @@ class QuizController:
                 context=context,
                 client_ip=client_ip,
                 language=normalize_language(language),
+                on_progress=on_progress,
             )
         except AIServiceError as e:
             raise QuizAPIException(str(e), 422)

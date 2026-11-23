@@ -12,6 +12,9 @@ import json
 import os
 import re
 import time
+import unicodedata
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 import requests
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -371,7 +374,8 @@ def _discover_free_models() -> dict[str, set]:
     now = time.time()
     with _free_models_lock:
         if now - _free_models_cache["fetched_at"] < _FREE_MODELS_TTL:
-            return _free_models_cache["models"]
+            cached_models: dict[str, set] = _free_models_cache["models"]
+            return cached_models
 
     try:
         resp = _get_http_session().get(f"{OPENROUTER_BASE_URL.rstrip('/')}/models", timeout=8)
@@ -381,7 +385,8 @@ def _discover_free_models() -> dict[str, set]:
         _log_ops(f"não foi possível consultar os modelos gratuitos do OpenRouter ({e})")
         with _free_models_lock:
             _free_models_cache["fetched_at"] = now - _FREE_MODELS_TTL + _FREE_MODELS_RETRY
-            return _free_models_cache["models"]
+            fallback_models: dict[str, set] = _free_models_cache["models"]
+            return fallback_models
 
     found: dict[str, set] = {}
     for model in catalog:
@@ -401,7 +406,8 @@ def _discover_free_models() -> dict[str, set]:
         _free_models_cache["fetched_at"] = now
         if found:
             _free_models_cache["models"] = found
-        return _free_models_cache["models"]
+        updated_models: dict[str, set] = _free_models_cache["models"]
+        return updated_models
 
 
 def _free_model_candidates() -> list[tuple[str, set | None]]:
@@ -475,7 +481,8 @@ def _read_chat_response(resp, attempt_timeout: float, deadline: float) -> dict:
     except Exception:  # noqa: BLE001
         content_type = ""
     if "text/event-stream" not in content_type:
-        return resp.json()
+        data = resp.json()
+        return data if isinstance(data, dict) else {}
 
     try:
         return _read_event_stream(resp, attempt_timeout, deadline)
@@ -642,7 +649,7 @@ def _call_openrouter(
         remaining = deadline - time.monotonic()
         if remaining < 5:
             break
-        payload = {
+        payload: dict[str, Any] = {
             "model": model,
             "messages": messages,
             "temperature": temperature,
@@ -848,7 +855,7 @@ def _record_budget(provider: Provider, model: str, tokens: int = 0, request: boo
         if request and provider.daily_requests:
             rate_limit_repo.record(req_key, 1)
         if tokens and provider.daily_tokens:
-            rate_limit_repo.record(tok_key, int(tokens))
+            rate_limit_repo.record(tok_key, tokens)
     except Exception:  # noqa: BLE001
         pass
 
@@ -895,7 +902,7 @@ def _call_compatible(
         model_lower = model.lower()
         if use_responses:
             url = f"{base}/responses"
-            payload = {
+            payload: dict[str, Any] = {
                 "model": model,
                 "input": messages,
                 "max_output_tokens": max_tokens,
@@ -910,7 +917,7 @@ def _call_compatible(
                 payload["max_output_tokens"] = int(max_tokens * _REASONING_TOKEN_HEADROOM)
         else:
             url = f"{base}/chat/completions"
-            payload = {
+            payload: dict[str, Any] = {
                 "model": model,
                 "messages": messages,
                 provider.max_tokens_field: max_tokens,
@@ -1194,6 +1201,230 @@ def _language_rule(language: str, subject: str) -> str:
     return f"O idioma de {subject} DEVE ser {AI_LANGUAGES[normalize_language(language)]}."
 
 
+TOPIC_CHUNK_SIZE = 5
+TOPIC_CHUNK_MAX_WORKERS = 3
+
+
+def _plan_question_chunks(qty: int, chunk_size: int = TOPIC_CHUNK_SIZE) -> list[int]:
+    """Divide uma quantidade > chunk_size em partes equilibradas de até chunk_size questões."""
+    if qty <= chunk_size:
+        return [qty]
+    chunks: list[int] = []
+    remaining = qty
+    while remaining > 0:
+        size = min(chunk_size, remaining)
+        chunks.append(size)
+        remaining -= size
+    return chunks
+
+
+def _normalize_question_key(text: str) -> str:
+    """Normaliza o enunciado para detectar e remover questões repetidas entre partes."""
+    decomposed = unicodedata.normalize("NFKD", text or "")
+    ascii_like = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    cleaned = re.sub(r"[^a-z0-9\s]", " ", ascii_like.lower())
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _deduplicate_questions(questions: list[dict], limit: int | None = None) -> list[dict]:
+    """Remove enunciados duplicados preservando a ordem e renumera id/question_number de 1..N."""
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for item in questions:
+        key = _normalize_question_key(str(item.get("question") or ""))
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        idx = len(unique) + 1
+        unique.append({**item, "id": idx, "question_number": idx})
+        if limit is not None and len(unique) >= limit:
+            break
+    return unique
+
+
+def _merge_usage(usages: list[dict | None]) -> dict:
+    """Soma as contagens de tokens de várias chamadas de IA."""
+    merged: dict[str, int] = {}
+    for usage in usages:
+        if not isinstance(usage, dict):
+            continue
+        for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+            val = usage.get(key)
+            if isinstance(val, (int, float)):
+                merged[key] = merged.get(key, 0) + int(val)
+    return merged
+
+
+def _build_topic_prompt(
+    clean_topic: str,
+    qty: int,
+    diff: str,
+    context_str: str,
+    lang: str,
+    part_index: int | None = None,
+    total_parts: int | None = None,
+) -> str:
+    prompt_lines = [
+        "Você é um professor e elaborador sênior de provas e simulados acadêmicos e de concursos.",
+        f"Crie um simulado de múltipla escolha com exatamente {qty} questões sobre o seguinte tema: '{clean_topic}'.",
+        f"Nível de dificuldade exigido: {diff}.",
+    ]
+    if part_index is not None and total_parts is not None and total_parts > 1:
+        prompt_lines.append(
+            f"Esta é a parte {part_index} de {total_parts} de um simulado completo. "
+            f"Foque em subtemas, ângulos e exemplos distintos das demais partes para não repetir enunciados."
+        )
+    if context_str:
+        prompt_lines.append(f"Diretrizes e foco específico adicional: {context_str}")
+
+    prompt_lines.extend([
+        "",
+        "Regras obrigatórias:",
+        f"1. {_language_rule(lang, 'todas as questões, alternativas, explicações e do título')}",
+        "2. Todas as questões devem ser inéditas, com enunciados claros, sem ambiguidades.",
+        "3. Cada questão deve possuir exatamente 4 ou 5 alternativas em formato de texto limpo (não coloque 'a)', 'b)' dentro do texto da alternativa).",
+        "4. Apenas UMA alternativa deve ser a correta.",
+        "5. O campo 'answer' deve ser o índice numérico (base 0) da alternativa correta (0 = primeira opção, 1 = segunda opção, 2 = terceira opção...).",
+        "6. O campo 'explanation' deve fornecer uma justificativa didática detalhada de 2 a 4 frases explicando por que a alternativa está correta.",
+        "7. Forneça um título atraente e descritivo para o quiz no campo 'title'.",
+        "",
+        "IMPORTANTE: Retorne SOMENTE um objeto JSON válido, sem qualquer texto ou formatação fora do JSON, no seguinte formato estrito:",
+        """{
+  "title": "Título Descritivo do Quiz",
+  "questions": [
+    {
+      "id": 1,
+      "section": "Subtema ou disciplina",
+      "context": "Breve contexto introdutório se necessário (ou vazio)",
+      "question": "Enunciado completo da pergunta?",
+      "options": [
+        "Texto da opção A",
+        "Texto da opção B",
+        "Texto da opção C",
+        "Texto da opção D"
+      ],
+      "answer": 0,
+      "explanation": "Explicação detalhada do porquê a opção A é a correta."
+    }
+  ]
+}""",
+    ])
+    return "\n".join(prompt_lines)
+
+
+def _parse_topic_questions(content: str, clean_topic: str) -> tuple[str, list[dict]]:
+    try:
+        parsed = parse_json_response(content)
+        if isinstance(parsed, list):
+            raw_questions = parsed
+            title = f"Quiz: {clean_topic.title()}"
+        elif isinstance(parsed, dict):
+            raw_questions = (
+                parsed.get("questions")
+                or parsed.get("questoes")
+                or parsed.get("data")
+                or next((v for v in parsed.values() if isinstance(v, list)), [])
+            )
+            title = parsed.get("title") or parsed.get("titulo") or f"Quiz: {clean_topic.title()}"
+        else:
+            raise ValueError("Formato JSON retornado não reconhecido")
+    except (json.JSONDecodeError, ValueError) as e:
+        _log_ops(f"quiz por tema: resposta da IA fora do formato JSON ({e})")
+        raise AIServiceError("A IA respondeu em um formato inesperado. Tente novamente.")
+
+    if not isinstance(raw_questions, list) or not raw_questions:
+        raise AIServiceError("A IA não gerou nenhuma questão para o tema solicitado.")
+
+    valid_questions = []
+    for idx, item in enumerate(raw_questions, start=1):
+        if not isinstance(item, dict):
+            continue
+
+        q_text = str(item.get("question") or item.get("enunciado") or "").strip()
+        options = item.get("options") or item.get("alternativas") or []
+        if not q_text or not isinstance(options, list) or len(options) < 2:
+            continue
+
+        # Limpar texto de opções caso venham com prefixos como a), A - , etc.
+        cleaned_options = []
+        for opt in options:
+            opt_str = re.sub(r"^[a-eA-E][\)\.\-]\s*", "", str(opt).strip())
+            cleaned_options.append(opt_str)
+
+        # Tratar índice da resposta correta
+        raw_answer = item.get("answer") if "answer" in item else item.get("resposta")
+        answer_idx = 0
+        if isinstance(raw_answer, int):
+            answer_idx = raw_answer
+        elif isinstance(raw_answer, str):
+            raw_answer_clean = raw_answer.strip().upper()
+            if len(raw_answer_clean) == 1 and "A" <= raw_answer_clean <= "E":
+                answer_idx = ord(raw_answer_clean) - ord("A")
+            else:
+                try:
+                    answer_idx = int(raw_answer_clean)
+                except ValueError:
+                    answer_idx = 0
+
+        if answer_idx < 0 or answer_idx >= len(cleaned_options):
+            answer_idx = 0
+
+        explanation = str(item.get("explanation") or item.get("explicacao") or "").strip()
+        section = str(item.get("section") or item.get("secao") or clean_topic).strip()
+        item_context = str(item.get("context") or item.get("contexto") or "").strip()
+
+        valid_questions.append({
+            "id": idx,
+            "question_number": idx,
+            "section": section or clean_topic,
+            "context": item_context,
+            "question": q_text,
+            "options": cleaned_options,
+            "answer": answer_idx,
+            "explanation": explanation or "Resposta correta conforme gabarito oficial.",
+        })
+
+    if not valid_questions:
+        raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
+
+    return str(title).strip(), valid_questions
+
+
+def _generate_topic_part(
+    clean_topic: str,
+    qty: int,
+    diff: str,
+    context_str: str,
+    lang: str,
+    client_ip: str | None = None,
+    part_index: int | None = None,
+    total_parts: int | None = None,
+) -> dict:
+    prompt = _build_topic_prompt(
+        clean_topic, qty, diff, context_str, lang,
+        part_index=part_index, total_parts=total_parts,
+    )
+    check_ai_token_quota(prompt, ip=client_ip)
+    max_tokens = min(4096, max(800, qty * 320))
+    call_res = _call_ai(
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.5,
+        max_tokens=max_tokens,
+        timeout=75,  # tempo total, somando provedores e modelos
+    )
+    content, used_model, usage, provider_name = _unpack_call_result(call_res)
+    if DEBUG:
+        print(f"🤖 IA Quiz Gerado [{used_model}]:\n{content[:300]}")
+    title, valid_questions = _parse_topic_questions(content, clean_topic)
+    return {
+        "title": title,
+        "questions": valid_questions,
+        "usage": usage,
+        "model": used_model,
+        "provider": provider_name,
+    }
+
+
 def generate_quiz_by_topic(
     topic: str,
     num_questions: int = 5,
@@ -1201,28 +1432,14 @@ def generate_quiz_by_topic(
     context: str = "",
     client_ip: str | None = None,
     language: str = DEFAULT_AI_LANGUAGE,
+    on_progress=None,
 ) -> dict:
     """
-    Gera um conjunto completo de questões de quiz sobre um tema especificado via OpenRouter API.
+    Gera um conjunto completo de questões de quiz sobre um tema especificado.
 
-    Args:
-        topic: Tema ou assunto do simulado (ex: "Raciocínio Lógico Proposicional")
-        num_questions: Quantidade de questões (1 a 20, padrão 5)
-        difficulty: Nível ("Fácil", "Médio", "Difícil")
-        context: Diretrizes ou instruções adicionais opcionais
-        client_ip: IP do cliente para controle de cota de tokens (opcional).
-        language: Idioma do conteúdo gerado ("pt-BR" ou "en").
-
-    Returns:
-        dict: {
-            "title": str,
-            "topic": str,
-            "questions": list[dict]
-        }
-
-    Raises:
-        AIServiceError: Se falhar a comunicação ou o modelo não gerar questões válidas
-        AIQuotaExceededError: Se o IP exceder a cota de tokens por hora
+    Para mais de 5 questões, divide em partes de 5 executadas em paralelo (até 3
+    simultâneas), reportando progresso via `on_progress(done, total)` e removendo
+    enunciados repetidos no servidor (docs/PLANO_ACELY.md, Fase 3).
     """
     if not ai_configured():
         _log_ops("nenhuma chave de IA configurada (defina GROQ_API_KEY, GEMINI_API_KEY ou OPENROUTER_API_KEY)")
@@ -1263,145 +1480,89 @@ def generate_quiz_by_topic(
         _log_ai(f"⚡ [ai_cache] Simulado de '{clean_topic}' lido do banco")
         return {**copy.deepcopy(stored), "cached": True}
 
-    prompt_lines = [
-        "Você é um professor e elaborador sênior de provas e simulados acadêmicos e de concursos.",
-        f"Crie um simulado de múltipla escolha com exatamente {qty} questões sobre o seguinte tema: '{clean_topic}'.",
-        f"Nível de dificuldade exigido: {diff}.",
-    ]
-    if context_str:
-        prompt_lines.append(f"Diretrizes e foco específico adicional: {context_str}")
+    def _report_progress(done: int, total: int) -> None:
+        if callable(on_progress):
+            try:
+                on_progress(done, total)
+            except Exception as e:  # noqa: BLE001
+                _log_ops(f"falha ao reportar progresso ({done}/{total}): {e}")
 
-    prompt_lines.extend([
-        "",
-        "Regras obrigatórias:",
-        f"1. {_language_rule(lang, 'todas as questões, alternativas, explicações e do título')}",
-        "2. Todas as questões devem ser inéditas, com enunciados claros, sem ambiguidades.",
-        "3. Cada questão deve possuir exatamente 4 ou 5 alternativas em formato de texto limpo (não coloque 'a)', 'b)' dentro do texto da alternativa).",
-        "4. Apenas UMA alternativa deve ser a correta.",
-        "5. O campo 'answer' deve ser o índice numérico (base 0) da alternativa correta (0 = primeira opção, 1 = segunda opção, 2 = terceira opção...).",
-        "6. O campo 'explanation' deve fornecer uma justificativa didática detalhada de 2 a 4 frases explicando por que a alternativa está correta.",
-        "7. Forneça um título atraente e descritivo para o quiz no campo 'title'.",
-        "",
-        "IMPORTANTE: Retorne SOMENTE um objeto JSON válido, sem qualquer texto ou formatação fora do JSON, no seguinte formato estrito:",
-        """{
-  "title": "Título Descritivo do Quiz",
-  "questions": [
-    {
-      "id": 1,
-      "section": "Subtema ou disciplina",
-      "context": "Breve contexto introdutório se necessário (ou vazio)",
-      "question": "Enunciado completo da pergunta?",
-      "options": [
-        "Texto da opção A",
-        "Texto da opção B",
-        "Texto da opção C",
-        "Texto da opção D"
-      ],
-      "answer": 0,
-      "explanation": "Explicação detalhada do porquê a opção A é a correta."
-    }
-  ]
-}"""
-    ])
-    prompt = "\n".join(prompt_lines)
-    check_ai_token_quota(prompt, ip=client_ip)
-    max_tokens = min(4096, max(800, qty * 320))
-    call_res = _call_ai(
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.5,
-        max_tokens=max_tokens,
-        timeout=75,  # tempo total, somando provedores e modelos
-    )
-    content, used_model, usage, provider_name = _unpack_call_result(call_res)
+    chunks = _plan_question_chunks(qty)
+    total_parts = len(chunks)
 
-    if DEBUG:
-        print(f"🤖 IA Quiz Gerado [{used_model}]:\n{content[:300]}")
+    if total_parts == 1:
+        part = _generate_topic_part(clean_topic, qty, diff, context_str, lang, client_ip=client_ip)
+        valid_questions = _deduplicate_questions(part["questions"], limit=qty)
+        if not valid_questions:
+            raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
+        result = {
+            "title": part["title"],
+            "topic": clean_topic,
+            "questions": valid_questions,
+            "usage": part["usage"],
+            "model": part["model"],
+            "provider": part["provider"],
+        }
+    else:
+        _report_progress(0, total_parts)
+        parts_by_index: dict[int, dict] = {}
+        errors: list[Exception] = []
+        done_count = 0
+        max_workers = min(TOPIC_CHUNK_MAX_WORKERS, total_parts)
 
-    try:
-        parsed = parse_json_response(content)
-        if isinstance(parsed, list):
-            raw_questions = parsed
-            title = f"Quiz: {clean_topic.title()}"
-        elif isinstance(parsed, dict):
-            raw_questions = (
-                parsed.get("questions")
-                or parsed.get("questoes")
-                or parsed.get("data")
-                or next((v for v in parsed.values() if isinstance(v, list)), [])
-            )
-            title = parsed.get("title") or parsed.get("titulo") or f"Quiz: {clean_topic.title()}"
-        else:
-            raise ValueError("Formato JSON retornado não reconhecido")
-    except (json.JSONDecodeError, ValueError) as e:
-        _log_ops(f"quiz por tema: resposta da IA fora do formato JSON ({e})")
-        raise AIServiceError("A IA respondeu em um formato inesperado. Tente novamente.")
-
-    if not isinstance(raw_questions, list) or not raw_questions:
-        raise AIServiceError("A IA não gerou nenhuma questão para o tema solicitado.")
-
-    valid_questions = []
-    for idx, item in enumerate(raw_questions, start=1):
-        if not isinstance(item, dict):
-            continue
-
-        q_text = str(item.get("question") or item.get("enunciado") or "").strip()
-        options = item.get("options") or item.get("alternativas") or []
-        if not q_text or not isinstance(options, list) or len(options) < 2:
-            continue
-
-        # Limpar texto de opções caso venham com prefixos como a), A - , etc.
-        cleaned_options = []
-        for opt in options:
-            opt_str = str(opt).strip()
-            # Remove a), A), a - etc
-            import re
-            opt_str = re.sub(r"^[a-eA-E][\)\.\-]\s*", "", opt_str)
-            cleaned_options.append(opt_str)
-
-        # Tratar índice da resposta correta
-        raw_answer = item.get("answer") if "answer" in item else item.get("resposta")
-        answer_idx = 0
-        if isinstance(raw_answer, int):
-            answer_idx = raw_answer
-        elif isinstance(raw_answer, str):
-            raw_answer_clean = raw_answer.strip().upper()
-            if len(raw_answer_clean) == 1 and "A" <= raw_answer_clean <= "E":
-                answer_idx = ord(raw_answer_clean) - ord("A")
-            else:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_map = {
+                executor.submit(
+                    _generate_topic_part,
+                    clean_topic,
+                    chunk_qty,
+                    diff,
+                    context_str,
+                    lang,
+                    client_ip,
+                    idx,
+                    total_parts,
+                ): idx
+                for idx, chunk_qty in enumerate(chunks, start=1)
+            }
+            for future in as_completed(future_map):
+                part_idx = future_map[future]
                 try:
-                    answer_idx = int(raw_answer_clean)
-                except ValueError:
-                    answer_idx = 0
+                    parts_by_index[part_idx] = future.result()
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(exc)
+                    _log_ops(f"quiz por tema parte {part_idx}/{total_parts} falhou: {exc}")
+                done_count += 1
+                _report_progress(done_count, total_parts)
 
-        if answer_idx < 0 or answer_idx >= len(cleaned_options):
-            answer_idx = 0
+        if not parts_by_index:
+            for exc in errors:
+                if isinstance(exc, AIQuotaExceededError):
+                    raise exc
+            for exc in errors:
+                if isinstance(exc, AIServiceError):
+                    raise exc
+            raise AIServiceError("Não foi possível gerar questões válidas para o tema solicitado.")
 
-        explanation = str(item.get("explanation") or item.get("explicacao") or "").strip()
-        section = str(item.get("section") or item.get("secao") or clean_topic).strip()
-        item_context = str(item.get("context") or item.get("contexto") or "").strip()
+        ordered_parts = [parts_by_index[i] for i in sorted(parts_by_index)]
+        merged_questions: list[dict] = []
+        for part in ordered_parts:
+            merged_questions.extend(part["questions"])
 
-        valid_questions.append({
-            "id": idx,
-            "question_number": idx,
-            "section": section or clean_topic,
-            "context": item_context,
-            "question": q_text,
-            "options": cleaned_options,
-            "answer": answer_idx,
-            "explanation": explanation or "Resposta correta conforme gabarito oficial.",
-        })
+        valid_questions = _deduplicate_questions(merged_questions, limit=qty)
+        if not valid_questions:
+            raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
 
-    if not valid_questions:
-        raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
-
-    result = {
-        "title": str(title).strip(),
-        "topic": clean_topic,
-        "questions": valid_questions,
-        "usage": usage,
-        "model": used_model,
-        "provider": provider_name,
-    }
+        first_part = ordered_parts[0]
+        result = {
+            "title": first_part["title"],
+            "topic": clean_topic,
+            "questions": valid_questions,
+            "usage": _merge_usage([p.get("usage") for p in ordered_parts]),
+            "model": first_part["model"],
+            "provider": first_part["provider"],
+            "parts": {"done": len(ordered_parts), "total": total_parts},
+        }
 
     # Armazena nos dois níveis de cache
     with _quiz_cache_lock:
