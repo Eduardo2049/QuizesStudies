@@ -164,10 +164,18 @@ class QuizController:
         client_ip: str | None = None,
         language: str = "",
         on_progress=None,
+        cross_check: bool | None = None,
     ) -> dict:
         """Gera quiz por tema utilizando IA"""
-        from api.services.ai_service import generate_quiz_by_topic, normalize_language, AIServiceError
+        from api.services.ai_service import (
+            generate_quiz_by_topic,
+            normalize_language,
+            should_cross_check,
+            AIServiceError,
+        )
         from api.services.upload_service import _slugify
+
+        do_cross_check = should_cross_check(bool(user_id)) if cross_check is None else bool(cross_check)
 
         try:
             generated = generate_quiz_by_topic(
@@ -178,6 +186,7 @@ class QuizController:
                 client_ip=client_ip,
                 language=normalize_language(language),
                 on_progress=on_progress,
+                cross_check=do_cross_check,
             )
         except AIServiceError as e:
             raise QuizAPIException(str(e), 422)
@@ -190,6 +199,7 @@ class QuizController:
         usage = generated.get("usage") or {}
         model = generated.get("model") or ""
         provider = generated.get("provider") or ""
+        verified_count = int(generated.get("verified_count") or 0)
 
         if not persist or not user_id:
             return {
@@ -199,6 +209,7 @@ class QuizController:
                     "name": name,
                     "label": title,
                     "question_count": len(questions),
+                    "verified_count": verified_count,
                     "ai_generated": True,
                     "local_only": True,
                     "questions": questions,
@@ -236,6 +247,7 @@ class QuizController:
                 "name": quiz["name"],
                 "label": quiz["label"],
                 "question_count": len(questions),
+                "verified_count": verified_count,
                 "ai_generated": True,
                 "local_only": False,
                 "questions": [
