@@ -9,7 +9,7 @@
  * i18n.js vem primeiro: ele traduz a página ao ser importado, antes de a tagline ser
  * quebrada em palavras (a tradução casa frases inteiras do dicionário).
  */
-import './i18n.js?v=12';
+import './i18n.js?v=13';
 import { initTheme, toggleTheme } from './theme.js?v=10';
 import { createSmoothScroll } from './smooth-scroll.js?v=1';
 import { initMural } from './mural.js?v=2';

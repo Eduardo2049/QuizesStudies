@@ -915,6 +915,9 @@ export default {
   'ativo': 'active',
   '{0}: respondeu com {1} em {2} s': '{0}: answered with {1} in {2} s',
   '{0}: falhou em {1} s': '{0}: failed in {1} s',
+  'Nenhuma geração com IA nas últimas 24 h.': 'No AI generation in the last 24 h.',
+  'Tempo de geração (24 h): média de {0} s, p90 de {1} s, {2}% em até {3} s ({4} simulados).':
+    'Generation time (24 h): average {0} s, p90 {1} s, {2}% within {3} s ({4} quizzes).',
   'Limite de {0} usos de IA por minuto atingido. Aguarde {1} segundo(s) e tente novamente.':
     'Limit of {0} AI uses per minute reached. Wait {1} second(s) and try again.',
 };

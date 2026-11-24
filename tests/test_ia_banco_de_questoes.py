@@ -76,7 +76,7 @@ class TestSamplePresetQuizzes(unittest.TestCase):
 
         calls = 0
 
-        def fake_call_ai(messages, temperature, max_tokens, timeout=75, prefer_different_from=None):
+        def fake_call_ai(messages, temperature, max_tokens, timeout=75, prefer_different_from=None, **kwargs):
             nonlocal calls
             calls += 1
             return ai_payload, "mock-model", {"total_tokens": 120}, "Groq"

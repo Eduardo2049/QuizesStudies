@@ -206,6 +206,31 @@ class TestAIJobsIntegration(unittest.TestCase):
         created, _ = self.repo.start(job_id, "user", "1", "generate", "h")
         self.assertTrue(created)
 
+    def test_generation_stats_reads_durations_from_jobs(self):
+        from api.database.connection import get_cursor
+        jobs = [
+            (6, {"question_count": 5, "provider": "OpenAI", "cached": False}),
+            (9, {"question_count": 10, "provider": "OpenAI", "cached": False}),
+            (14, {"question_count": 30, "provider": "Groq", "cached": False}),
+            (0, {"question_count": 5, "provider": "Acely Preset", "cached": True}),  # pronto: fica de fora
+            (600, {"question_count": 5, "provider": "OpenAI", "cached": False}),  # refeito após falha: fora
+        ]
+        for seconds, data in jobs:
+            job_id = self._id()
+            self.repo.start(job_id, "guest", "g", "generate", "h")
+            self.repo.finish(job_id, {"http_status": 201, "data": data})
+            with get_cursor() as cur:
+                cur.execute(
+                    "UPDATE ai_jobs SET created_at = updated_at - make_interval(secs => %s) WHERE id = %s",
+                    (seconds, job_id),
+                )
+        stats = self.repo.generation_stats(24)
+        self.assertEqual(stats["count"], 3)
+        self.assertAlmostEqual(stats["avg"], round((6 + 9 + 14) / 3, 1), places=1)
+        self.assertEqual(stats["within_target_pct"], 67)
+        self.assertEqual([b["label"] for b in stats["by_size"]], ["até 5", "6 a 10", "21 a 30"])
+        self.assertEqual({p["provider"] for p in stats["by_provider"]}, {"OpenAI", "Groq"})
+
     def test_parallel_starts_create_only_one(self):
         import threading
         job_id = self._id()
