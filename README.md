@@ -12,7 +12,7 @@ Estado em 24/11/2026: em produção em `acely.com.br` (Vercel, região `gru1`, P
 
 ## O que o Acely faz hoje
 
-- **Simulado por tema**: de 3 a 30 questões, três níveis de dificuldade e instruções extras opcionais. Mais de 5 questões saem em partes de 5 geradas em paralelo, com progresso na tela.
+- **Simulado por tema**: de 3 a 30 questões, três níveis de dificuldade e instruções extras opcionais. Com a OpenAI na frente, o simulado sai em partes de 3 questões geradas todas ao mesmo tempo, e fica pronto em cerca de 8 s em qualquer tamanho (medido contra uma OpenAI simulada na velocidade publicada do `gpt-6-luna`).
 - **Simulado a partir de arquivo** (TXT, PDF, DOCX): o parser reconhece questões e gabaritos em vários formatos (pares "1-B", "GABARITO OFICIAL", tabelas, alternativa marcada). Arquivo que já traz gabarito não gasta IA; sem gabarito, a IA resolve e explica.
 - **Qualidade do gabarito**: o servidor reprova questão com gabarito fora do intervalo, alternativas repetidas ou idioma trocado; para quem tem conta, um segundo modelo resolve cada questão sem ver o gabarito e descarta as que discordam.
 - **Caderno de erros com variações**: a IA cria questões novas sobre o mesmo conceito das que você errou, para não decorar a letra.
@@ -106,7 +106,9 @@ O `.env.example` explica cada variável. As principais:
 | `OPENROUTER_API_KEY` | Não | [OpenRouter](https://openrouter.ai), só modelos gratuitos (`:free`). Libere-os em *Settings → Privacy* e deixe *ZDR Endpoints Only* desligado |
 | `OPENROUTER_FREE_MODELS`, `OPENROUTER_DISCOVER_FREE_MODELS`, `OPENROUTER_MAX_ATTEMPTS` | Não | Modelos gratuitos preferidos, descoberta automática de outros (padrão `true`) e tentativas por pedido (padrão `4`) |
 | `<PROVEDOR>_DAILY_REQUESTS` / `<PROVEDOR>_DAILY_TOKENS` | Não | Orçamento diário por modelo (`OPENAI_`, `GROQ_`, `GEMINI_`, `CEREBRAS_`); o modelo é pulado antes de levar 429 |
-| `AI_DAILY_CALL_LIMIT` | Não | Teto global de chamadas ao provedor a cada 24 h, somando todos (padrão `1000`; `0` desliga). Cada simulado usa de 1 a 5 chamadas. Só com o OpenRouter sem créditos, deixe abaixo de 50 |
+| `AI_DAILY_CALL_LIMIT` | Não | Teto global de chamadas ao provedor a cada 24 h, somando todos (padrão `3000`; `0` desliga). Com a OpenAI na frente, um simulado usa em média ~8 chamadas (até 20 num de 30 questões com conferência). Só com o OpenRouter sem créditos, deixe abaixo de 50 |
+| `AI_PART_SIZE` / `AI_PARALLEL_PARTS` | Não | Questões por parte e partes ao mesmo tempo na geração por tema (`0` = automático: 3 e 10 com a OpenAI na frente, 5 e 3 só com gratuitos) |
+| `OPENAI_SERVICE_TIER` | Não | `fast` liga o Fast mode da OpenAI (até ~2,5x mais rápido, preço por token maior); vazio = padrão da conta |
 | `AI_USER_REQUESTS_PER_MINUTE` | Não | Pedidos de IA por minuto por pessoa (padrão `10`; `0` desliga). A vaga volta quando a IA falha ou o resultado vem pronto |
 | `AI_CROSS_CHECK` | Não | Conferência do gabarito por um segundo modelo: `account` (padrão, só contas), `all` ou `off` |
 | `AI_ATTEMPT_TIMEOUT` | Não | Segundos que um modelo pode ficar sem mandar nada antes de passar ao próximo (padrão `20`) |
@@ -165,6 +167,12 @@ O servidor sobe em `http://localhost:8000` (ou na próxima porta livre) e roda a
 
 - **Ordem**: o servidor tenta os provedores com chave na ordem de `AI_PROVIDERS`. Se um bate no limite, recusa a chave, está sem créditos ou fica `AI_ATTEMPT_TIMEOUT` s sem responder, passa ao próximo sem erro para a pessoa.
 - **OpenAI**: modelos de raciocínio vão com esforço baixo e sem `temperature`. Modelo com data de desligamento vencida é pulado sem fazer pedido. Organização sem verificação recebe a resposta inteira, em vez de em partes. Sem créditos, a OpenAI fica de fora por 15 min.
+- **Velocidade** (meta: simulado pronto em até ~10 s):
+  - com a OpenAI na frente, partes de 3 questões geradas ao mesmo tempo (até 10), cada uma conferida assim que fica pronta;
+  - raciocínio `none` ao escrever as questões e `low` na conferência;
+  - explicação de 1 a 2 frases e JSON em uma linha, para escrever menos tokens;
+  - o diagnóstico do admin mostra a média, o p90 e a fatia em até 10 s das últimas 24 h;
+  - `python scripts/benchmark_geracao_ia.py` mede o fluxo contra uma OpenAI simulada, sem gastar tokens.
 - **Menos chamadas**:
   - cache em dois níveis (memória e tabela `ai_cache`);
   - temas de exemplo prontos;
@@ -177,7 +185,7 @@ O servidor sobe em `http://localhost:8000` (ou na próxima porta livre) e roda a
   - teto global `AI_DAILY_CALL_LIMIT`;
   - orçamento diário por modelo.
 - **Logs**: cada tentativa gera uma linha `[ia]` com o motivo de cada falha, sem a chave. A primeira linha de cada instância mostra a ordem dos provedores e os avisos de configuração.
-- **Diagnóstico**: entre como admin e abra **Minha conta → Diagnóstico da IA**. Ali aparecem a ordem real, os avisos (chave fora de `AI_PROVIDERS`, modelo vencendo, teto baixo) e o botão *Testar provedores agora*. As rotas são `GET /api/admin/ia` e `POST /api/admin/ia/teste`, só para o admin e sem devolver chaves.
+- **Diagnóstico**: entre como admin e abra **Minha conta → Diagnóstico da IA**. Ali aparecem a ordem real, os avisos (chave fora de `AI_PROVIDERS`, modelo vencendo, teto baixo), o tempo médio das gerações e o botão *Testar provedores agora*. As rotas são `GET /api/admin/ia` e `POST /api/admin/ia/teste`, só para o admin e sem devolver chaves.
 
 Detalhes: [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).
 
@@ -288,7 +296,7 @@ Todo endpoint em `/api/` responde `{"status": "success", "data": ...}` ou `{"sta
 | `GET` | `/api/me/plan` | Conta | Plano, limites e uso do mês (`PLAN_LIMIT_REACHED` ao passar da cota) |
 | `GET` | `/api/account/export` | Conta | Cópia dos dados em JSON (LGPD) |
 | `POST` | `/api/account/delete-code` e `/api/account/delete` | Conta | Código de confirmação e exclusão da conta |
-| `GET` | `/api/admin/ia` · `POST` `/api/admin/ia/teste` | Admin | Diagnóstico e teste dos provedores de IA |
+| `GET` | `/api/admin/ia` · `POST` `/api/admin/ia/teste` | Admin | Diagnóstico (ordem, avisos, tempo das gerações) e teste dos provedores de IA |
 
 ---
 
