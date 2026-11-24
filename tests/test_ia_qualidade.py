@@ -1,5 +1,5 @@
 """
-Testes da Fase 4 (docs/PLANO_ACELY.md): qualidade, validação e conferência de gabarito.
+Qualidade da IA (docs/ARQUITETURA.md, seção da IA): qualidade, validação e conferência de gabarito.
 
 Valida:
 1. Gabarito fora do intervalo é reprovado (não mascarado para 0).

@@ -4495,6 +4495,15 @@ a.access-cta.primary:hover { color: var(--btn-primary-text); }
 .account-section { margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--space-2); }
 .account-hint { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: 20px; }
 .account-section .access-cta { margin-top: var(--space-2); }
+/* Diagnóstico da IA (só admin) em Minha conta */
+.ai-diag-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--text-sm); line-height: 20px; color: var(--ink); }
+.ai-diag-list--log { margin-top: var(--space-1); padding-left: var(--space-4); gap: var(--space-1); }
+.ai-diag-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); overflow-wrap: anywhere; }
+.ai-diag-item--block { display: block; }
+.ai-diag-status, .ai-diag-models, .ai-diag-log { color: var(--muted); }
+.ai-diag-warning { color: var(--ink); }
+.ai-diag-ok { font-weight: 600; color: var(--ink); }
+.ai-diag-fail { font-weight: 600; color: var(--error); }
 .account-delete-form { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
 .account-delete-form label { font: 600 var(--text-sm) var(--font-sans); color: var(--ink); }
 .account-delete-form input { min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--input-border); border-radius: var(--radius-sm); background: var(--input-bg); color: var(--ink); font: 400 var(--text-md) var(--font-sans); }

@@ -92,48 +92,70 @@ OPENROUTER_FREE_MODELS = [
 # usa os outros gratuitos como reserva.
 OPENROUTER_DISCOVER_FREE_MODELS = os.getenv("OPENROUTER_DISCOVER_FREE_MODELS", "true").lower() == "true"
 
-# ─── Vários provedores em sequência (docs/PLANO_ACELY.md, Fase 2) ────────────────────────────
-# Todos falam OpenAI Chat Completions (ou Responses API no provedor Codex). A IA tenta os
-# provedores na ordem de AI_PROVIDERS; quando um bate no limite (429), falha ou fica sem
-# resposta, passa ao próximo. Provedor sem chave fica de fora: sem CODEX/GROQ/GEMINI/CEREBRAS,
-# o comportamento é o de antes (só OpenRouter).
+# ─── Vários provedores em sequência (docs/ARQUITETURA.md, seção da IA) ──────────────────────
+# Todos falam OpenAI Chat Completions (ou Responses API na OpenAI). A IA tenta os provedores
+# na ordem de AI_PROVIDERS; quando um bate no limite (429), falha ou fica sem resposta, passa
+# ao próximo. Provedor sem chave fica de fora. Internamente a OpenAI se chama "codex" (nome
+# antigo); "openai" é aceito em AI_PROVIDERS e é o nome que aparece nos logs.
 _KNOWN_AI_PROVIDERS = ("codex", "groq", "gemini", "cerebras", "openrouter")
 _AI_PROVIDER_ALIASES = {"openai": "codex", "google": "gemini"}
+_DEFAULT_AI_PROVIDERS = "codex,groq,gemini,cerebras,openrouter"
+
+
+def _split_ai_providers(raw: str | None) -> tuple[list[str], list[str]]:
+    """(ordem reconhecida, nomes ignorados) de AI_PROVIDERS; aceita 'openai' como apelido de 'codex'."""
+    source = raw if raw is not None and raw.strip() else _DEFAULT_AI_PROVIDERS
+    ordered: list[str] = []
+    ignored: list[str] = []
+    for item in source.split(","):
+        raw_name = item.strip().lower()
+        if not raw_name:
+            continue
+        name = _AI_PROVIDER_ALIASES.get(raw_name, raw_name)
+        if name not in _KNOWN_AI_PROVIDERS:
+            ignored.append(item.strip())
+        elif name not in ordered:
+            ordered.append(name)
+    return ordered or ["openrouter"], ignored
 
 
 def _parse_ai_providers(raw: str | None) -> list[str]:
     """Lê a ordem de prioridade dos provedores de IA (aceita 'openai' como apelido de 'codex')."""
-    source = raw if raw is not None and raw.strip() else "codex,groq,gemini,cerebras,openrouter"
-    ordered: list[str] = []
-    for item in source.split(","):
-        name = _AI_PROVIDER_ALIASES.get(item.strip().lower(), item.strip().lower())
-        if name in _KNOWN_AI_PROVIDERS and name not in ordered:
-            ordered.append(name)
-    return ordered or ["openrouter"]
+    return _split_ai_providers(raw)[0]
 
 
-AI_PROVIDERS = _parse_ai_providers(os.getenv("AI_PROVIDERS"))
+AI_PROVIDERS, AI_PROVIDERS_IGNORED = _split_ai_providers(os.getenv("AI_PROVIDERS"))
+# True quando AI_PROVIDERS veio do ambiente (o diagnóstico avisa se ele deixa de fora uma chave)
+AI_PROVIDERS_FROM_ENV = bool((os.getenv("AI_PROVIDERS") or "").strip())
 
 
 def _env_list(name: str, default: str) -> list[str]:
     return [item.strip() for item in (os.getenv(name) or default).split(",") if item.strip()]
 
 
-# OpenAI / Codex API (platform.openai.com): usado primeiro quando OPENAI_API_KEY ou
-# CODEX_API_KEY estiver configurada; vazio = pulado. Para usar SOMENTE OpenAI sem depender
-# do OpenRouter, defina AI_PROVIDERS=openai no .env ou nas variáveis de ambiente.
+# OpenAI (platform.openai.com): usada primeiro quando OPENAI_API_KEY (ou o nome antigo
+# CODEX_API_KEY) estiver configurada; vazio = pulada. Para usar SOMENTE a OpenAI, defina
+# AI_PROVIDERS=openai.
+# Modelos (OPENAI_MODELS; o nome antigo CODEX_MODELS ainda vale): o padrão é o gpt-6-luna
+# (substituto indicado pela OpenAI para gpt-5-nano e gpt-4o-mini) com o gpt-4o-mini de reserva.
+# gpt-5-nano e gpt-5-mini saem do ar em 11/12/2026 e codex-mini-latest já saiu (lista em
+# OPENAI_MODEL_SHUTDOWNS, no ai_service.py: modelo vencido é pulado sem gastar pedido).
 # CODEX_API_MODE: "auto" (usa /responses em modelos *codex* e /chat/completions nos demais,
-# com fallback automático), "responses" ou "chat".
+# com troca automática), "responses" ou "chat".
 CODEX_API_KEY = (os.getenv("OPENAI_API_KEY") or os.getenv("CODEX_API_KEY") or "").strip()
 CODEX_BASE_URL = (os.getenv("OPENAI_BASE_URL") or os.getenv("CODEX_BASE_URL") or "https://api.openai.com/v1").strip()
-CODEX_MODELS = _env_list(
-    "OPENAI_MODELS",
-    os.getenv("CODEX_MODELS") or "gpt-5-nano,gpt-4o-mini,gpt-5-mini,codex-mini-latest",
-)
-_codex_mode = (os.getenv("CODEX_API_MODE") or "auto").strip().lower()
+_DEFAULT_OPENAI_MODELS = "gpt-6-luna,gpt-4o-mini"
+if (os.getenv("OPENAI_MODELS") or "").strip():
+    CODEX_MODELS_SOURCE = "OPENAI_MODELS"
+elif (os.getenv("CODEX_MODELS") or "").strip():
+    CODEX_MODELS_SOURCE = "CODEX_MODELS"
+else:
+    CODEX_MODELS_SOURCE = "padrão"
+CODEX_MODELS = _env_list("OPENAI_MODELS", os.getenv("CODEX_MODELS") or _DEFAULT_OPENAI_MODELS)
+_codex_mode = (os.getenv("CODEX_API_MODE") or os.getenv("OPENAI_API_MODE") or "auto").strip().lower()
 CODEX_API_MODE = _codex_mode if _codex_mode in ("auto", "responses", "chat") else "auto"
 
-# Conferência de gabarito por um segundo modelo (docs/PLANO_ACELY.md, Fase 4).
+# Conferência de gabarito por um segundo modelo (docs/ARQUITETURA.md, seção da IA).
 # "account" (padrão): só quem tem conta; "all": conta e convidado; "off": desligada.
 _cross_check_mode = (os.getenv("AI_CROSS_CHECK") or "account").strip().lower()
 AI_CROSS_CHECK = _cross_check_mode if _cross_check_mode in ("account", "all", "off") else "account"
@@ -197,14 +219,16 @@ GUEST_AI_LIMIT = _env_int("GUEST_AI_LIMIT", 3, 0, 50)
 GUEST_AI_IP_LIMIT = _env_int("GUEST_AI_IP_LIMIT", 10, 1, 500)
 GUEST_AI_WINDOW_SECONDS = _env_int("GUEST_AI_WINDOW_HOURS", 24, 1, 24) * 60 * 60
 
-# Limite de chamadas de IA por minuto por usuário (ou convidado), somando gerar por tema,
-# variações e upload que precisa de IA. 0 desliga. Protege o saldo da API contra rajadas.
-AI_USER_REQUESTS_PER_MINUTE = _env_int("AI_USER_REQUESTS_PER_MINUTE", 3, 0, 120)
+# Pedidos de IA por minuto por usuário (ou convidado), somando gerar por tema, variações e
+# upload que precisa de IA. 0 desliga. Protege o saldo da API contra rajadas. Conta o pedido
+# da pessoa (um simulado de 20 questões em 4 partes é 1 pedido) e devolve a vaga quando a IA
+# falha ou quando o resultado vem pronto (cache ou tema de exemplo).
+AI_USER_REQUESTS_PER_MINUTE = _env_int("AI_USER_REQUESTS_PER_MINUTE", 10, 0, 120)
 
 # Teto global de chamadas à IA por 24 h, somando todos os usuários (trava de emergência
-# contra a conta do provedor estourar). 0 desliga. Os modelos gratuitos do OpenRouter têm
-# limite diário por conta (50 pedidos sem créditos comprados; 1.000 com pelo menos US$ 10
-# comprados); ajuste para ficar abaixo dele.
+# contra a conta do provedor estourar). 0 desliga. Conta CADA chamada ao provedor: um simulado
+# usa de 1 a 5 (uma por parte de 5 questões e mais uma quando há conferência do gabarito).
+# Com só os modelos gratuitos do OpenRouter sem créditos (50 pedidos/dia), use algo como 40.
 AI_DAILY_CALL_LIMIT = _env_int("AI_DAILY_CALL_LIMIT", 1000, 0, 1_000_000)
 
 # Quantos modelos gratuitos tentar em um mesmo pedido antes de desistir (cada tentativa
@@ -221,18 +245,26 @@ AI_ATTEMPT_TIMEOUT = _env_int("AI_ATTEMPT_TIMEOUT", 20, 5, 120)
 AI_CACHE_TTL_DAYS = _env_int("AI_CACHE_TTL_DAYS", 7, 0, 90)
 
 
-def _provider_budget(name: str, requests_default: int, tokens_default: int) -> tuple[int, int]:
+def _provider_budget(
+    name: str, requests_default: int, tokens_default: int, alias: str | None = None
+) -> tuple[int, int]:
     """Orçamento diário por modelo do provedor: (pedidos, tokens). 0 = sem controle.
 
     Fica um pouco abaixo do limite grátis para o provedor ser pulado antes de responder 429.
+    `alias` é um prefixo que vale antes de `name` (ex.: OPENAI_DAILY_* antes de CODEX_DAILY_*).
     """
+    def pick(suffix: str) -> str:
+        if alias and (os.getenv(f"{alias}_{suffix}") or "").strip():
+            return f"{alias}_{suffix}"
+        return f"{name}_{suffix}"
+
     return (
-        _env_int(f"{name}_DAILY_REQUESTS", requests_default, 0, 10_000_000),
-        _env_int(f"{name}_DAILY_TOKENS", tokens_default, 0, 1_000_000_000),
+        _env_int(pick("DAILY_REQUESTS"), requests_default, 0, 10_000_000),
+        _env_int(pick("DAILY_TOKENS"), tokens_default, 0, 1_000_000_000),
     )
 
 
-CODEX_DAILY_REQUESTS, CODEX_DAILY_TOKENS = _provider_budget("CODEX", 500, 500_000)
+CODEX_DAILY_REQUESTS, CODEX_DAILY_TOKENS = _provider_budget("CODEX", 500, 500_000, alias="OPENAI")
 GROQ_DAILY_REQUESTS, GROQ_DAILY_TOKENS = _provider_budget("GROQ", 950, 190_000)
 GEMINI_DAILY_REQUESTS, GEMINI_DAILY_TOKENS = _provider_budget("GEMINI", 450, 0)
 CEREBRAS_DAILY_REQUESTS, CEREBRAS_DAILY_TOKENS = _provider_budget("CEREBRAS", 0, 950_000)
