@@ -48,3 +48,8 @@ updates:
       - "docker"
     cooldown:
       default-days: 7
+    # Só correções da mesma série do Python (3.15.x). Troca de série (3.16) é decisão manual:
+    # em 16/11/2026 o Dependabot subiu a imagem para a alfa 3.16.0a1.
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

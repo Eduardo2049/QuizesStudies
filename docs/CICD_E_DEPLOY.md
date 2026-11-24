@@ -75,13 +75,18 @@ Acesse **Settings > Environment Variables** no painel da Vercel e cadastre as va
 | `ADMIN_USERNAME` | Nome seguro do administrador | `admin` |
 | `ADMIN_PASSWORD` | Senha forte e exclusiva | Senha de homologação |
 | `OPENROUTER_API_KEY` | Chave do OpenRouter de produção (só modelos `:free`) | Chave de homolog/dev |
-| `AI_DAILY_CALL_LIMIT` | Teto global de pedidos de IA por dia, somando os provedores (ex.: `1000` com Groq e Gemini; `40` só com o OpenRouter sem créditos) | `40` |
-| `GROQ_API_KEY` | (Opcional, recomendado) chave do Groq: primeiro provedor, o mais rápido | Chave de homolog/dev |
+| `AI_DAILY_CALL_LIMIT` | Teto global de chamadas ao provedor por dia, somando todos (cada simulado usa de 1 a 5). Ex.: `1000` com OpenAI ou Groq; `40` só com o OpenRouter sem créditos | `200` |
+| `AI_USER_REQUESTS_PER_MINUTE` | (Opcional) pedidos de IA por minuto por pessoa; padrão `10` | Idem |
+| `OPENAI_API_KEY` | (Opcional) chave da OpenAI, primeira da fila; a conta precisa de créditos | Chave de homolog/dev ou vazia |
+| `OPENAI_MODELS` | (Opcional) padrão `gpt-6-luna,gpt-4o-mini`. Se existir `CODEX_MODELS` antigo com `gpt-5-nano`/`codex-mini-latest`, apague ou troque | Idem |
+| `GROQ_API_KEY` | (Opcional, recomendado) chave do Groq: primeiro gratuito, o mais rápido | Chave de homolog/dev |
 | `GEMINI_API_KEY` | (Opcional) chave do Google AI Studio; no plano grátis o Google usa o conteúdo | Chave de homolog/dev |
 | `CEREBRAS_API_KEY` | (Opcional) chave da Cerebras | — |
-| `AI_PROVIDERS` | (Opcional) ordem de tentativa; padrão `groq,gemini,cerebras,openrouter` | Idem |
+| `AI_PROVIDERS` | (Opcional) ordem de tentativa; padrão `openai,groq,gemini,cerebras,openrouter`. Se definida, precisa incluir `openai` para a chave da OpenAI ser usada | Idem |
 | `COOKIE_SECURE` | `true` | `true` |
 | `DEBUG` | `false` | `false` |
+
+**A chave da IA parece não ser usada?** Entre como admin (`/login?senha=1`) e abra **Minha conta → Diagnóstico da IA**: mostra a ordem real dos provedores, avisos (chave fora de `AI_PROVIDERS`, modelo desligado, teto diário baixo) e o botão *Testar provedores agora*, que faz um pedido mínimo a cada um e mostra o motivo de cada falha (sem créditos, modelo inexistente, chave recusada). Nos logs da Vercel, as linhas começam com `[ia]`; a primeira de cada instância é `ordem dos provedores: ...`.
 
 ---
 
@@ -226,7 +231,13 @@ O que já está no código:
 - As páginas públicas têm `canonical` e `og:url` no domínio; `reset-password` e a 404 têm `noindex`. Os deploys de Preview da Vercel já recebem `X-Robots-Tag: noindex` automaticamente.
 - Nova página pública: adicionar ao `public/web/sitemap.xml` (o teste `tests/test_dominio_acely.py` confere que cada endereço do sitemap tem rewrite).
 
-Fora do código (dono do projeto): DNS no Registro.br, `APP_URL` em Production, URIs do OAuth do Google e envio do sitemap (`https://acely.com.br/sitemap.xml`) no Google Search Console. A lista completa está em `docs/PLANO_ACELY.md`, seção 1.2.
+Fora do código (dono do projeto):
+1. **Vercel → Settings → Domains:** `acely.com.br` e `www.acely.com.br`, com o `www` redirecionando para a raiz.
+2. **Registro.br → DNS:** os registros que a Vercel pedir (A na raiz e CNAME no `www`).
+3. **Vercel → Environment Variables (Production):** `APP_URL=https://acely.com.br` (em Preview, a URL da Vercel do ambiente).
+4. **Google Cloud → OAuth:** redirect `https://acely.com.br/api/auth/google/callback` e origem `https://acely.com.br`; tela de consentimento com o nome Acely, a logo (`favicon.png`, 512) e os links de `/privacidade` e `/termos`.
+5. **E-mail:** para enviar como `noreply@acely.com.br` (códigos de acesso), um provedor de e-mail no domínio com SPF, DKIM e DMARC no DNS; até lá, `SMTP_FROM` com o Gmail.
+6. **Google Search Console:** verificar o domínio (registro TXT) e enviar `https://acely.com.br/sitemap.xml`.
 
 ---
 

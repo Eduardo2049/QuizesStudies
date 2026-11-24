@@ -1,7 +1,7 @@
 """
 Acervo de simulados prontos para os temas de exemplo da interface (.topic-chip).
 
-Fase 5 (docs/PLANO_ACELY.md): clicar em um tema de exemplo e gerar com os parâmetros
+Temas de exemplo prontos (docs/ARQUITETURA.md, seção da IA): clicar em um tema de exemplo e gerar com os parâmetros
 padrão (até 5 questões, nível Médio, sem instruções extras, pt-BR) responde
 instantaneamente sem chamar a IA nem descontar cota (cached=True).
 """

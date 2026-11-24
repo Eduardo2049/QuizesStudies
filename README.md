@@ -64,8 +64,8 @@ Edite o `.env`:
 | `OPENROUTER_FREE_MODELS` | Não | Modelos gratuitos preferidos, em ordem, separados por vírgula |
 | `OPENROUTER_DISCOVER_FREE_MODELS` | Não | Padrão `true`: descobre os modelos gratuitos disponíveis e usa como reserva |
 | `OPENROUTER_MAX_ATTEMPTS` | Não | Modelos tentados por pedido antes de desistir (padrão: `4`) |
-| `AI_DAILY_CALL_LIMIT` | Não | Teto diário de chamadas de IA somando os provedores; só com o OpenRouter sem créditos, deixe abaixo de 50 |
-| `AI_PROVIDERS` | Não | Ordem dos provedores (padrão `groq,gemini,cerebras,openrouter`); provedor sem chave fica de fora |
+| `AI_PROVIDERS` | Não | Ordem dos provedores (padrão `openai,groq,gemini,cerebras,openrouter`); provedor sem chave fica de fora. Definida, ela manda: um provedor fora da lista nunca é chamado, mesmo com chave |
+| `OPENAI_API_KEY` / `OPENAI_MODELS` | Não | [OpenAI](https://platform.openai.com/api-keys), primeiro da fila quando tem chave (precisa de créditos). Padrão `gpt-6-luna,gpt-4o-mini`; os nomes antigos `CODEX_API_KEY`/`CODEX_MODELS` ainda valem |
 | `GROQ_API_KEY` / `GROQ_MODELS` | Não (recomendado) | [Groq](https://console.groq.com/keys): o mais rápido; padrão `openai/gpt-oss-120b,openai/gpt-oss-20b` |
 | `GEMINI_API_KEY` / `GEMINI_MODELS` | Não | [Google AI Studio](https://aistudio.google.com/apikey); no plano grátis o Google usa o conteúdo enviado |
 | `CEREBRAS_API_KEY` / `CEREBRAS_MODELS` | Não | [Cerebras](https://cloud.cerebras.ai) (teste com cartão, contexto curto) |
@@ -73,7 +73,9 @@ Edite o `.env`:
 | `AI_ATTEMPT_TIMEOUT` | Não | Segundos que um modelo pode ficar sem mandar nada antes de passar ao próximo (padrão `20`) |
 | `AI_CACHE_TTL_DAYS` | Não | Dias que um simulado por tema fica em cache no banco (padrão `7`) |
 | `AI_TOKEN_QUOTA_PER_HOUR` | Não | Cota de tokens estimados por hora por IP (padrão: `50000`) |
-| `AI_DAILY_CALL_LIMIT` | Não | Teto global de chamadas à IA a cada 24 h, somando todos os usuários (padrão: `1000`; `0` desliga). Trava de emergência contra a conta do provedor estourar |
+| `AI_DAILY_CALL_LIMIT` | Não | Teto global de chamadas ao provedor a cada 24 h, somando todos os usuários (padrão: `1000`; `0` desliga). Conta cada chamada: um simulado usa de 1 a 5 (partes de 5 questões e conferência). Só com o OpenRouter sem créditos, deixe abaixo de 50 |
+| `AI_USER_REQUESTS_PER_MINUTE` | Não | Pedidos de IA por minuto por pessoa (padrão: `10`; `0` desliga). A vaga volta quando a IA falha ou o resultado vem pronto |
+| `AI_CROSS_CHECK` | Não | Conferência do gabarito por um segundo modelo: `account` (padrão, só contas), `all` ou `off` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Não | Liga o botão "Entrar com Google". Redirect URI: `<APP_URL>/api/auth/google/callback` (defina `APP_URL` em produção) |
 | `GUEST_AI_LIMIT` | Não | Usos de IA do convidado por janela (padrão: `3`; `0` desliga a IA para convidados) |
 | `GUEST_AI_WINDOW_HOURS` | Não | Janela da cota do convidado em horas (padrão e máximo: `24`) |
@@ -248,7 +250,7 @@ c) Opção C
 
 O projeto conta com suítes completas tanto para **auditoria em ambiente isolado (sem custo de tokens)** quanto para **testes reais de carga contra o servidor ativo**.
 
-> **Nota sobre o CI**: Os testes unitários (`python -m unittest discover tests`) executam com **PostgreSQL 16 real** no pipeline de CI. Em ambiente local sem PostgreSQL disponível, o sistema faz fallback automático para **SQLite em memória** — funcional para desenvolvimento, mas não garante compatibilidade total com tipos PostgreSQL (ex: `JSONB`, `SERIAL`).
+> **Nota sobre o CI**: Os testes unitários (`python -m unittest discover tests`) executam com **PostgreSQL 16 real** no pipeline de CI. Localmente sem PostgreSQL, os testes que precisam de banco são pulados e os demais usam repositórios em memória; o servidor em si precisa de `DATABASE_URL` (não há SQLite).
 
 ### 1. Testes Automatizados de Segurança e Carga (Mock — Sem Custo)
 Valida a integridade do `RateLimiter`, cotas de tokens por IP e concorrência massiva:

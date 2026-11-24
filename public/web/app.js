@@ -3,7 +3,7 @@ import { initTheme, toggleTheme } from './modules/theme.js?v=10';
 import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js?v=5';
 import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=8';
 import { initTimerDrag } from './modules/timer-drag.js?v=1';
-import { getLanguage } from './modules/i18n.js?v=11';
+import { getLanguage } from './modules/i18n.js?v=12';
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 const quiz = document.querySelector('#quiz');
@@ -2587,6 +2587,14 @@ function openAccountModal() {
   renderAccountPlan();
   loadPlanStatus().then(renderAccountPlan);
   resetDeleteAccountForm();
+  // Diagnóstico da IA: só o admin vê (o servidor também confere o papel em /api/admin/ia)
+  const aiSection = document.querySelector('#accountAiSection');
+  if (aiSection) {
+    aiSection.hidden = currentUser.role !== 'admin';
+    if (currentUser.role === 'admin') {
+      import('./modules/ai_diagnostics.js?v=1').then((m) => m.openAiDiagnostics()).catch(() => {});
+    }
+  }
   accountModal.hidden = false;
   syncModalInert();
   releaseAccountFocus = trapFocus(accountModal, document.querySelector('#accountExportLink'));
