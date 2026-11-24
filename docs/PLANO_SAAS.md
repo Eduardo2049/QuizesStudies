@@ -1,15 +1,19 @@
 # PLANO_SAAS.md: Acely como produto (SaaS individual e para equipes)
 
-Documento de passagem para quem continuar o trabalho (pessoa ou agente). Escrito em 09/11/2026.
-Antes de qualquer fase, leia o `AGENTS.md` e o `docs/ARQUITETURA.md` (as 5 fases de IA já foram
-concluídas e integradas). Cada fase vira **uma branch `feature/*` e um PR para a
-`develop`**, pelo fluxo `feature/*` → `develop` → `homolog` → `main`.
+Documento de passagem para quem continuar o trabalho (pessoa ou agente). Escrito em 09/11/2026 e
+enxugado em 24/11/2026: o que já foi entregue virou resumo e este é o único plano em aberto do
+repositório. Antes de qualquer fase, leia o `AGENTS.md` e o `docs/ARQUITETURA.md`. Cada fase vira
+**uma branch `feature/*` e um PR para a `develop`**, pelo fluxo `feature/*` → `develop` → `homolog` → `main`.
 
 ---
 
-## 0. Decisões já tomadas (atualizado em 23/11/2026)
+## 0. Estado e decisões (atualizado em 24/11/2026)
 
-> **Estado em 23/11/2026:** Fases **S0** (licença no código), **S1** (planos e limites no servidor) e **S6** (página inicial `/` com tema claro/escuro e `/app` em layout estúdio) estão concluídas e unificadas em `develop`/`homolog`/`main`. Próximas fases de produto no código: **S2** (Workspaces de equipe) → **S3** (Atribuições e painel do gestor) → **S4** (Cobrança) → **S5** (IA paga por plano).
+> **Feito:** S0 só no código (licença proprietária), **S1** (planos e cota mensal no servidor) e
+> **S6** (página inicial em `/`, simulados em `/app`), mais as 5 fases de IA e a correção da OpenAI
+> (PR #115), tudo em `main`. **Próximas fases de código:** **S2** (workspaces de equipe) → **S3**
+> (atribuições e painel do gestor) → **S4** (cobrança) → **S5** (IA paga por plano).
+> **Pendências fora das fases:** seção 6.
 
 | Tema | Decisão |
 |---|---|
@@ -64,10 +68,9 @@ Os limites ficam em uma tabela no banco (Fase S1) para mudar sem deploy.
 
 O convidado (sem conta) continua com a cota atual (`GUEST_AI_LIMIT`) e é a porta de entrada do Grátis.
 
-**Na página `/produto` hoje:** o Grátis lista só o que já existe (até 30 questões, arquivos de
-até 20 MB); Pro e Equipe aparecem como "em breve", sem preço e com o botão desativado; Instituição
-abre um e-mail. Ao implementar a Fase S1, trocar os limites do Grátis na página pelos da tabela
-`plans` e, na S4, pôr os preços e o checkout nos cartões (o teste `tests/test_pagina_produto.py`
+**Na página `/produto` hoje:** o Grátis lista o que já existe (até 30 questões, arquivos de até
+20 MB); Pro e Equipe aparecem como "em breve", sem preço e com o botão desativado; Instituição abre
+um e-mail. Na S4, pôr os preços e o checkout nos cartões (o teste `tests/test_pagina_produto.py`
 confere que nenhum plano pago tem compra ativa: atualizá-lo junto).
 
 ---
@@ -118,8 +121,9 @@ audit_log        (id, workspace_id, actor_user_id, action, target, created_at)
 
 ## 5. Fases
 
-### Fase S0: Privatização e base legal (dono do projeto + PR de licença)
-Branch: `feature/saas-produto-e-planos` (licença) · resto é manual.
+### Fase S0: Privatização e base legal (só falta a parte manual)
+A licença proprietária (`LICENSE`, `pyproject.toml`, `README.md`) já está no código. Em 24/11/2026
+o repositório **ainda é público**.
 
 **Checklist manual (fora do código)**
 1. GitHub → `Eduardo2049/QuizesStudies` → Settings → General → Danger Zone → **Change visibility → Private**.
@@ -142,39 +146,18 @@ Branch: `feature/saas-produto-e-planos` (licença) · resto é manual.
    já tenha aparecido em commit deve ser **trocada**, porque o histórico público já pode ter sido copiado.
 9. Registrar a marca **Acely** no INPI (classes 9, 41 e 42) e conferir o domínio `.com`.
 
-**No código (este PR):** `LICENSE` proprietária, `license` no `pyproject.toml`/`package.json`,
-seção de licença no `README.md`.
-
-### Fase S1: Planos e limites no servidor
-Branch sugerida: `feature/saas-planos-limites`
-1. Tabelas `plans`, `workspaces`, `workspace_members`, `usage_counters` + migration que cria o
-   workspace pessoal de cada usuário e o põe no plano `free`.
-2. `entitlements_service.py` com testes: cota mensal, tamanho de arquivo, questões por simulado,
-   recursos liga/desliga.
-3. Trocar as checagens soltas de limite por chamadas ao serviço (geração, upload, remix).
-4. `GET /api/me/plan` → plano, limites e uso do mês. Chip de cota no topo usa essa rota.
-5. Tela "Minha conta" ganha a aba **Plano e uso** (barra de uso do mês, data da renovação).
-
-**Pronto quando** um usuário Grátis recebe erro claro ao passar da cota e um usuário marcado como
-Pro no banco (manualmente) não recebe.
-
-**✅ Concluída em 09/11/2026** (branch `feature/saas-planos-limites`). Como ficou:
-- Planos e limites iniciais em `api/utils/plans.py`; a tabela `plans` é a fonte em produção
-  (ajustes no banco não são desfeitos no deploy). Grátis: **30 gerações e 10 rodadas de variações
-  por mês**, até 30 questões e arquivos de 20 MB. Os valores da seção 2 (20 gerações, 10 questões,
-  5 MB) ficaram de fora para não contradizer a página `/produto` nem cortar quem já usa; mudar com
-  `UPDATE plans` (ver `docs/BANCO_DE_DADOS.md`, seção 4.1).
-- O mês vira à meia-noite de Brasília (offset fixo de -3 h, sem depender de tzdata).
-- `EntitlementsService` reserva o uso **antes** da IA (UPSERT atômico que não passa do limite) e
-  devolve se a IA falhar ou se o resultado vier do cache; no upload, só gasta se o arquivo precisar
-  de IA (mesmo `ai_gate` do convidado). Admin da plataforma não tem cota.
-- Erros: `PLAN_LIMIT_REACHED` (403, com a data da renovação) e `PLAN_QUESTION_LIMIT` (400, antes de
-  chamar a IA). As respostas de IA trazem `data.plan` com o uso atualizado.
-- Interface: chip "IA restante/limite" no topo para quem tem conta; seção **Plano e uso** em Minha
-  conta com barras de uso e data da renovação; a cópia de dados (LGPD) inclui workspaces e uso.
-- Teto técnico continua 30 questões e 20 MB (`HARD_MAX_*`); a Instituição com 50 questões fica para
+### Fase S1: Planos e limites no servidor ✅ (09/11/2026)
+- Tabelas `plans`, `workspaces`, `workspace_members` e `usage_counters`; cada usuário tem um
+  workspace pessoal no plano `free`. A tabela `plans` é a fonte em produção: limites mudam com
+  `UPDATE plans` (ver `docs/BANCO_DE_DADOS.md`, seção 4.1), sem deploy.
+- Grátis: **30 gerações e 10 rodadas de variações por mês**, até 30 questões e arquivos de 20 MB
+  (a seção 2 sugeria 20 gerações, 10 questões e 5 MB; ficou mais folgado para não contradizer a
+  `/produto` nem cortar quem já usava). O mês vira à meia-noite de Brasília.
+- `EntitlementsService` reserva o uso antes da IA e devolve se a IA falhar ou o resultado vier
+  pronto; admin não tem cota. Erros `PLAN_LIMIT_REACHED` (403) e `PLAN_QUESTION_LIMIT` (400);
+  `GET /api/me/plan` e a seção "Plano e uso" em Minha conta.
+- Teto técnico de 30 questões e 20 MB (`HARD_MAX_*`): a Instituição com 50 questões fica para
   quando o gerador aceitar mais.
-- Testes: `tests/test_planos_limites.py` (incluindo concorrência contra PostgreSQL real no CI).
 
 ### Fase S2: Workspaces de equipe
 Branch sugerida: `feature/saas-equipes`
@@ -210,28 +193,41 @@ Usa a conferência de gabarito por segundo modelo (`AI_CROSS_CHECK`) já impleme
    só `account`, `all` e `off`, então o modo `paid` precisa ser criado).
 3. Selo "gabarito conferido" nas questões; métricas de custo por workspace no admin.
 
-### Fase S6: Promoção da página de produto para a raiz
-
-> **✅ 17/11/2026 (branch `feature/inicio-na-raiz`):** a página inicial (`inicio.html`, estilo estúdio) passou para a raiz `/` para todos e os simulados para `/app`. Links antigos na raiz com `?abrir=`, `?simulado=` ou `?email=` continuam abrindo o app (regras `has` no `vercel.json`). O login sem `?next=`, a confirmação de e-mail, o `start_url` do manifesto e os links "Voltar aos simulados" vão para `/app`; sair da conta volta para a raiz. Quem já entrou vê "Meus simulados" no topo da página inicial. A página de produto continua em `/produto`.
-Branch sugerida: `feature/saas-raiz`
-Quando a página de produto estiver validada: `/` vira a página de produto para quem não tem
-sessão e o app passa para `/app`. Tocar com cuidado: `safe_next` (padrão `/`), redirecionamentos
-da confirmação de e-mail e do login com Google, `vercel.json`, `sitemap.xml`, testes que acessam `/`
-e as capturas em `tests/visual/capture_baseline.py`.
+### Fase S6: Página inicial na raiz ✅ (17/11/2026)
+A página inicial (`inicio.html`) fica em `/` para todos e os simulados em `/app`; links antigos
+`/?abrir=`, `/?simulado=` e `/?email=` ainda abrem o app. A página de produto continua em `/produto`.
 
 ---
 
-## 6. Primeira entrega deste plano (09/11/2026)
+## 6. Pendências fora das fases
 
-Branch `feature/saas-produto-e-planos`:
-- Página `/produto` (e `/planos`, que rola até os planos) em `public/web/produto.html`, com estilo
-  em `public/web/produto.css` e comportamento em `public/web/modules/produto.js`.
-  Seções: hero, como funciona, tagline com revelação palavra por palavra, modelos de IA,
-  para quem (individual, turmas, empresas), planos, perguntas frequentes e chamada final.
-- Link "Planos" no topo da home e "Produto e planos" no rodapé de todas as páginas.
-- Rotas no `vercel.json` e no `quiz_handler.py`; `sitemap.xml` atualizado.
-- Tradução em `en.js`; testes do domínio cobrem a rota nova.
-- Licença proprietária.
+Juntadas aqui em 24/11/2026, quando o plano de IA (`PLANO_ACELY.md`) foi encerrado.
+
+**Na Vercel, depois do PR #115 (OpenAI)**
+- `AI_PROVIDERS` sem a variável ou com `openai`; `CODEX_MODELS`/`OPENAI_MODELS` antigos apagados ou
+  trocados por `gpt-6-luna,gpt-4o-mini`; créditos na conta da OpenAI; `AI_DAILY_CALL_LIMIT` perto
+  de `1000`. Para conferir, entrar como admin e abrir **Minha conta → Diagnóstico da IA → Testar
+  provedores agora**.
+- Trocar o `gpt-4o-mini` antes de **14/01/2027** (data em que a OpenAI o desliga; o diagnóstico avisa).
+  Ao trocar modelos, atualizar `OPENAI_MODEL_SHUTDOWNS` em `api/services/ai_service.py`.
+
+**Domínio e e-mail** (passo a passo em `docs/CICD_E_DEPLOY.md`, seção 7.1)
+- Conferir DNS, `APP_URL`, URIs do OAuth do Google e o sitemap no Search Console.
+- Provedor de e-mail no domínio (SPF, DKIM, DMARC) para `noreply@acely.com.br`: urgente, porque o
+  login é por código no e-mail.
+
+**Código, sem fase própria**
+- Temas de exemplo prontos só existem em português (em inglês o mesmo clique chama a IA).
+- `ruff check` acusa cerca de 250 avisos antigos e o job do CI não reprova (`continue-on-error`).
+  Limpar aos poucos e depois tornar o job obrigatório.
+- Comentário SQL em `api/database/migrations.py` ainda cita o `docs/PLANO_ACELY.md` (não mexido
+  para não tocar nas migrations sem necessidade).
+- Interface, adiados da Missão 1: CSS Cascade Layers (`@layer`) para unificar os tokens das 9 páginas;
+  Container Queries nos painéis e no catálogo (cuidado com `#customQuizDropdown`); Popover API
+  (`#timerConfig` e `#customQuizDropdown` têm posição e foco próprios).
+- Continuam vetados em `/app`: `smooth-scroll.js`, WebGL durante a prova, `backdrop-filter` em cards
+  e modais, View Transitions na troca de questões, animação de `width`/`height` ou abaixo de 200 ms.
+- Opcional: chave própria do usuário (Groq/Gemini) nas configurações, guardada criptografada.
 
 ---
 
