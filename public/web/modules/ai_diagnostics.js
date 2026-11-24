@@ -56,6 +56,22 @@ function renderDiagnostics(diag) {
       : `Chamadas hoje: ${calls.used_24h ?? 0}.`;
     daily.hidden = false;
   }
+  const speed = $('#accountAiSpeed');
+  if (speed) {
+    const t = diag.generation_time;
+    if (!t || !t.count) {
+      speed.textContent = 'Nenhuma geração com IA nas últimas 24 h.';
+    } else {
+      speed.textContent = `Tempo de geração (24 h): média de ${t.avg} s, p90 de ${t.p90} s, ${t.within_target_pct}% em até ${t.target_seconds} s (${t.count} simulados).`;
+    }
+    speed.hidden = false;
+    const detail = $('#accountAiSpeedDetail');
+    if (detail) {
+      const parts = (t?.by_size || []).map((b) => `${b.label}: ${b.avg} s (${b.count})`);
+      detail.textContent = parts.join(' · ');
+      detail.hidden = parts.length === 0;
+    }
+  }
   fillList($('#accountAiWarnings'), (diag.warnings || []).map((w) => node('li', w, { cls: 'ai-diag-warning', noTranslate: true })));
   fillList($('#accountAiProviders'), (diag.providers || []).map((p) => {
     const li = node('li', '', { cls: 'ai-diag-item' });

@@ -3,7 +3,7 @@ import { initTheme, toggleTheme } from './modules/theme.js?v=10';
 import { initShortcuts, getShortcutBadgeHtml } from './modules/shortcuts.js?v=5';
 import { calculateQuizStats, renderStatsHtml } from './modules/stats.js?v=8';
 import { initTimerDrag } from './modules/timer-drag.js?v=1';
-import { getLanguage } from './modules/i18n.js?v=12';
+import { getLanguage } from './modules/i18n.js?v=13';
 
 // ─── Estado global ────────────────────────────────────────────────────────────
 const quiz = document.querySelector('#quiz');
@@ -2592,7 +2592,7 @@ function openAccountModal() {
   if (aiSection) {
     aiSection.hidden = currentUser.role !== 'admin';
     if (currentUser.role === 'admin') {
-      import('./modules/ai_diagnostics.js?v=1').then((m) => m.openAiDiagnostics()).catch(() => {});
+      import('./modules/ai_diagnostics.js?v=2').then((m) => m.openAiDiagnostics()).catch(() => {});
     }
   }
   accountModal.hidden = false;
