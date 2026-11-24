@@ -226,10 +226,11 @@ GUEST_AI_WINDOW_SECONDS = _env_int("GUEST_AI_WINDOW_HOURS", 24, 1, 24) * 60 * 60
 AI_USER_REQUESTS_PER_MINUTE = _env_int("AI_USER_REQUESTS_PER_MINUTE", 10, 0, 120)
 
 # Teto global de chamadas à IA por 24 h, somando todos os usuários (trava de emergência
-# contra a conta do provedor estourar). 0 desliga. Conta CADA chamada ao provedor: um simulado
-# usa de 1 a 5 (uma por parte de 5 questões e mais uma quando há conferência do gabarito).
-# Com só os modelos gratuitos do OpenRouter sem créditos (50 pedidos/dia), use algo como 40.
-AI_DAILY_CALL_LIMIT = _env_int("AI_DAILY_CALL_LIMIT", 1000, 0, 1_000_000)
+# contra a conta do provedor estourar). 0 desliga. Conta CADA chamada ao provedor: com a OpenAI na
+# frente, um simulado usa uma chamada por parte de 3 questões e outra para conferir cada parte
+# (média ~8; até 20 num de 30 questões); nos gratuitos, partes de 5. O custo em tokens quase não
+# muda com as partes. Com só os modelos gratuitos do OpenRouter sem créditos (50/dia), use 40.
+AI_DAILY_CALL_LIMIT = _env_int("AI_DAILY_CALL_LIMIT", 3000, 0, 1_000_000)
 
 # Quantos modelos gratuitos tentar em um mesmo pedido antes de desistir (cada tentativa
 # conta no limite diário do OpenRouter).
@@ -239,6 +240,19 @@ OPENROUTER_MAX_ATTEMPTS = _env_int("OPENROUTER_MAX_ATTEMPTS", 4, 1, 8)
 # trecho da resposta ou entre dois trechos). A resposta vem em partes (streaming): um modelo
 # parado na fila é abandonado nesse tempo, e um que está escrevendo continua até o tempo total.
 AI_ATTEMPT_TIMEOUT = _env_int("AI_ATTEMPT_TIMEOUT", 20, 5, 120)
+
+# Velocidade da geração por tema. Mais de AI_PART_SIZE questões viram partes geradas ao mesmo
+# tempo (até AI_PARALLEL_PARTS), e a conferência do gabarito roda em cada parte assim que ela fica
+# pronta. 0 = automático: com a OpenAI na frente, partes de 3 e até 10 ao mesmo tempo (o total fica
+# perto do tempo de uma parte pequena); só com provedores gratuitos, partes de 5 e até 3 ao mesmo
+# tempo (respeita os limites por minuto do Groq). Cada parte conta uma chamada em AI_DAILY_CALL_LIMIT.
+AI_PART_SIZE = _env_int("AI_PART_SIZE", 0, 0, 10)
+AI_PARALLEL_PARTS = _env_int("AI_PARALLEL_PARTS", 0, 0, 12)
+
+# OpenAI "Fast mode" (service_tier=fast): respostas até ~2,5x mais rápidas nos modelos aceitos, com
+# preço por token maior. Vazio = padrão da conta. Modelo que recusar o parâmetro é pedido sem ele.
+_openai_tier = (os.getenv("OPENAI_SERVICE_TIER") or "").strip().lower()
+OPENAI_SERVICE_TIER = _openai_tier if _openai_tier in ("auto", "default", "flex", "fast", "priority") else ""
 
 # Pedidos de IA com identificador (request_id): recarregar a página não refaz nem cobra de novo.
 # Simulados por tema ficam guardados no banco (ai_cache) por este número de dias.

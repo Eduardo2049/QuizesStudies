@@ -11,7 +11,7 @@ repositório. Antes de qualquer fase, leia o `AGENTS.md` e o `docs/ARQUITETURA.m
 
 > **Feito:** S0 só no código (licença proprietária), **S1** (planos e cota mensal no servidor) e
 > **S6** (página inicial em `/`, simulados em `/app`), mais as 5 fases de IA e a correção da OpenAI
-> (PR #115), tudo em `main`. **Próximas fases de código:** **S2** (workspaces de equipe) → **S3**
+> (PR #115), tudo em `main`; geração por tema em ~8 s no PR seguinte. **Próximas fases de código:** **S2** (workspaces de equipe) → **S3**
 > (atribuições e painel do gestor) → **S4** (cobrança) → **S5** (IA paga por plano).
 > **Pendências fora das fases:** seção 6.
 >
@@ -215,8 +215,10 @@ Juntadas aqui em 24/11/2026, quando o antigo `PLANO_ACELY.md` (plano de IA, conc
 **Na Vercel, depois do PR #115 (OpenAI)**
 - `AI_PROVIDERS` sem a variável ou com `openai`; `CODEX_MODELS`/`OPENAI_MODELS` antigos apagados ou
   trocados por `gpt-6-luna,gpt-4o-mini`; créditos na conta da OpenAI; `AI_DAILY_CALL_LIMIT` perto
-  de `1000`. Para conferir, entrar como admin e abrir **Minha conta → Diagnóstico da IA → Testar
-  provedores agora**.
+  de `3000` (com a geração em partes de 3, um simulado usa ~8 chamadas). Para conferir, entrar como
+  admin e abrir **Minha conta → Diagnóstico da IA → Testar provedores agora**; ali também aparece o
+  tempo médio das gerações das últimas 24 h (meta: até 10 s). Se ficar acima, testar
+  `OPENAI_SERVICE_TIER=fast` (Fast mode, mais caro) ou uma chave do Groq para a conferência.
 - Trocar o `gpt-4o-mini` antes de **14/01/2027** (data em que a OpenAI o desliga; o diagnóstico avisa).
   Ao trocar modelos, atualizar `OPENAI_MODEL_SHUTDOWNS` em `api/services/ai_service.py`.
 

@@ -38,6 +38,59 @@ def is_valid_job_id(value) -> bool:
     return isinstance(value, str) and bool(_UUID_PATTERN.match(value))
 
 
+def _as_int(value) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+_SIZE_BUCKETS = ((5, "até 5"), (10, "6 a 10"), (20, "11 a 20"), (30, "21 a 30"))
+GENERATION_TARGET_SECONDS = 10
+
+
+def _percentile(sorted_values: list[float], fraction: float) -> float:
+    if not sorted_values:
+        return 0.0
+    index = min(len(sorted_values) - 1, max(0, round(fraction * (len(sorted_values) - 1))))
+    return sorted_values[index]
+
+
+def summarize_generation_times(rows: list[tuple[float, int, str]], hours: int = 24) -> dict:
+    """Média, p50, p90 e fatia dentro da meta, no total, por tamanho e por provedor."""
+    valid = [(sec, qty, prov) for sec, qty, prov in rows if 0 <= sec <= 300]
+    seconds = sorted(sec for sec, _q, _p in valid)
+
+    def block(values: list[float]) -> dict:
+        ordered = sorted(values)
+        return {
+            "count": len(ordered),
+            "avg": round(sum(ordered) / len(ordered), 1) if ordered else None,
+            "p50": round(_percentile(ordered, 0.5), 1) if ordered else None,
+            "p90": round(_percentile(ordered, 0.9), 1) if ordered else None,
+        }
+
+    summary = block(seconds)
+    summary["hours"] = int(hours)
+    summary["target_seconds"] = GENERATION_TARGET_SECONDS
+    summary["within_target_pct"] = (
+        round(100 * sum(1 for s in seconds if s <= GENERATION_TARGET_SECONDS) / len(seconds)) if seconds else None
+    )
+    by_size = []
+    lower = 0
+    for upper, label in _SIZE_BUCKETS:
+        values = [sec for sec, qty, _p in valid if lower < qty <= upper]
+        if values:
+            by_size.append({"label": label, **block(values)})
+        lower = upper
+    providers = sorted({prov for _s, _q, prov in valid if prov})
+    summary["by_size"] = by_size
+    summary["by_provider"] = [
+        {"provider": prov, **block([sec for sec, _q, p in valid if p == prov])} for prov in providers
+    ]
+    return summary
+
+
 class JobConflict(Exception):
     """O mesmo request_id já foi usado por outra pessoa ou com outros parâmetros."""
 
@@ -48,6 +101,53 @@ class AIJobRepository:
         self._lock = Lock()
         self._jobs: dict[str, dict] = {}
         self._cache: dict[str, tuple[float, dict]] = {}
+
+    # ─── Tempo das gerações (diagnóstico do admin) ───────────────────────────
+
+    def generation_stats(self, hours: int = 24) -> dict:
+        """Tempo das gerações por tema prontas nas últimas `hours` horas.
+
+        Mede do pedido criado até o resultado gravado (o que a pessoa esperou no servidor). Fica
+        de fora o que veio pronto (cache e temas de exemplo, `cached=true`) e pedidos refeitos
+        depois de uma falha (mais de 5 min), que distorceriam a média.
+        """
+        rows: list[tuple[float, int, str]] = []
+        try:
+            with get_cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT EXTRACT(EPOCH FROM (updated_at - created_at)) AS seconds,
+                           result->'data'->>'question_count' AS questions,
+                           result->'data'->>'provider' AS provider
+                    FROM ai_jobs
+                    WHERE kind = 'generate' AND status = 'done'
+                      AND created_at > NOW() - make_interval(hours => %s)
+                      AND COALESCE(result->'data'->>'cached', 'false') <> 'true'
+                    ORDER BY created_at DESC
+                    LIMIT 1000
+                    """,
+                    (int(hours),),
+                )
+                rows = [
+                    (float(r["seconds"] or 0), _as_int(r["questions"]), str(r["provider"] or ""))
+                    for r in cur.fetchall()
+                ]
+        except Exception as e:  # banco fora: usa o que está na memória
+            self._debug(f"generation_stats no banco falhou ({e}), usando memória")
+            cutoff = time.time() - int(hours) * 3600
+            with self._lock:
+                for job in self._jobs.values():
+                    data = (job.get("result") or {}).get("data") or {}
+                    if (
+                        job.get("kind") == "generate" and job.get("status") == "done"
+                        and job.get("created_ts", 0) > cutoff and not data.get("cached")
+                    ):
+                        rows.append((
+                            float(job.get("updated_ts", 0) - job.get("created_ts", 0)),
+                            _as_int(data.get("question_count")),
+                            str(data.get("provider") or ""),
+                        ))
+        return summarize_generation_times(rows, hours)
 
     # ─── Jobs ────────────────────────────────────────────────────────────────
 

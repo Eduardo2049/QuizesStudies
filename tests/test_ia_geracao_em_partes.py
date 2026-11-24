@@ -70,7 +70,7 @@ class TestParallelChunkedGeneration(unittest.TestCase):
         prompts_seen = []
         lock = threading.Lock()
 
-        def fake_call_ai(messages, temperature, max_tokens, timeout=75):
+        def fake_call_ai(messages, temperature, max_tokens, timeout=75, **kwargs):
             nonlocal active, max_active
             prompt = messages[0]["content"]
             with lock:
@@ -117,7 +117,7 @@ class TestParallelChunkedGeneration(unittest.TestCase):
             self.assertTrue(any(f"parte {idx} de 4" in p for p in prompts_seen))
 
     def test_deduplicates_repeated_questions_across_parts(self):
-        def fake_call_ai(messages, temperature, max_tokens, timeout=75):
+        def fake_call_ai(messages, temperature, max_tokens, timeout=75, **kwargs):
             prompt = messages[0]["content"]
             if "parte 1 de 2" in prompt:
                 payload = _make_part_payload("P1", 5, duplicate_first="Qual é a capital do Brasil?")
@@ -134,7 +134,7 @@ class TestParallelChunkedGeneration(unittest.TestCase):
         self.assertEqual([q["id"] for q in result["questions"]], list(range(1, 10)))
 
     def test_partial_part_failure_still_returns_valid_questions(self):
-        def fake_call_ai(messages, temperature, max_tokens, timeout=75):
+        def fake_call_ai(messages, temperature, max_tokens, timeout=75, **kwargs):
             prompt = messages[0]["content"]
             if "parte 2 de 3" in prompt:
                 raise ai_service.AIServiceError("timeout na parte 2")
@@ -159,7 +159,7 @@ class TestParallelChunkedGeneration(unittest.TestCase):
     def test_five_or_fewer_questions_uses_single_call(self):
         calls = 0
 
-        def fake_call_ai(messages, temperature, max_tokens, timeout=75):
+        def fake_call_ai(messages, temperature, max_tokens, timeout=75, **kwargs):
             nonlocal calls
             calls += 1
             self.assertNotIn("parte 1 de", messages[0]["content"])
