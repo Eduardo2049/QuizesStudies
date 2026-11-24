@@ -14,10 +14,14 @@ repositório. Antes de qualquer fase, leia o `AGENTS.md` e o `docs/ARQUITETURA.m
 > (PR #115), tudo em `main`. **Próximas fases de código:** **S2** (workspaces de equipe) → **S3**
 > (atribuições e painel do gestor) → **S4** (cobrança) → **S5** (IA paga por plano).
 > **Pendências fora das fases:** seção 6.
+>
+> **Privatização pausada (24/11/2026):** o repositório fica **público** por enquanto, para servir de
+> portfólio e chamar a atenção de recrutadores. A licença proprietária continua: o código pode ser
+> lido, mas não reutilizado. As fases S2 a S5 não dependem disso.
 
 | Tema | Decisão |
 |---|---|
-| Código | Repositório passa a **privado**; licença MIT trocada por **proprietária** (`LICENSE`). |
+| Código | Licença MIT trocada por **proprietária** (`LICENSE`). Tornar o repositório **privado** está **pausado** desde 24/11/2026: ele fica público como portfólio. |
 | Público | **Individual** (estudante) e **coletivo**: turmas de ensino (professor, cursinho, escola) **e** empresas (treinamento, certificações). Um único modelo de *workspace* com papéis atende os dois. |
 | Cobrança | **Provedor a decidir.** Planos, limites e telas são feitos agora; o pagamento entra numa fase própria (seção 5, Fase S4). Até lá, os planos pagos aparecem como "em breve". |
 | Primeira entrega | Página de produto `/produto` (alias `/planos`) com o produto, os planos, os modelos de IA e equipes. |
@@ -121,9 +125,14 @@ audit_log        (id, workspace_id, actor_user_id, action, target, created_at)
 
 ## 5. Fases
 
-### Fase S0: Privatização e base legal (só falta a parte manual)
-A licença proprietária (`LICENSE`, `pyproject.toml`, `README.md`) já está no código. Em 24/11/2026
-o repositório **ainda é público**.
+### Fase S0: Privatização e base legal (pausada)
+A licença proprietária (`LICENSE`, `pyproject.toml`, `README.md`) já está no código. A privatização
+foi **pausada em 24/11/2026**: o repositório continua público para servir de portfólio. Os passos 1 a 5
+e 7 ficam para quando ela for retomada.
+
+**Valem mesmo com o repositório público:** passo 6 (proteção dos previews na Vercel), passo 8 (buscar
+segredos no histórico e trocar qualquer chave que já tenha aparecido, que é ainda mais importante com
+o código aberto) e passo 9 (marca no INPI).
 
 **Checklist manual (fora do código)**
 1. GitHub → `Eduardo2049/QuizesStudies` → Settings → General → Danger Zone → **Change visibility → Private**.
