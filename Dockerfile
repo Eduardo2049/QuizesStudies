@@ -1,6 +1,6 @@
 # ─── Stage 1: Builder ────────────────────────────────────────────────────────
 # Compila dependências que requerem gcc (ex: psycopg2-binary)
-FROM python:3.16.0a1-slim@sha256:df293ba3b89f458e1aad6051b62ff1c4fad7b3b52b8147ae9cc4b667f9cf2741 AS builder
+FROM python:3.15.2-slim@sha256:1c670c3568107e243bfd05457ad9ca0b11c35a855c985af73e4452db9a714e70 AS builder
 
 WORKDIR /build
 
@@ -14,7 +14,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ─── Stage 2: Runtime (sem gcc, menor e mais seguro) ─────────────────────────
-FROM python:3.16.0a1-slim@sha256:df293ba3b89f458e1aad6051b62ff1c4fad7b3b52b8147ae9cc4b667f9cf2741
+FROM python:3.15.2-slim@sha256:1c670c3568107e243bfd05457ad9ca0b11c35a855c985af73e4452db9a714e70
 
 WORKDIR /app
 
