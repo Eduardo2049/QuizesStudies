@@ -2,38 +2,56 @@
 
 Site: [acely.com.br](https://acely.com.br) · Repositório: `Eduardo2049/QuizesStudies` (o nome do repositório é anterior à marca).
 
-Plataforma de simulados de alto rendimento e treino de raciocínio lógico. Transforme qualquer material em **PDF**, **DOCX** ou **TXT** (ou gere tópicos do zero) em simulados interativos com gabarito pedagógico e **Caderno de Erros inteligente com mutações por IA**.
+Plataforma de simulados com IA. Transforme um material em **PDF**, **DOCX** ou **TXT**, ou só um tema, em um simulado com cronômetro, gabarito comentado, estatísticas e **caderno de erros com variações inéditas geradas por IA**.
 
-> **Proposta de Valor Central:** *“Da sua apostila ao simulado ativo, com gabarito comentado.”*  
-> Menos tempo formatando flashcards, zero distração com fóruns poluídos e foco total na retenção de raciocínio.
+> *“Da sua apostila ao simulado ativo, com gabarito comentado.”*
+
+Estado em 24/11/2026: em produção em `acely.com.br` (Vercel, região `gru1`, PostgreSQL na Neon em `sa-east-1`). Próximas fases do produto (equipes, atribuições e cobrança): [`docs/PLANO_SAAS.md`](docs/PLANO_SAAS.md).
 
 ---
 
-## Por que o Acely existe? (Diferenciais de Mercado)
+## O que o Acely faz hoje
 
-Estudantes para concursos, certificações e vestibulares enfrentam três grandes problemas no mercado atual:
-1. **Criação Lenta de Questões:** Plataformas como o Anki exigem digitação e formatação manual card por card.
-2. **Bancos Estáticos e Rígidos:** Grandes sites (como QConcursos e Gran) dependem exclusivamente de provas antigas de bancas, sem permitir que o aluno pratique sobre suas próprias anotações, resumos ou livros de faculdade.
-3. **Decoreba de Gabarito:** Ao refazer uma questão errada, o cérebro tende a lembrar da letra correta (*"na 3 era a C"*), gerando uma falsa ilusão de aprendizado.
+- **Simulado por tema**: de 3 a 30 questões, três níveis de dificuldade e instruções extras opcionais. Com a OpenAI na frente, o simulado sai em partes de 3 questões geradas todas ao mesmo tempo, e fica pronto em cerca de 8 s em qualquer tamanho (medido contra uma OpenAI simulada na velocidade publicada do `gpt-6-luna`).
+- **Simulado a partir de arquivo** (TXT, PDF, DOCX): o parser reconhece questões e gabaritos em vários formatos (pares "1-B", "GABARITO OFICIAL", tabelas, alternativa marcada). Arquivo que já traz gabarito não gasta IA; sem gabarito, a IA resolve e explica.
+- **Qualidade do gabarito**: o servidor reprova questão com gabarito fora do intervalo, alternativas repetidas ou idioma trocado; para quem tem conta, um segundo modelo resolve cada questão sem ver o gabarito e descarta as que discordam.
+- **Caderno de erros com variações**: a IA cria questões novas sobre o mesmo conceito das que você errou, para não decorar a letra.
+- **Temas de exemplo prontos**: os 4 temas clicáveis da tela respondem na hora, sem IA e sem gastar cota.
+- **Prova**: cronômetro arrastável, modo foco, atalhos de teclado, paleta de questões, estatísticas por seção e tela acordada durante a prova (Screen Wake Lock).
+- **Pedido que sobrevive ao recarregar**: a geração continua no servidor; ao voltar para a página, o simulado aparece sem gastar outra cota.
+- **Interface em português e inglês**, com a IA gerando no idioma escolhido; tema escuro (padrão no app) e claro.
+- **Acesso sem muro**: a página inicial e os simulados públicos abrem sem cadastro; o modo convidado dá 3 usos de IA por dia.
+- **Conta sem senha**: entrar e criar conta com um código de 6 dígitos enviado ao e-mail, ou com o Google.
+- **Planos**: cota mensal decidida no servidor (Grátis: 30 gerações e 10 rodadas de variações por mês, até 30 questões e arquivos de 20 MB). Pro e Equipe aparecem como "em breve" em `/produto`.
+- **LGPD**: termos, política de privacidade, cópia dos dados e exclusão da conta em "Minha conta".
+- **Diagnóstico da IA para o admin**: em "Minha conta", a ordem real dos provedores, avisos de configuração e um teste de cada provedor.
 
-O **Acely** resolve isso unindo a extração instantânea de conteúdo à **Mutação de Questões por IA**: a IA identifica onde você errou e pode gerar variações inéditas mantendo o mesmo conceito teórico e nível de dificuldade, forçando a aplicação real do raciocínio.
+### Comparação
 
-### 📊 Benchmarking Competitivo
-
-| Critério / Ferramenta | Acely | Quizlet | QConcursos / Gran Cursos | Anki |
+| Critério | Acely | Quizlet | QConcursos / Gran | Anki |
 |---|:---:|:---:|:---:|:---:|
-| **Geração Instantânea por Material Próprio** | **Sim (PDF, DOCX, TXT)** | Não (Manual ou listas públicas) | Não (Apenas banco próprio de bancas) | Não (Manual card a card) |
-| **Geração de Simulado por Tema via IA** | **Sim (Groq, Gemini e OpenRouter, planos gratuitos)** | Limitado (em planos pagos) | Não | Não nativo |
-| **Caderno de Erros com Mutação IA** | **Sim (Gera variações inéditas)** | Não (Apenas repete o card) | Não (Filtra questões estáticas) | Não (Repete o mesmo card) |
-| **Explicação Didática Passo a Passo** | **Sim (Imediata via IA)** | Raras (Geralmente apenas definição) | Sim (Fórum / Comentários de profs) | Apenas se o usuário tiver escrito |
-| **Experiência Limpa e Sem Fricção** | **Sim (Modo foco + cronômetro)** | Não (Gameficado/Anúncios) | Não (Poluído de propagandas e fórum) | Interface crua e curva alta |
-| **Acesso sem Cadastro** | **Sim (home aberta + 3 usos de IA como convidado)** | Parcial (sets públicos) | Não | Sim (Local) |
+| Simulado a partir do seu material | **Sim (PDF, DOCX, TXT)** | Não (manual ou listas públicas) | Não (banco de provas) | Não (card a card) |
+| Simulado por tema com IA | **Sim (OpenAI e provedores gratuitos de reserva)** | Limitado (planos pagos) | Não | Não nativo |
+| Caderno de erros com questões novas | **Sim** | Não (repete o card) | Não (filtra questões fixas) | Não (repete o card) |
+| Explicação de cada resposta | **Sim (na hora)** | Rara | Sim (comentários e fórum) | Só se o usuário escreveu |
+| Tela limpa, sem anúncios | **Sim (modo foco + cronômetro)** | Não | Não | Sim, mas crua |
+| Uso sem cadastro | **Sim (convidado com 3 usos de IA por dia)** | Parcial | Não | Sim (local) |
+
+---
+
+## Stack
+
+- **Back-end**: Python puro (`http.server.ThreadingHTTPServer`), em camadas `handlers → controllers → services → repositories`. Dependências: `psycopg2-binary`, `requests`, `pdfplumber`, `python-docx`, `python-dotenv`, `certifi`.
+- **Banco**: PostgreSQL (Neon em produção; Supabase ou Docker local também servem). Migrations idempotentes rodam na inicialização.
+- **Front-end**: HTML, CSS e JavaScript (ES Modules) sem frameworks, servidos pela CDN da Vercel. CSP só com `'self'`: fontes e ícones ficam no próprio site.
+- **IA**: OpenAI, Groq, Gemini, Cerebras e OpenRouter em sequência, todos pelo formato de chat da OpenAI.
+- **Infra**: Vercel (produção e previews), Docker Compose e Cloudflare Tunnel (opcional), GitHub Actions (testes com PostgreSQL 16, ruff, Semgrep, gitleaks, pip-audit).
 
 ---
 
 ## Requisitos
 
-- Python 3.11+
+- Python 3.11+ (a imagem Docker usa `python:3.15.2-slim`)
 - PostgreSQL 14+
 
 ---
@@ -44,45 +62,68 @@ O **Acely** resolve isso unindo a extração instantânea de conteúdo à **Muta
 # 1. Instalar dependências
 pip install -r requirements.txt
 
-# 2. Criar arquivo de variáveis de ambiente
+# 2. Criar o arquivo de variáveis de ambiente
 cp .env.example .env
 ```
 
-Edite o `.env`:
+O `.env.example` explica cada variável. As principais:
+
+### Banco, servidor e segurança
 
 | Variável | Obrigatória | Descrição |
 |---|---|---|
-| `DATABASE_URL` | ✅ | `postgresql://user:password@host:5432/dbname` |
-| `DATABASE_URL_DIRECT` | Não | URL sem pooler para migrations e scripts (vazio = `DATABASE_URL`). Neon, Supabase e TLS: `docs/BANCO_DE_DADOS.md` |
-| `POSTGRES_PASSWORD` | ✅ Docker | Senha forte do PostgreSQL local |
-| `ADMIN_USERNAME` | Não | Usuário do administrador inicial (padrão: `admin`) |
-| `ADMIN_PASSWORD` | ✅ | Senha forte do administrador inicial |
-| `ALLOWED_ORIGINS` | Não | Lista separada por vírgulas de origens CORS permitidas |
-| `COOKIE_SECURE` | Não | Padrão `true`; use `false` apenas no desenvolvimento HTTP |
-| `CLOUDFLARE_TUNNEL_TOKEN` | Para Tunnel | Token do Cloudflare Zero Trust para expor via túnel HTTPS |
-| `OPENROUTER_API_KEY` | Para IA | Chave do [OpenRouter](https://openrouter.ai). Só modelos gratuitos (`:free`) são usados; libere-os em *Settings → Privacy* e deixe *ZDR Endpoints Only* desligado (ele bloqueia todos os gratuitos) |
-| `OPENROUTER_FREE_MODELS` | Não | Modelos gratuitos preferidos, em ordem, separados por vírgula |
-| `OPENROUTER_DISCOVER_FREE_MODELS` | Não | Padrão `true`: descobre os modelos gratuitos disponíveis e usa como reserva |
-| `OPENROUTER_MAX_ATTEMPTS` | Não | Modelos tentados por pedido antes de desistir (padrão: `4`) |
+| `DATABASE_URL` | ✅ | `postgresql://user:password@host:5432/dbname` (na Vercel, a URL com pooler) |
+| `ACELY_DATABASE_URL` | Não | Tem prioridade sobre todas: use quando a integração Neon da Vercel trava o nome `DATABASE_URL` |
+| `DATABASE_URL_DIRECT` | Não | URL sem pooler para migrations e scripts (vazio = `DATABASE_URL`). Neon, Supabase e TLS: [`docs/BANCO_DE_DADOS.md`](docs/BANCO_DE_DADOS.md) |
+| `DB_SSLMODE` / `DB_SSLROOTCERT` | Não | `verify-full` (padrão recomendado) com o certificado do `certifi`; Supabase precisa do `.crt` próprio |
+| `POSTGRES_PASSWORD` | ✅ Docker | Senha do PostgreSQL local |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | ✅ senha | Administrador inicial (entra com senha em `/login?senha=1`) |
+| `APP_URL` | ✅ produção | URL pública usada nos e-mails e no login com Google (`https://acely.com.br`) |
+| `ALLOWED_ORIGINS` | Não | Origens CORS permitidas, separadas por vírgula |
+| `COOKIE_SECURE` | Não | Padrão `true`; `false` só no desenvolvimento em HTTP |
+| `TRUST_PROXY` | Não | Confiar em cabeçalhos de proxy (padrão `false`; `true` automático na Vercel) |
+| `PORT` / `DEBUG` | Não | Porta (padrão `8000`) e logs detalhados (padrão `false`) |
+| `CLOUDFLARE_TUNNEL_TOKEN` | Para o túnel | Token do Cloudflare Zero Trust |
+
+### E-mail e acesso por código
+
+| Variável | Obrigatória | Descrição |
+|---|---|---|
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | ✅ produção | Envio dos códigos de acesso e dos avisos da conta. Sem SMTP, entrar por código responde 503 (em `DEBUG`, o código volta na resposta) |
+| `AUTH_CODE_SECRET` | Recomendada | Chave do HMAC que guarda os códigos no banco (sem ela, é derivada de `ADMIN_PASSWORD`) |
+| `LOGIN_CODE_TTL_MINUTES`, `LOGIN_CODE_MAX_ATTEMPTS`, `LOGIN_CODE_RESEND_SECONDS`, `LOGIN_CODE_MAX_PER_HOUR` | Não | Validade (10 min), palpites (5), espera para reenviar (60 s) e códigos por hora (5) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Não | Liga "Entrar com Google". Redirect URI: `<APP_URL>/api/auth/google/callback` |
+
+### IA
+
+| Variável | Obrigatória | Descrição |
+|---|---|---|
 | `AI_PROVIDERS` | Não | Ordem dos provedores (padrão `openai,groq,gemini,cerebras,openrouter`); provedor sem chave fica de fora. Definida, ela manda: um provedor fora da lista nunca é chamado, mesmo com chave |
-| `OPENAI_API_KEY` / `OPENAI_MODELS` | Não | [OpenAI](https://platform.openai.com/api-keys), primeiro da fila quando tem chave (precisa de créditos). Padrão `gpt-6-luna,gpt-4o-mini`; os nomes antigos `CODEX_API_KEY`/`CODEX_MODELS` ainda valem |
-| `GROQ_API_KEY` / `GROQ_MODELS` | Não (recomendado) | [Groq](https://console.groq.com/keys): o mais rápido; padrão `openai/gpt-oss-120b,openai/gpt-oss-20b` |
+| `OPENAI_API_KEY` / `OPENAI_MODELS` | Não | [OpenAI](https://platform.openai.com/api-keys), primeira da fila quando tem chave (precisa de créditos). Padrão `gpt-6-luna,gpt-4o-mini`; os nomes antigos `CODEX_API_KEY`/`CODEX_MODELS` ainda valem |
+| `GROQ_API_KEY` / `GROQ_MODELS` | Não (recomendado) | [Groq](https://console.groq.com/keys): o gratuito mais rápido; padrão `openai/gpt-oss-120b,openai/gpt-oss-20b` |
 | `GEMINI_API_KEY` / `GEMINI_MODELS` | Não | [Google AI Studio](https://aistudio.google.com/apikey); no plano grátis o Google usa o conteúdo enviado |
 | `CEREBRAS_API_KEY` / `CEREBRAS_MODELS` | Não | [Cerebras](https://cloud.cerebras.ai) (teste com cartão, contexto curto) |
-| `<PROVEDOR>_DAILY_REQUESTS` / `<PROVEDOR>_DAILY_TOKENS` | Não | Orçamento diário por modelo; o provedor é pulado antes de responder 429 |
+| `OPENROUTER_API_KEY` | Não | [OpenRouter](https://openrouter.ai), só modelos gratuitos (`:free`). Libere-os em *Settings → Privacy* e deixe *ZDR Endpoints Only* desligado |
+| `OPENROUTER_FREE_MODELS`, `OPENROUTER_DISCOVER_FREE_MODELS`, `OPENROUTER_MAX_ATTEMPTS` | Não | Modelos gratuitos preferidos, descoberta automática de outros (padrão `true`) e tentativas por pedido (padrão `4`) |
+| `<PROVEDOR>_DAILY_REQUESTS` / `<PROVEDOR>_DAILY_TOKENS` | Não | Orçamento diário por modelo (`OPENAI_`, `GROQ_`, `GEMINI_`, `CEREBRAS_`); o modelo é pulado antes de levar 429 |
+| `AI_DAILY_CALL_LIMIT` | Não | Teto global de chamadas ao provedor a cada 24 h, somando todos (padrão `3000`; `0` desliga). Com a OpenAI na frente, um simulado usa em média ~8 chamadas (até 20 num de 30 questões com conferência). Só com o OpenRouter sem créditos, deixe abaixo de 50 |
+| `AI_PART_SIZE` / `AI_PARALLEL_PARTS` | Não | Questões por parte e partes ao mesmo tempo na geração por tema (`0` = automático: 3 e 10 com a OpenAI na frente, 5 e 3 só com gratuitos) |
+| `OPENAI_SERVICE_TIER` | Não | `fast` liga o Fast mode da OpenAI (até ~2,5x mais rápido, preço por token maior); vazio = padrão da conta |
+| `AI_USER_REQUESTS_PER_MINUTE` | Não | Pedidos de IA por minuto por pessoa (padrão `10`; `0` desliga). A vaga volta quando a IA falha ou o resultado vem pronto |
+| `AI_CROSS_CHECK` | Não | Conferência do gabarito por um segundo modelo: `account` (padrão, só contas), `all` ou `off` |
 | `AI_ATTEMPT_TIMEOUT` | Não | Segundos que um modelo pode ficar sem mandar nada antes de passar ao próximo (padrão `20`) |
 | `AI_CACHE_TTL_DAYS` | Não | Dias que um simulado por tema fica em cache no banco (padrão `7`) |
-| `AI_TOKEN_QUOTA_PER_HOUR` | Não | Cota de tokens estimados por hora por IP (padrão: `50000`) |
-| `AI_DAILY_CALL_LIMIT` | Não | Teto global de chamadas ao provedor a cada 24 h, somando todos os usuários (padrão: `1000`; `0` desliga). Conta cada chamada: um simulado usa de 1 a 5 (partes de 5 questões e conferência). Só com o OpenRouter sem créditos, deixe abaixo de 50 |
-| `AI_USER_REQUESTS_PER_MINUTE` | Não | Pedidos de IA por minuto por pessoa (padrão: `10`; `0` desliga). A vaga volta quando a IA falha ou o resultado vem pronto |
-| `AI_CROSS_CHECK` | Não | Conferência do gabarito por um segundo modelo: `account` (padrão, só contas), `all` ou `off` |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Não | Liga o botão "Entrar com Google". Redirect URI: `<APP_URL>/api/auth/google/callback` (defina `APP_URL` em produção) |
-| `GUEST_AI_LIMIT` | Não | Usos de IA do convidado por janela (padrão: `3`; `0` desliga a IA para convidados) |
-| `GUEST_AI_WINDOW_HOURS` | Não | Janela da cota do convidado em horas (padrão e máximo: `24`) |
-| `GUEST_AI_IP_LIMIT` | Não | Teto de usos de IA de convidados por IP na janela (padrão: `10`), contra quem apaga cookies para renovar a cota |
-| `TRUST_PROXY` | Não | Confiar em headers de proxy (padrão: `false`, auto `true` na Vercel) |
-| `PORT` | Não | Porta do servidor (padrão: `8000`) |
-| `DEBUG` | Não | Logs detalhados (padrão: `false`) |
+| `AI_TOKEN_QUOTA_PER_HOUR` | Não | Tokens estimados por hora por IP (padrão `50000`) |
+
+### Convidado
+
+| Variável | Obrigatória | Descrição |
+|---|---|---|
+| `GUEST_AI_LIMIT` | Não | Usos de IA do convidado por janela (padrão `3`; `0` desliga a IA para convidados) |
+| `GUEST_AI_WINDOW_HOURS` | Não | Janela da cota em horas (padrão e máximo `24`) |
+| `GUEST_AI_IP_LIMIT` | Não | Teto por IP somando os convidados (padrão `10`), contra quem apaga cookies para renovar a cota |
+
+Variáveis para a Vercel (Production e Preview): [`docs/CICD_E_DEPLOY.md`](docs/CICD_E_DEPLOY.md).
 
 ---
 
@@ -90,13 +131,14 @@ Edite o `.env`:
 
 ### Opção A — Docker Compose (recomendado)
 
-Sobe o PostgreSQL e a aplicação com um único comando:
+Sobe o PostgreSQL e a aplicação:
 
 ```bash
 docker compose up -d
 ```
 
-Para subir também o **Cloudflare Tunnel** (expondo com HTTPS e proteção DDoS na Cloudflare):
+Com o **Cloudflare Tunnel** (HTTPS e proteção contra DDoS sem abrir portas):
+
 ```bash
 docker compose --profile tunnel up -d
 ```
@@ -107,7 +149,45 @@ docker compose --profile tunnel up -d
 python quiz_api.py
 ```
 
-O servidor inicia em `http://localhost:8000` (ou próxima porta livre) e executa as migrations automaticamente na primeira vez.
+O servidor sobe em `http://localhost:8000` (ou na próxima porta livre) e roda as migrations na primeira vez. Sem `DATABASE_URL` ele não sobe: não há banco de reserva.
+
+### Páginas
+
+| Endereço | Página |
+|---|---|
+| `/` (apelido `/inicio`) | Página inicial |
+| `/app` | Simulados (links antigos `/?abrir=`, `/?simulado=` e `/?email=` também abrem o app) |
+| `/produto` (`/planos` rola até os planos) | Produto, modelos de IA e planos |
+| `/login`, `/register` | Entrar e criar conta com código por e-mail (`/login?senha=1` para o admin) |
+| `/termos`, `/privacidade` | Termos de uso e política de privacidade |
+
+---
+
+## IA
+
+- **Ordem**: o servidor tenta os provedores com chave na ordem de `AI_PROVIDERS`. Se um bate no limite, recusa a chave, está sem créditos ou fica `AI_ATTEMPT_TIMEOUT` s sem responder, passa ao próximo sem erro para a pessoa.
+- **OpenAI**: modelos de raciocínio vão com esforço baixo e sem `temperature`. Modelo com data de desligamento vencida é pulado sem fazer pedido. Organização sem verificação recebe a resposta inteira, em vez de em partes. Sem créditos, a OpenAI fica de fora por 15 min.
+- **Velocidade** (meta: simulado pronto em até ~10 s):
+  - com a OpenAI na frente, partes de 3 questões geradas ao mesmo tempo (até 10), cada uma conferida assim que fica pronta;
+  - raciocínio `none` ao escrever as questões e `low` na conferência;
+  - explicação de 1 a 2 frases e JSON em uma linha, para escrever menos tokens;
+  - o diagnóstico do admin mostra a média, o p90 e a fatia em até 10 s das últimas 24 h;
+  - `python scripts/benchmark_geracao_ia.py` mede o fluxo contra uma OpenAI simulada, sem gastar tokens.
+- **Menos chamadas**:
+  - cache em dois níveis (memória e tabela `ai_cache`);
+  - temas de exemplo prontos;
+  - pedidos com `request_id`, que não repetem a chamada ao recarregar a página;
+  - arquivos com gabarito, que não chamam a IA.
+- **Limites**:
+  - cota do convidado e do plano, decidida só no servidor;
+  - `AI_USER_REQUESTS_PER_MINUTE` por pessoa;
+  - `AI_TOKEN_QUOTA_PER_HOUR` por IP;
+  - teto global `AI_DAILY_CALL_LIMIT`;
+  - orçamento diário por modelo.
+- **Logs**: cada tentativa gera uma linha `[ia]` com o motivo de cada falha, sem a chave. A primeira linha de cada instância mostra a ordem dos provedores e os avisos de configuração.
+- **Diagnóstico**: entre como admin e abra **Minha conta → Diagnóstico da IA**. Ali aparecem a ordem real, os avisos (chave fora de `AI_PROVIDERS`, modelo vencendo, teto baixo), o tempo médio das gerações e o botão *Testar provedores agora*. As rotas são `GET /api/admin/ia` e `POST /api/admin/ia/teste`, só para o admin e sem devolver chaves.
+
+Detalhes: [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).
 
 ---
 
@@ -115,89 +195,64 @@ O servidor inicia em `http://localhost:8000` (ou próxima porta livre) e executa
 
 - A interface tem um botão **PT/EN** no topo. A escolha fica no `localStorage` (`quiz_lang`); na primeira visita segue o idioma do navegador.
 - O português escrito no HTML e no JS é o texto-fonte. `public/web/modules/i18n.js` troca textos e atributos pelo dicionário `public/web/modules/i18n/en.js` e observa o que o `app.js` gera depois; `public/web/modules/i18n-boot.js` evita mostrar o português por um instante antes da tradução. Elementos com `translate="no"` não são tocados.
-- A IA gera simulados, gabaritos de arquivos e variações no idioma escolhido: as rotas `/api/quiz/generate`, `/api/upload` e `/api/quiz/remix-mistakes` aceitam o campo `language` (`pt-BR` ou `en`; padrão `pt-BR`).
+- A IA gera simulados, gabaritos e variações no idioma escolhido: `/api/quiz/generate`, `/api/upload` e `/api/quiz/remix-mistakes` aceitam `language` (`pt-BR` ou `en`; padrão `pt-BR`). Os temas de exemplo prontos existem só em português.
 - Para um idioma novo: crie `public/web/modules/i18n/<código>.js`, registre em `LANGUAGES` e `DICTIONARIES` (`i18n.js`), repita a regra em `i18n-boot.js` e acrescente o código em `AI_LANGUAGES` (`api/services/ai_service.py`).
 
 ---
 
-## Autenticação e Segurança
+## Acesso, conta e segurança
 
-- **Visitante (sem cadastro)**: a home abre direto, sem muro de login. Dá para explorar e resolver os simulados públicos, ver o gabarito comentado e enviar arquivos que já tragam gabarito (o simulado fica só no navegador).
-- **Convidado**: quando o visitante tenta criar um simulado ou usar a IA, escolhe entre criar conta grátis, entrar ou **continuar como convidado**. O convidado recebe **3 usos de IA a cada 24 horas** (gerar por tema, arquivo que precise de IA, variações dos erros), contados no servidor por um cookie HttpOnly (`qs_guest`) e com teto por IP. Os simulados ficam só no navegador e o upload vai até 5 MB. Ao esgotar a cota, a tela oferece a conta grátis.
-- **Acesso de Estudantes**: Cadastro via `/register` e autenticação via `/login` (ou Google, se configurado). Ao entrar, os simulados criados como convidado na mesma aba são salvos na conta.
-- **Privacidade (LGPD)**: termos em `/termos` e política em `/privacidade`. Em "Minha conta" a pessoa baixa uma cópia dos dados (`GET /api/account/export`) e exclui a conta (`POST /api/account/delete`, com senha). O token de sessão não vai no JSON do login (só no cookie HttpOnly); clientes de API pedem com `"return_token": true`. POSTs vindos de outro site são recusados.
-- **Acesso de Administrador**:
-  - Usuário: `admin`
-  - Senha: definida pela variável de ambiente `ADMIN_PASSWORD` no seu `.env` (obrigatório antes de iniciar).
-  - **Redefinição rápida de senha do admin**:
-    ```bash
-    python scripts/reset_admin.py "NovaSenha123*"
-    ```
-  - **Invalidar todas as sessões ativas (forçar reautenticação geral)**:
-    ```bash
-    python scripts/reset_sessions.py
-    ```
+- **Visitante**: a página inicial e os simulados (`/app`) abrem sem cadastro. Dá para resolver os simulados públicos, ver o gabarito comentado e enviar arquivos que já tragam gabarito (o simulado fica só no navegador).
+- **Convidado**: ao tentar usar a IA, a pessoa escolhe entre criar conta, entrar ou continuar como convidado. O convidado tem **3 usos de IA a cada 24 horas**, contados no servidor por um cookie HttpOnly (`qs_guest`) e com teto por IP. O upload vai até 5 MB.
+- **Conta**: entrar e criar conta com um **código de 6 dígitos** enviado ao e-mail (vale 10 min, 5 palpites), ou com o Google. Os simulados feitos como convidado na mesma aba vão para a conta. As telas de senha estão comentadas no código, não apagadas.
+- **Administrador**: entra com usuário e senha em `/login?senha=1` (`ADMIN_USERNAME`/`ADMIN_PASSWORD`), não tem cota de IA e vê o diagnóstico da IA em "Minha conta".
+  ```bash
+  python scripts/reset_admin.py "NovaSenha123*"   # troca a senha do admin
+  python scripts/reset_sessions.py                # derruba todas as sessões
+  ```
+- **LGPD**: em "Minha conta", a pessoa baixa uma cópia dos dados (`GET /api/account/export`) e exclui a conta com um código enviado ao e-mail.
+- **Sessão**: só em cookie HttpOnly (`__Host-acely_session`; o antigo `ifuture_session` ainda é lido). O token não vem no JSON do login, a menos que o cliente peça `"return_token": true`. POSTs vindos de outro site são recusados (`Origin` / `Sec-Fetch-Site`).
 
----
-
-## Auditoria de Segurança e Hardening (Semgrep SAST)
-
-A base de código é submetida a auditorias estáticas contínuas (SAST) com **Semgrep** utilizando o conjunto oficial de regras para OWASP Top 10, Python, Dockerfile e Web:
+### Medidas de proteção
+1. **Container sem root**: o `Dockerfile` roda como `appuser` (UID 1000), com a imagem fixada por digest.
+2. **Rate limit por janela deslizante** nas rotas de login, código por e-mail, upload, geração e leitura, contado no PostgreSQL (vale entre instâncias). IP do cliente: `CF-Connecting-IP` só fora da Vercel → `X-Forwarded-For` confiável → socket.
+3. **Cotas de IA no servidor**: convidado, plano mensal, pedidos por minuto, tokens por hora por IP e teto global diário.
+4. **Cabeçalhos HTTP**: HSTS com preload, CSP só `'self'`, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy` e `Permissions-Policy`.
+5. **Validação de entrada**: JSON até 1 MB, upload até 20 MB (5 MB para convidado), só `.txt`, `.pdf` e `.docx`.
+6. **Segredos**: códigos de acesso guardados só como HMAC; senhas com PBKDF2; chaves dos provedores nunca vão para o navegador nem para os logs.
+7. **Varreduras no CI**: Semgrep (SAST), gitleaks (segredos no histórico) e pip-audit (dependências).
 
 ```bash
-# Executar varredura estática de segurança
 semgrep scan --config auto .
 ```
 
-### Medidas de Hardening Implementadas:
-1. **Container Seguro (Non-Root User)**:
-   - O `Dockerfile` cria e executa o processo sob um usuário sem privilégios (`appuser`, UID 1000), prevenindo ataques de escape de container e execução indevida como `root` (`dockerfile.security.missing-user.missing-user`).
-2. **Prevenção de SSRF e Protocolos Arbitrários**:
-   - A integração com a API do OpenRouter em `api/services/ai_service.py` utiliza a biblioteca `requests` com timeout explícito e validação estrita de protocolo HTTP/HTTPS, eliminando riscos de leitura local de arquivos via esquemas como `file://` (`python.lang.security.audit.dynamic-urllib-use-detected`).
-3. **Proteção contra Ataques de Rajada e DDoS (Rate Limiting por Janela Deslizante)**:
-   - Implementação de `RateLimiter` genérico em [`api/handlers/quiz_handler.py`](api/handlers/quiz_handler.py) protegendo rotas críticas (`/api/auth/*`, `/api/upload`, `/api/quiz/generate`).
-   - Resolução confiável do IP de origem seguindo a cadeia segura: `CF-Connecting-IP` → primeiro IP confiável de `X-Forwarded-For` → endereço de socket (`client_address`).
-4. **Cota de Proteção de Tokens de IA por IP (`AI_TOKEN_QUOTA_PER_HOUR`)**:
-   - Limite configurável de tokens consumidos por hora por IP (padrão: **50.000 tokens/hora**, ajustável no `.env`), impedindo o esgotamento malicioso da cota do OpenRouter.
-5. **Cabeçalhos de Segurança HTTP e HSTS**:
-   - Aplicação de `Strict-Transport-Security` (HSTS com `max-age=63072000; includeSubDomains; preload`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy` e `Referrer-Policy`.
-6. **Validação Rigorosa de Payloads**:
-   - Limite estrito de tamanho para JSONs (`MAX_JSON_BYTES = 1 MB`), upload com teto de 20 MB e whitelist de formatos (`.txt`, `.pdf`, `.docx`).
-7. **Status do Scan SAST**:
-   - ✅ **0 vulnerabilidades / 0 achados bloqueantes** em mais de 490 regras aplicadas.
-    - *Último scan: execute `semgrep scan --config auto .` para verificar o status atual.*
-
 ---
 
-## Cloudflare Tunnel (Proxy Reverso Seguro)
+## Cloudflare Tunnel (opcional)
 
-Para disponibilizar sua aplicação com domínio próprio, HTTPS automático e proteção contra DDoS sem abrir portas no roteador:
-1. Crie um túnel no [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/) (Networks > Tunnels).
+Para publicar com domínio próprio, HTTPS e proteção contra DDoS sem abrir portas no roteador:
+1. Crie um túnel no [Cloudflare Zero Trust](https://one.dash.cloudflare.com/) (Networks > Tunnels).
 2. Aponte o serviço interno do túnel para `http://app:8000`.
-3. Cole o token gerado na variável `CLOUDFLARE_TUNNEL_TOKEN` do seu arquivo `.env`.
-4. Inicie o serviço com:
-   ```bash
-   docker compose --profile tunnel up -d
-   ```
+3. Cole o token em `CLOUDFLARE_TUNNEL_TOKEN` no `.env`.
+4. Suba com `docker compose --profile tunnel up -d`.
 
 ---
 
-## Como adicionar quizzes
+## Como criar simulados
 
-Clique no botão **"+ Adicionar Quiz"** na interface. Você pode escolher entre duas formas:
+Em `/app`, use **Novo simulado**.
 
-### Opção 1: ✨ Gerar por Tema com IA (Sem Arquivo)
-Se você não tiver um documento pronto, digite o **tema ou assunto** desejado (ex: *Raciocínio Lógico Proposicional*, *Python Básico*, *História do Brasil*, *Direito Constitucional*), escolha o número de questões (3, 5 ou 10) e o nível de dificuldade. A IA elaborará todo o simulado com alternativas e explicações detalhadas!
+### Gerar por tema
+Digite o tema (ex.: *Raciocínio lógico proposicional*, *Python básico*, *Direito constitucional*), escolha a quantidade (3 a 30, ou personalizada) e a dificuldade, e, se quiser, acrescente instruções. Os temas de exemplo abaixo do campo respondem na hora, sem IA.
 
-### Opção 2: 📄 Enviar Arquivo (com Parsing Heurístico e IA)
-Envie um arquivo nos formatos suportados:
-- **`.txt`** — texto estruturado ou em formato livre. O sistema conta com **parser heurístico inteligente e adaptação via IA** capaz de reconhecer perguntas e alternativas mesmo sem números de separação (`1.`, `2.`), marcadores padronizados ou com quebras de linha irregulares (respeitando o limite de peso de 20 MB).
-- **`.pdf`** — documento PDF (extração automática de texto via `pdfplumber`)
-- **`.docx`** — documento Word (via `python-docx`)
+### Enviar arquivo
+- **`.txt`**: texto estruturado ou livre; o parser e a IA reconhecem perguntas e alternativas mesmo sem numeração ou com quebras irregulares.
+- **`.pdf`**: extração de texto com `pdfplumber`.
+- **`.docx`**: extração com `python-docx`.
 
-Se o arquivo **não contiver gabarito**, as respostas e justificativas são geradas automaticamente via IA (`OPENROUTER_API_KEY`, modelos gratuitos). Cada questão pode ter de 2 a N alternativas.
+Se o arquivo **não tiver gabarito**, a IA resolve e explica cada questão (gasta um uso de IA). Com gabarito, não gasta. Cada questão pode ter de 2 a N alternativas.
 
-#### Formato de questões aceito em arquivos
+#### Formato aceito
 
 ```
 **1.** Enunciado da questão?
@@ -217,212 +272,145 @@ c) Opção C
 
 ## Endpoints da API
 
-| Método | Rota | Autenticação | Descrição |
+Todo endpoint em `/api/` responde `{"status": "success", "data": ...}` ou `{"status": "error", "error": ...}`.
+
+| Método | Rota | Acesso | Descrição |
 |---|---|---|---|
-| `GET` | `/` ou `/index.html` | Pública | Interface principal de simulados |
-| `GET` | `/login` ou `/login.html` | Pública | Página de autenticação |
-| `GET` | `/register` ou `/register.html` | Pública | Página de cadastro de estudante |
-| `GET` | `/termos` e `/privacidade` | Pública | Termos de uso e política de privacidade (LGPD) |
-| `GET` | `/api/quizzes` | Pública | Lista quizzes disponíveis (com cache HTTP e ETag / 304) |
-| `GET` | `/api/quiz?source=<name>` | Pública | Questões de um quiz (sem gabarito; com ETag / 304) |
-| `POST` | `/api/quiz/submit` | Pública | Submete respostas, salva tentativa e retorna score/gabarito |
-| `GET` | `/api/user/attempts` | Autenticado / Convidado | Histórico de tentativas e caderno de erros |
-| `POST` | `/api/quiz/remix-mistakes` | Convidado / Autenticado | Cria variações inéditas com IA para questões erradas (aceita `language`) |
-| `POST` | `/api/quiz/generate` | Convidado / Autenticado | Gera questões por tema via IA, com cache no banco (aceita `language` e `request_id`) |
-| `GET` | `/api/quiz/jobs/<request_id>` | Dono do pedido | Andamento de um pedido de IA (`running`, `done` com o resultado, `failed`) |
-| `POST` | `/api/auth/login` | Pública | Login (sessão em cookie HttpOnly; o token só vem no JSON com `"return_token": true`) |
-| `POST` | `/api/auth/register` | Pública | Cadastro de estudante |
-| `GET` | `/api/auth/me` | Cookie / Bearer Token | Dados do usuário autenticado |
-| `POST` | `/api/auth/logout` | Cookie / Bearer Token | Encerramento de sessão |
-| `POST` | `/api/auth/forgot-password` e `/api/auth/reset-password` | Pública | Pedido e troca de senha por e-mail |
-| `GET` | `/api/auth/providers` | Pública | Informa se o login com Google está ligado |
-| `GET` | `/api/auth/google/start` e `/api/auth/google/callback` | Pública | Login com Google (OAuth, `state` em cookie) |
-| `POST` | `/api/guest/start`, `/api/guest/end` · `GET` `/api/guest/status` | Pública | Sessão de convidado e cota gratuita de IA |
-| `GET` | `/api/me/plan` | Conta | Plano, limites e uso de IA do mês (`PLAN_LIMIT_REACHED` ao passar da cota) |
-| `POST` | `/api/quizzes/import` | Autenticado | Salva na conta os simulados criados como convidado |
-| `GET` | `/api/account/export` | Autenticado | Cópia dos dados da conta em JSON (LGPD) |
-| `POST` | `/api/account/delete` | Autenticado (com senha) | Exclui a conta e os dados |
-| `POST` | `/api/upload` | Autenticado (20 MB) / Convidado (`?guest=1`, 5 MB) | Upload multipart/form-data (TXT, PDF, DOCX); aceita `language` |
+| `GET` | `/api/quizzes` | Público | Lista os simulados (cache HTTP com ETag / 304) |
+| `GET` | `/api/quiz?source=<name>` | Público | Questões de um simulado (sem gabarito) |
+| `POST` | `/api/quiz/submit` | Público | Corrige, salva a tentativa e devolve nota e gabarito |
+| `POST` | `/api/quiz/generate` | Convidado / Conta | Gera por tema (aceita `language` e `request_id`) |
+| `POST` | `/api/upload` | Convidado (5 MB) / Conta (20 MB) | Upload multipart (TXT, PDF, DOCX); aceita `language` e `request_id` |
+| `POST` | `/api/quiz/remix-mistakes` | Convidado / Conta | Variações das questões erradas (aceita `language` e `request_id`) |
+| `GET` | `/api/quiz/jobs/<request_id>` | Dono do pedido | Andamento de um pedido de IA (`running` com progresso, `done`, `failed`) |
+| `GET` | `/api/user/attempts` | Conta / Convidado | Histórico de tentativas e caderno de erros |
+| `POST` | `/api/quizzes/import` | Conta | Salva na conta os simulados criados como convidado |
+| `POST` | `/api/auth/email-code` e `/api/auth/email-code/verify` | Público | Envia e confere o código de 6 dígitos (entra ou cria a conta) |
+| `POST` | `/api/auth/login` | Público | Entrar com senha (admin e contas antigas) |
+| `POST` | `/api/auth/register` | Público | Cadastro com senha (mantido na API) |
+| `GET` | `/api/auth/me` · `POST` `/api/auth/logout` | Conta | Usuário da sessão e saída |
+| `GET` | `/api/auth/verify-email` · `POST` `/api/auth/resend-verification` | Público / Conta | Confirmação do e-mail |
+| `POST` | `/api/auth/forgot-password`, `/api/auth/reset-password` · `GET` `/api/auth/verify-reset-token` | Público | Recuperação de senha |
+| `GET` | `/api/auth/providers`, `/api/auth/google/start`, `/api/auth/google/callback` | Público | Login com Google (OAuth, `state` em cookie) |
+| `POST` | `/api/guest/start`, `/api/guest/end` · `GET` `/api/guest/status` | Público | Sessão de convidado e cota gratuita |
+| `GET` | `/api/me/plan` | Conta | Plano, limites e uso do mês (`PLAN_LIMIT_REACHED` ao passar da cota) |
+| `GET` | `/api/account/export` | Conta | Cópia dos dados em JSON (LGPD) |
+| `POST` | `/api/account/delete-code` e `/api/account/delete` | Conta | Código de confirmação e exclusão da conta |
+| `GET` | `/api/admin/ia` · `POST` `/api/admin/ia/teste` | Admin | Diagnóstico (ordem, avisos, tempo das gerações) e teste dos provedores de IA |
 
 ---
 
-## Testes de Carga, Segurança e Consumo de Tokens
+## Testes
 
-O projeto conta com suítes completas tanto para **auditoria em ambiente isolado (sem custo de tokens)** quanto para **testes reais de carga contra o servidor ativo**.
+```bash
+# Suíte completa (o CI roda com PostgreSQL 16 e QUIZ_DB_INTEGRATION=1)
+ADMIN_PASSWORD=ci-test-password-123 python -m unittest discover tests
 
-> **Nota sobre o CI**: Os testes unitários (`python -m unittest discover tests`) executam com **PostgreSQL 16 real** no pipeline de CI. Localmente sem PostgreSQL, os testes que precisam de banco são pulados e os demais usam repositórios em memória; o servidor em si precisa de `DATABASE_URL` (não há SQLite).
+# Lint e formatação (no CI não bloqueiam; há avisos antigos)
+ruff check .
+ruff format --check .
 
-### 1. Testes Automatizados de Segurança e Carga (Mock — Sem Custo)
-Valida a integridade do `RateLimiter`, cotas de tokens por IP e concorrência massiva:
+# Capturas de tela antes/depois (com o app rodando)
+python tests/visual/capture_baseline.py --label after --lang en
+```
+
+São mais de 450 testes. Sem PostgreSQL local, os que precisam de banco são pulados e os demais usam repositórios em memória.
+
+### Carga e consumo de tokens
+
+Sem custo, com a IA simulada (rate limit, cota por IP, concorrência e anti-spoofing):
+
 ```bash
 python -m unittest tests/test_load_and_token_usage.py
 ```
-- **Cobertura (23 testes passando)**:
-  - **Limite exato de 200k tokens**: Validação do corte determinístico em 200.000 tokens com retorno HTTP `429 Too Many Requests`.
-  - **Alta concorrência**: 500 chamadas simultâneas com 50 threads (latência p99 < 10ms).
-  - **Simulação DDoS**: 50 IPs diferentes concorrentes sem bypass de cota individual.
-  - **Resistência Anti-Spoofing**: Proteção contra manipulação de cabeçalhos `X-Forwarded-For`.
 
-### 2. Teste Real de Carga contra a API (Consome Tokens Reais)
-Para testar a infraestrutura com geração real de questões via IA (`POST /api/quiz/generate`):
+Contra o servidor de verdade (**gasta tokens reais**):
+
 ```bash
-# Nível 1: Teste rápido de validação (5 chamadas, 1 worker, ~7k tokens)
-python scripts/load_test_real_api.py --calls 5 --workers 1 --guest --questions 3
-
-# Nível 2: Carga moderada (10 chamadas, 3 workers, ~15k tokens)
-python scripts/load_test_real_api.py --calls 10 --workers 3 --guest --questions 5
-
-# Nível 3: Teste de estresse com teto de 200k tokens
+python scripts/load_test_real_api.py --calls 5 --workers 1 --guest --questions 3          # validação rápida
 python scripts/load_test_real_api.py --calls 50 --workers 5 --guest --questions 10 --token-limit 200000
-
-# Nível 4: Rajada imediata para testar bloqueio 429 pelo Rate Limiter
-python scripts/load_test_real_api.py --calls 30 --workers 10 --burst --guest
+python scripts/load_test_real_api.py --calls 30 --workers 10 --burst --guest              # rajada para ver o 429
 ```
-- **Recursos do script**:
-  - **Auto-detecção inteligente de porta**: Identifica se o servidor está na porta `8001`, `8002`, etc., evitando conflitos com serviços nativos do Windows (como IIS/HTTP.sys na porta 8000).
-  - **Monitoramento em tempo real**: Exibe status individual (`OK`, `429 BLOCKED`, `ERR`), latência e barra de progresso do consumo acumulado de tokens.
-  - **Contabilidade precisa e custos**: Tokens só são contabilizados em caso de sucesso real, gerando ao final relatório com latência percentilar (p50, p95, max) e estimativa de custo em USD.
+
+O script acha a porta do servidor sozinho, mostra cada chamada (`OK`, `429 BLOCKED`, `ERR`) e termina com latência (p50, p95, máx.), tokens e custo estimado.
 
 ---
 
-## Arquitetura
+## Estrutura
 
 ```
 QuizesStudies/
 ├── api/
-│   ├── database/
-│   │   ├── connection.py      # Context managers para PostgreSQL
-│   │   └── migrations.py      # Schema (executa na inicialização)
-│   ├── controllers/
-│   │   ├── auth_controller.py # Endpoints de login, registro e sessão
-│   │   └── quiz_controller.py # Endpoints de quizzes e upload
-│   ├── exceptions/
-│   │   └── quiz_exceptions.py # Exceções de domínio
-│   ├── handlers/
-│   │   └── quiz_handler.py    # Handler HTTP (GET/POST/OPTIONS)
-│   ├── middleware/
-│   │   └── http_middleware.py # CORS, cache, ResponseFormatter
-│   ├── models/
-│   │   └── dtos.py            # Data Transfer Objects
-│   ├── repositories/
-│   │   ├── ai_job_repository.py # Pedidos de IA por request_id e cache de temas
-│   │   ├── quiz_repository.py # Persistência de quizzes e questões
-│   │   ├── rate_limit_repository.py # Contadores de rate limit e cotas
-│   │   └── user_repository.py # Usuários, sessões, exportação e exclusão (LGPD)
+│   ├── controllers/        # auth_controller.py, quiz_controller.py
+│   ├── database/           # connection.py (URL, pooler, TLS), migrations.py
+│   ├── exceptions/         # quiz_exceptions.py
+│   ├── handlers/           # quiz_handler.py: rotas, rate limits, cotas
+│   ├── middleware/         # http_middleware.py: cookies, CORS, CSRF, respostas JSON
+│   ├── models/             # dtos.py
+│   ├── repositories/       # ai_job, plan, quiz, rate_limit e user
 │   ├── services/
-│   │   ├── ai_service.py      # IA: Groq, Gemini, Cerebras e OpenRouter em sequência (planos gratuitos)
-│   │   ├── auth_service.py    # Regras de hash e autenticação
-│   │   ├── email_service.py   # E-mail de redefinição de senha
-│   │   ├── google_auth_service.py # Login com Google (OAuth)
-│   │   ├── guest_service.py   # Modo convidado e cota gratuita de IA
-│   │   ├── import_service.py  # Importa simulados do convidado para a conta
-│   │   ├── quiz_service.py    # Lógica de negócio de simulados
-│   │   └── upload_service.py  # Orquestração de upload TXT/PDF/DOCX
-│   ├── utils/
-│   │   ├── config.py          # Variáveis de ambiente
-│   │   ├── file_parser.py     # Extração de texto (TXT/PDF/DOCX) e parse de questões
-│   │   ├── quiz_logic.py      # Correção e pontuação de respostas
-│   │   └── validators.py      # Validação de payloads HTTP
-│   └── index.py               # Entrypoint Vercel (serverless)
-├── public/web/                # Front-end, servido pela CDN da Vercel em /web/...
-│   ├── app.js                 # Lógica client-side (SPA)
-│   ├── index.html             # Interface principal
-│   ├── login.html             # Tela de login moderna
-│   ├── register.html          # Tela de cadastro moderna
-│   ├── reset-password.html    # Troca de senha
-│   ├── termos.html            # Termos de uso
-│   ├── privacidade.html       # Política de privacidade (LGPD)
-│   ├── modules/               # ES Modules (tema, idiomas, atalhos, estatísticas, ícones...)
-│   │   ├── i18n.js            # Tradução da interface (PT/EN)
-│   │   ├── i18n-boot.js       # Evita piscar o português antes da tradução
-│   │   └── i18n/en.js         # Dicionário em inglês
-│   └── styles.css             # Design system completo
-├── docs/                      # Arquitetura, CI/CD, design e plano em andamento
-├── scripts/                   # Manutenção do banco e teste de carga da API real
-├── tests/                     # Suíte unittest (+ tests/visual para capturas de tela)
-├── 404.html                   # Página 404 própria
-├── .env.example               # Template de variáveis de ambiente
-├── docker-compose.yml         # PostgreSQL + app + tunnel
-├── Dockerfile                 # Multi-stage (builder + runtime) com usuário non-root
-├── Procfile
-├── quiz_api.py                # Entry point local
-└── requirements.txt           # Dependências (psycopg2, pdfplumber, requests, etc.)
+│   │   ├── ai_service.py           # provedores de IA, partes, conferência, diagnóstico
+│   │   ├── auth_service.py         # código por e-mail, senha do admin, sessões
+│   │   ├── email_service.py        # e-mails de código, confirmação e recuperação
+│   │   ├── entitlements_service.py # cota mensal por plano
+│   │   ├── google_auth_service.py  # login com Google
+│   │   ├── guest_service.py        # modo convidado
+│   │   ├── import_service.py       # simulados do convidado para a conta
+│   │   ├── quiz_service.py
+│   │   └── upload_service.py       # TXT/PDF/DOCX e gabarito
+│   ├── utils/              # config.py, plans.py, sample_quizzes.py, file_parser.py, quiz_logic.py, validators.py
+│   └── index.py            # entrada da Vercel
+├── public/web/             # front-end servido pela CDN em /web/...
+│   ├── inicio.html/.css    # página inicial (/)
+│   ├── index.html, app.js  # simulados (/app)
+│   ├── produto.html/.css   # produto e planos
+│   ├── login.html, register.html, reset-password.html, termos.html, privacidade.html
+│   ├── styles.css          # tokens e temas
+│   └── modules/            # i18n, tema, fundo WebGL, atalhos, estatísticas, diagnóstico da IA...
+├── docs/                   # arquitetura, banco, CI/CD e deploy, design, plano SaaS
+├── scripts/                # reset_admin, reset_sessions, reset_database, teste de carga
+├── tests/                  # suíte unittest (+ tests/visual)
+├── 404.html, vercel.json, Dockerfile, docker-compose.yml, Procfile
+├── quiz_api.py             # servidor local
+└── requirements.txt, pyproject.toml, .env.example
 ```
 
 ---
 
-## Schema do Banco
+## Banco de dados
 
-```sql
--- Quizzes cadastrados
-CREATE TABLE quizzes (
-    id               SERIAL PRIMARY KEY,
-    name             VARCHAR(255) UNIQUE NOT NULL,  -- slug identificador
-    label            VARCHAR(255) NOT NULL,          -- nome de exibição
-    original_filename VARCHAR(255),
-    file_type        VARCHAR(10) DEFAULT 'txt',      -- 'txt' | 'pdf' | 'docx' | 'md'
-    has_answer_key   BOOLEAN DEFAULT TRUE,
-    ai_generated     BOOLEAN DEFAULT FALSE,
-    created_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    is_public        BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at       TIMESTAMP DEFAULT NOW()
-);
+O schema completo está em [`api/database/migrations.py`](api/database/migrations.py). Toda migration é idempotente (`IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`).
 
--- Questões (options em JSONB suporta 2 a N alternativas)
-CREATE TABLE questions (
-    id              SERIAL PRIMARY KEY,
-    quiz_id         INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
-    question_number INTEGER NOT NULL,
-    section         VARCHAR(255) DEFAULT 'Geral',
-    context         TEXT DEFAULT '',
-    question        TEXT NOT NULL,
-    options         JSONB NOT NULL,   -- ["Opção A", "Opção B", ...]
-    answer          INTEGER,          -- índice base-0 (0=A, 1=B, ...)
-    explanation     TEXT DEFAULT '',
-    UNIQUE (quiz_id, question_number)
-);
-CREATE INDEX idx_questions_quiz_id ON questions(quiz_id);
+| Tabela | Para quê |
+|---|---|
+| `users`, `sessions` | Contas (estudante e admin) e sessões (token guardado como hash) |
+| `email_codes` | Códigos de 6 dígitos de acesso e de exclusão de conta (só o HMAC) |
+| `email_verifications`, `password_resets` | Confirmação de e-mail e recuperação de senha |
+| `quizzes`, `questions` | Simulados e questões (alternativas em JSONB, de 2 a N) |
+| `quiz_attempts` | Tentativas, notas e questões erradas (caderno de erros) |
+| `rate_limits` | Contadores de rate limit, cotas de convidado e orçamento de IA |
+| `ai_jobs`, `ai_cache` | Pedidos de IA por `request_id` (24 h) e simulados por tema em cache |
+| `plans`, `workspaces`, `workspace_members`, `usage_counters` | Planos, workspace pessoal e uso mensal |
 
--- Usuários e Autenticação
-CREATE TABLE users (
-    id            SERIAL PRIMARY KEY,
-    username      VARCHAR(50) UNIQUE NOT NULL,
-    email         VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    salt          VARCHAR(64) NOT NULL,
-    role          VARCHAR(20) DEFAULT 'student',
-    created_at    TIMESTAMP DEFAULT NOW()
-);
+Manutenção: `python scripts/reset_database.py --scope content --dry-run` (ou o workflow *Manutenção — Limpar Banco de Dados* no GitHub Actions).
 
--- Sessões (token armazenado como hash SHA-256)
-CREATE TABLE sessions (
-    token         VARCHAR(128) PRIMARY KEY,
-    user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    expires_at    TIMESTAMP NOT NULL,
-    created_at    TIMESTAMP DEFAULT NOW()
-);
-CREATE INDEX idx_sessions_token ON sessions(token);
-CREATE INDEX idx_sessions_user_id ON sessions(user_id);
+---
 
--- Tentativas e Histórico de Desempenho (Caderno de Erros)
-CREATE TABLE quiz_attempts (
-    id                 SERIAL PRIMARY KEY,
-    user_id            INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    quiz_id            INTEGER REFERENCES quizzes(id) ON DELETE SET NULL,
-    quiz_name          VARCHAR(255) NOT NULL,
-    score              INTEGER NOT NULL,
-    total              INTEGER NOT NULL,
-    percentage         INTEGER NOT NULL,
-    wrong_question_ids JSONB DEFAULT '[]'::jsonb,
-    created_at         TIMESTAMP DEFAULT NOW()
-);
-CREATE INDEX idx_quiz_attempts_user_id ON quiz_attempts(user_id);
-CREATE INDEX idx_quiz_attempts_quiz_id ON quiz_attempts(quiz_id);
-```
+## Documentação
+
+| Documento | Conteúdo |
+|---|---|
+| [`AGENTS.md`](AGENTS.md) | Regras do projeto, mapa de arquivos e proibições (leia antes de mudar algo) |
+| [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Camadas, rotas, IA e decisões de segurança |
+| [`docs/BANCO_DE_DADOS.md`](docs/BANCO_DE_DADOS.md) | Neon, Supabase, credenciais e TLS |
+| [`docs/CICD_E_DEPLOY.md`](docs/CICD_E_DEPLOY.md) | Fluxo `feature/*` → `develop` → `homolog` → `main`, variáveis da Vercel e domínio |
+| [`docs/DESIGN_SKILLS.md`](docs/DESIGN_SKILLS.md) | Regras de design da interface |
+| [`docs/PLANO_SAAS.md`](docs/PLANO_SAAS.md) | O que falta para o produto: equipes, atribuições, cobrança e IA paga por plano |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Como contribuir |
 
 ---
 
 ## Licença
 
 Software proprietário. © 2024–2026 Eduardo Felipe Alves de Sousa. Todos os direitos reservados.
-Veja [`LICENSE`](LICENSE). Planos e roadmap do produto: [`docs/PLANO_SAAS.md`](docs/PLANO_SAAS.md).
+Veja [`LICENSE`](LICENSE).

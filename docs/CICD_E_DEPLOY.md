@@ -75,7 +75,9 @@ Acesse **Settings > Environment Variables** no painel da Vercel e cadastre as va
 | `ADMIN_USERNAME` | Nome seguro do administrador | `admin` |
 | `ADMIN_PASSWORD` | Senha forte e exclusiva | Senha de homologação |
 | `OPENROUTER_API_KEY` | Chave do OpenRouter de produção (só modelos `:free`) | Chave de homolog/dev |
-| `AI_DAILY_CALL_LIMIT` | Teto global de chamadas ao provedor por dia, somando todos (cada simulado usa de 1 a 5). Ex.: `1000` com OpenAI ou Groq; `40` só com o OpenRouter sem créditos | `200` |
+| `AI_DAILY_CALL_LIMIT` | Teto global de chamadas ao provedor por dia, somando todos. Com a OpenAI na frente, um simulado usa em média ~8 (até 20 num de 30 questões com conferência). Ex.: `3000` com a OpenAI; `40` só com o OpenRouter sem créditos | `500` |
+| `OPENAI_SERVICE_TIER` | (Opcional) `fast` liga o Fast mode da OpenAI (mais rápido, preço por token maior); vazio = padrão | Vazio |
+| `AI_PART_SIZE` / `AI_PARALLEL_PARTS` | (Opcional) questões por parte e partes ao mesmo tempo; `0` = automático (3 e 10 com a OpenAI, 5 e 3 nos gratuitos) | Idem |
 | `AI_USER_REQUESTS_PER_MINUTE` | (Opcional) pedidos de IA por minuto por pessoa; padrão `10` | Idem |
 | `OPENAI_API_KEY` | (Opcional) chave da OpenAI, primeira da fila; a conta precisa de créditos | Chave de homolog/dev ou vazia |
 | `OPENAI_MODELS` | (Opcional) padrão `gpt-6-luna,gpt-4o-mini`. Se existir `CODEX_MODELS` antigo com `gpt-5-nano`/`codex-mini-latest`, apague ou troque | Idem |

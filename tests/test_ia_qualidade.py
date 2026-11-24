@@ -120,7 +120,7 @@ class TestCrossCheckVerification(unittest.TestCase):
 
         calls = []
 
-        def fake_call_ai(messages, temperature, max_tokens, timeout=75, prefer_different_from=None):
+        def fake_call_ai(messages, temperature, max_tokens, timeout=75, prefer_different_from=None, **kwargs):
             calls.append({
                 "prompt": messages[0]["content"],
                 "temperature": temperature,
@@ -184,7 +184,7 @@ class TestCrossCheckVerification(unittest.TestCase):
 
         captured_prompt = []
 
-        def fake_call_ai(messages, temperature, max_tokens, timeout=75, prefer_different_from=None):
+        def fake_call_ai(messages, temperature, max_tokens, timeout=75, prefer_different_from=None, **kwargs):
             captured_prompt.append(messages[0]["content"])
             return raw_payload, "model-a", {"total_tokens": 200}, "Groq"
 

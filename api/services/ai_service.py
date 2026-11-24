@@ -34,6 +34,8 @@ from api.utils.config import (
     AI_ATTEMPT_TIMEOUT,
     AI_CROSS_CHECK,
     AI_DAILY_CALL_LIMIT,
+    AI_PARALLEL_PARTS,
+    AI_PART_SIZE,
     AI_PROVIDERS,
     AI_PROVIDERS_FROM_ENV,
     AI_PROVIDERS_IGNORED,
@@ -44,6 +46,7 @@ from api.utils.config import (
     CODEX_API_MODE,
     CODEX_MODELS_SOURCE,
     CODEX_DAILY_REQUESTS,
+    OPENAI_SERVICE_TIER,
     CODEX_DAILY_TOKENS,
     GROQ_API_KEY,
     GROQ_BASE_URL,
@@ -799,6 +802,10 @@ _force_chat_api: set[str] = set()
 # Modelos que a conta não pode receber em partes (OpenAI exige organização verificada para
 # streaming de gpt-5/gpt-6): pedidos seguintes vão sem streaming
 _no_stream: set[str] = set()
+# Modelos que recusaram raciocínio "none" (ex.: gpt-5-nano só aceita "minimal"): vão com "low"
+_reasoning_none_refused: set[str] = set()
+# Modelos que recusaram o service_tier da OpenAI (Fast mode): vão sem ele
+_no_service_tier: set[str] = set()
 # Modelo que não existe ou que a conta não pode usar: fica de fora por mais tempo
 _COOLDOWN_MODEL_MISSING = 6 * 60 * 60
 
@@ -1032,10 +1039,14 @@ def ai_setup_warnings() -> list[str]:
                 warnings.append(f"openai {model}: sai do ar em {shutdown:%d/%m/%Y}; troque em OPENAI_MODELS antes")
         if not active:
             warnings.append("nenhum modelo de OPENAI_MODELS está ativo: a OpenAI nunca responde")
-    if 0 < AI_DAILY_CALL_LIMIT < 100:
+    # Chamadas por simulado (média): com a OpenAI na frente, partes de 3 e conferência por parte
+    # (~8; um de 30 questões com conferência usa 20); nos gratuitos, partes de 5 (~3)
+    calls_per_quiz = 8 if _topic_speed_profile()[0] <= FAST_TOPIC_CHUNK_SIZE else 3
+    if 0 < AI_DAILY_CALL_LIMIT and AI_DAILY_CALL_LIMIT // calls_per_quiz < 100:
         warnings.append(
-            f"AI_DAILY_CALL_LIMIT={AI_DAILY_CALL_LIMIT}: cada simulado usa de 1 a 5 chamadas, então a IA do "
-            f"site inteiro para depois de uns {max(1, AI_DAILY_CALL_LIMIT // 3)} simulados por dia"
+            f"AI_DAILY_CALL_LIMIT={AI_DAILY_CALL_LIMIT}: cada simulado usa em média {calls_per_quiz} chamadas "
+            f"(até 20 num de 30 questões), então a IA do site inteiro para depois de uns "
+            f"{max(1, AI_DAILY_CALL_LIMIT // calls_per_quiz)} simulados por dia"
         )
     return warnings
 
@@ -1065,6 +1076,14 @@ def _budget_usage(key: str) -> int | None:
     try:
         return int(rate_limit_repo.get_usage(key, _DAY_SECONDS))
     except Exception:
+        return None
+
+
+def _generation_time() -> dict | None:
+    try:
+        return ai_job_repo.generation_stats(24)
+    except Exception as e:
+        _log_ai(f"[IA] tempo das gerações indisponível: {e}")
         return None
 
 
@@ -1134,11 +1153,16 @@ def ai_diagnostics() -> dict:
             "attempt_timeout_seconds": AI_ATTEMPT_TIMEOUT,
             "cross_check": AI_CROSS_CHECK,
             "user_requests_per_minute": AI_USER_REQUESTS_PER_MINUTE,
+            "openai_service_tier": OPENAI_SERVICE_TIER or None,
+            "part_size_env": AI_PART_SIZE or None,
+            "parallel_parts_env": AI_PARALLEL_PARTS or None,
         },
         "daily_calls": {
             "limit": AI_DAILY_CALL_LIMIT or None,
             "used_24h": _budget_usage("ai_global:calls"),
         },
+        "generation_time": _generation_time(),
+        "speed_profile": dict(zip(("part_size", "parallel_parts"), _topic_speed_profile(), strict=True)),
         "events": events,
     }
 
@@ -1241,12 +1265,17 @@ def _call_compatible(
     temperature: float,
     max_tokens: int,
     deadline: float,
+    reasoning: str = "low",
 ) -> tuple[str, str, dict]:
     """OpenAI, Groq, Gemini e Cerebras: mesmo formato de chat da OpenAI, com resposta em partes.
 
     Tenta os modelos do provedor em ordem (pausados por último). Levanta _ProviderSkip quando
     nenhum responde, para `_call_ai` passar ao próximo provedor. Cada falha vai para o log do
     servidor com o motivo dado pelo provedor (sem a chave), para o dono saber o que ajustar.
+
+    `reasoning` é o esforço pedido aos modelos que raciocinam: "none" (mais rápido; a geração de
+    questões usa) ou "low". gpt-oss não aceita "none" e vai com "low"; um modelo que recusar "none"
+    passa a receber "low".
     """
     session = _get_http_session()
     base = provider.base_url.rstrip("/")
@@ -1274,40 +1303,45 @@ def _call_compatible(
 
         use_responses = _uses_responses_api(provider, model, key)
         use_stream = key not in _no_stream
-        reasoning = _is_reasoning_model(model)
+        is_reasoning = _is_reasoning_model(model)
+        effort = reasoning if reasoning in ("none", "low") else "low"
+        if effort == "none" and ("gpt-oss" in model.lower() or key in _reasoning_none_refused):
+            effort = "low"
         # Modelos de raciocínio da OpenAI só aceitam a temperatura padrão: nem envia
-        send_temperature = key not in _no_temperature_param and not (provider.name == "codex" and reasoning)
+        send_temperature = key not in _no_temperature_param and not (provider.name == "codex" and is_reasoning)
+        send_effort = is_reasoning and key not in _no_reasoning_param
+        # O raciocínio gasta o mesmo limite de tokens da resposta: folga quando ele está ligado
+        token_cap = int(max_tokens * _REASONING_TOKEN_HEADROOM) if send_effort and effort != "none" else max_tokens
         if use_responses:
             url = f"{base}/responses"
             payload: dict[str, Any] = {
                 "model": model,
                 "input": messages,
-                "max_output_tokens": max_tokens,
+                "max_output_tokens": token_cap,
                 "stream": use_stream,
             }
             if send_temperature:
                 payload["temperature"] = temperature
             if provider.json_mode and key not in _no_json_mode:
                 payload["text"] = {"format": {"type": "json_object"}}
-            if reasoning and key not in _no_reasoning_param:
-                payload["reasoning"] = {"effort": "low"}
-                payload["max_output_tokens"] = int(max_tokens * _REASONING_TOKEN_HEADROOM)
+            if send_effort:
+                payload["reasoning"] = {"effort": effort}
         else:
             url = f"{base}/chat/completions"
             payload: dict[str, Any] = {
                 "model": model,
                 "messages": messages,
-                provider.max_tokens_field: max_tokens,
+                provider.max_tokens_field: token_cap,
                 "stream": use_stream,
             }
             if send_temperature:
                 payload["temperature"] = temperature
             if provider.json_mode and key not in _no_json_mode:
                 payload["response_format"] = {"type": "json_object"}
-            if reasoning and key not in _no_reasoning_param:
-                # modelos com raciocínio gastam o mesmo limite: esforço baixo e folga no limite
-                payload["reasoning_effort"] = "low"
-                payload[provider.max_tokens_field] = int(max_tokens * _REASONING_TOKEN_HEADROOM)
+            if send_effort:
+                payload["reasoning_effort"] = effort
+        if provider.name == "codex" and OPENAI_SERVICE_TIER and key not in _no_service_tier:
+            payload["service_tier"] = OPENAI_SERVICE_TIER
 
         # Em partes, um modelo parado é abandonado em AI_ATTEMPT_TIMEOUT s; sem partes a resposta
         # chega inteira no fim, então a espera vai até o tempo total
@@ -1381,8 +1415,17 @@ def _call_compatible(
             _no_temperature_param.add(key)
             queue.insert(0, model)
             continue
+        if status == 400 and "service_tier" in lower and "service_tier" in payload:
+            _log_ops(f"{log_name} {model}: service_tier={OPENAI_SERVICE_TIER} recusado; pedindo sem ele")
+            _no_service_tier.add(key)
+            queue.insert(0, model)
+            continue
         if status == 400 and "reasoning" in lower and ("reasoning_effort" in payload or "reasoning" in payload):
-            _no_reasoning_param.add(key)
+            if effort == "none":
+                # Aceita raciocínio, só não "none": repete com "low" em vez de tirar o parâmetro
+                _reasoning_none_refused.add(key)
+            else:
+                _no_reasoning_param.add(key)
             queue.insert(0, model)
             continue
         if (
@@ -1442,6 +1485,7 @@ def _call_ai(
     max_tokens: int,
     timeout: int = 75,
     prefer_different_from: str | None = None,
+    reasoning: str = "low",
 ) -> tuple[str, str, dict, str]:
     """Pede a resposta ao primeiro provedor que conseguir, na ordem de AI_PROVIDERS.
 
@@ -1485,7 +1529,9 @@ def _call_ai(
                     messages, temperature, max_tokens, timeout=int(remaining), count_budget=False,
                 ))[:3]
                 return content, model, usage, provider.label
-            content, model, usage = _call_compatible(provider, messages, temperature, max_tokens, deadline)
+            content, model, usage = _call_compatible(
+                provider, messages, temperature, max_tokens, deadline, reasoning=reasoning
+            )
             return content, model, usage, provider.label
         except _ProviderSkip as e:
             last_message = e.message
@@ -1623,6 +1669,25 @@ def _language_rule(language: str, subject: str) -> str:
 
 TOPIC_CHUNK_SIZE = 5
 TOPIC_CHUNK_MAX_WORKERS = 3
+# Com a OpenAI na frente (paga, limites altos por minuto): partes menores e todas ao mesmo tempo.
+# O tempo do simulado fica perto do tempo de uma parte pequena, qualquer que seja o tamanho.
+FAST_TOPIC_CHUNK_SIZE = 3
+FAST_TOPIC_MAX_WORKERS = 10
+
+
+def _topic_speed_profile() -> tuple[int, int]:
+    """(questões por parte, partes ao mesmo tempo) para a geração por tema.
+
+    AI_PART_SIZE e AI_PARALLEL_PARTS mandam quando definidos. No automático, a OpenAI na frente
+    (primeiro provedor com chave e sem pausa) usa partes de 3 e até 10 ao mesmo tempo; os
+    gratuitos ficam com partes de 5 e até 3 ao mesmo tempo, por causa dos limites por minuto.
+    """
+    now = time.time()
+    ready = [p for p in _configured_providers() if _provider_pause.get(p.name, (0, ""))[0] <= now]
+    fast = bool(ready) and ready[0].name == "codex"
+    size = AI_PART_SIZE or (FAST_TOPIC_CHUNK_SIZE if fast else TOPIC_CHUNK_SIZE)
+    workers = AI_PARALLEL_PARTS or (FAST_TOPIC_MAX_WORKERS if fast else TOPIC_CHUNK_MAX_WORKERS)
+    return max(1, size), max(1, workers)
 
 
 def _plan_question_chunks(qty: int, chunk_size: int = TOPIC_CHUNK_SIZE) -> list[int]:
@@ -1697,6 +1762,9 @@ def _build_topic_prompt(
     if context_str:
         prompt_lines.append(f"Diretrizes e foco específico adicional: {context_str}")
 
+    # Resposta enxuta = geração mais rápida: o tempo da IA cresce com cada token escrito. Explicação
+    # de 1 a 2 frases e JSON em uma linha cortam cerca de metade dos tokens do formato anterior
+    # (explicação de 2 a 4 frases, campo "context" e JSON indentado).
     prompt_lines.extend([
         "",
         "Regras obrigatórias:",
@@ -1705,29 +1773,12 @@ def _build_topic_prompt(
         "3. Cada questão deve possuir exatamente 4 ou 5 alternativas em formato de texto limpo (não coloque 'a)', 'b)' dentro do texto da alternativa).",
         "4. Apenas UMA alternativa deve ser a correta.",
         "5. O campo 'answer' deve ser o índice numérico (base 0) da alternativa correta (0 = primeira opção, 1 = segunda opção, 2 = terceira opção...).",
-        "6. O campo 'explanation' deve fornecer uma justificativa didática detalhada de 2 a 4 frases explicando por que a alternativa está correta.",
-        "7. Forneça um título atraente e descritivo para o quiz no campo 'title'.",
+        "6. O campo 'explanation' deve justificar a resposta em 1 a 2 frases objetivas, citando o conceito que a torna correta.",
+        "7. Forneça um título curto e descritivo no campo 'title' e um subtema curto em 'section'.",
         "",
-        "IMPORTANTE: Retorne SOMENTE um objeto JSON válido, sem qualquer texto ou formatação fora do JSON, no seguinte formato estrito:",
-        """{
-  "title": "Título Descritivo do Quiz",
-  "questions": [
-    {
-      "id": 1,
-      "section": "Subtema ou disciplina",
-      "context": "Breve contexto introdutório se necessário (ou vazio)",
-      "question": "Enunciado completo da pergunta?",
-      "options": [
-        "Texto da opção A",
-        "Texto da opção B",
-        "Texto da opção C",
-        "Texto da opção D"
-      ],
-      "answer": 0,
-      "explanation": "Explicação detalhada do porquê a opção A é a correta."
-    }
-  ]
-}""",
+        "IMPORTANTE: Retorne SOMENTE um objeto JSON válido, em uma linha só, sem texto, quebras de linha ou espaços extras fora dos textos, no formato:",
+        '{"title":"Título do simulado","questions":[{"id":1,"section":"Subtema","question":"Enunciado completo da pergunta?",'
+        '"options":["Opção A","Opção B","Opção C","Opção D"],"answer":0,"explanation":"Por que a opção A é a correta."}]}',
     ])
     return "\n".join(prompt_lines)
 
@@ -2007,6 +2058,7 @@ def _generate_topic_part(
     client_ip: str | None = None,
     part_index: int | None = None,
     total_parts: int | None = None,
+    cross_check: bool = False,
 ) -> dict:
     prompt = _build_topic_prompt(
         clean_topic, qty, diff, context_str, lang,
@@ -2019,18 +2071,30 @@ def _generate_topic_part(
         temperature=0.5,
         max_tokens=max_tokens,
         timeout=75,  # tempo total, somando provedores e modelos
+        reasoning="none",  # escrever questões não precisa de raciocínio longo; a conferência usa "low"
     )
     content, used_model, usage, provider_name = _unpack_call_result(call_res)
     if DEBUG:
         print(f"🤖 IA Quiz Gerado [{used_model}]:\n{content[:300]}")
     title, valid_questions = _parse_topic_questions(content, clean_topic, language=lang)
-    return {
+    part = {
         "title": title,
         "questions": valid_questions,
         "usage": usage,
         "model": used_model,
         "provider": provider_name,
+        "verified_count": 0,
     }
+    if cross_check and valid_questions:
+        # Confere esta parte assim que ela fica pronta, enquanto as outras ainda são geradas
+        checked, verified_count, check_usage = cross_check_questions(
+            valid_questions, language=lang, source_provider=provider_name, client_ip=client_ip,
+        )
+        part["questions"] = checked
+        part["verified_count"] = verified_count
+        if check_usage:
+            part["usage"] = _merge_usage([usage, check_usage])
+    return part
 
 
 def generate_quiz_by_topic(
@@ -2046,11 +2110,11 @@ def generate_quiz_by_topic(
     """
     Gera um conjunto completo de questões de quiz sobre um tema especificado.
 
-    Para mais de 5 questões, divide em partes de 5 executadas em paralelo (até 3
-    simultâneas), reportando progresso via `on_progress(done, total)` e removendo
-    enunciados repetidos no servidor (geração em partes, ver docs/ARQUITETURA.md).
-    Quando `cross_check=True` (Fase 4), um segundo modelo confere o gabarito sem
-    ver a resposta original e registra `verified_count`.
+    Divide em partes (tamanho e paralelismo em `_topic_speed_profile`: com a OpenAI na frente,
+    partes de 3 e até 10 ao mesmo tempo; nos gratuitos, partes de 5 e até 3), reportando
+    progresso via `on_progress(done, total)` e removendo enunciados repetidos no servidor.
+    Quando `cross_check=True`, um segundo modelo confere o gabarito de cada parte assim que ela
+    fica pronta (sem ver a resposta original) e o resultado registra `verified_count`.
     """
     clean_topic = topic.strip() if topic else ""
     if not clean_topic:
@@ -2107,11 +2171,15 @@ def generate_quiz_by_topic(
             except Exception as e:  # noqa: BLE001
                 _log_ops(f"falha ao reportar progresso ({done}/{total}): {e}")
 
-    chunks = _plan_question_chunks(qty)
+    started = time.monotonic()
+    part_size, parallel_parts = _topic_speed_profile()
+    chunks = _plan_question_chunks(qty, chunk_size=part_size)
     total_parts = len(chunks)
 
     if total_parts == 1:
-        part = _generate_topic_part(clean_topic, qty, diff, context_str, lang, client_ip=client_ip)
+        part = _generate_topic_part(
+            clean_topic, qty, diff, context_str, lang, client_ip=client_ip, cross_check=cross_check,
+        )
         valid_questions = _deduplicate_questions(part["questions"], limit=qty)
         if not valid_questions:
             raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
@@ -2123,12 +2191,14 @@ def generate_quiz_by_topic(
             "model": part["model"],
             "provider": part["provider"],
         }
+        if cross_check:
+            result["verified_count"] = sum(1 for q in valid_questions if q.get("verified"))
     else:
         _report_progress(0, total_parts)
         parts_by_index: dict[int, dict] = {}
         errors: list[Exception] = []
         done_count = 0
-        max_workers = min(TOPIC_CHUNK_MAX_WORKERS, total_parts)
+        max_workers = min(parallel_parts, total_parts)
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_map = {
@@ -2142,6 +2212,7 @@ def generate_quiz_by_topic(
                     client_ip,
                     idx,
                     total_parts,
+                    cross_check,
                 ): idx
                 for idx, chunk_qty in enumerate(chunks, start=1)
             }
@@ -2183,18 +2254,16 @@ def generate_quiz_by_topic(
             "provider": first_part["provider"],
             "parts": {"done": len(ordered_parts), "total": total_parts},
         }
+        if cross_check:
+            # Cada parte já foi conferida no próprio trabalho (ver _generate_topic_part)
+            result["verified_count"] = sum(1 for q in valid_questions if q.get("verified"))
 
-    if cross_check and result.get("questions"):
-        checked_questions, verified_count, check_usage = cross_check_questions(
-            result["questions"],
-            language=lang,
-            source_provider=result.get("provider"),
-            client_ip=client_ip,
-        )
-        result["questions"] = checked_questions
-        result["verified_count"] = verified_count
-        if check_usage:
-            result["usage"] = _merge_usage([result.get("usage"), check_usage])
+    _log_ops(
+        f"simulado por tema: {len(result['questions'])} de {qty} questões em {total_parts} "
+        f"parte(s) de até {part_size}, {min(parallel_parts, total_parts)} ao mesmo tempo"
+        f"{', com conferência' if cross_check else ''}, via {result.get('provider')} {result.get('model')} "
+        f"({time.monotonic() - started:.1f} s)"
+    )
 
     # Armazena nos dois níveis de cache
     with _quiz_cache_lock:
