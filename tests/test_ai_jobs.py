@@ -1,5 +1,5 @@
 """
-Pedidos de IA persistentes, cache no banco e tempo por tentativa (docs/PLANO_ACELY.md, Fase 1).
+Pedidos de IA persistentes, cache no banco e tempo por tentativa (docs/ARQUITETURA.md, pedidos com request_id).
 
 Cobre:
 1. AIJobRepository (modo memória): criar, repetir, concluir, conflito de dono/parâmetros,

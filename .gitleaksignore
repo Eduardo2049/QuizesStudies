@@ -1,0 +1,3 @@
+# Falsos positivos já no histórico (não são chaves reais). Formato: <commit>:<arquivo>:<regra>:<linha>
+# Chave falsa no teste de mascaramento do log da IA (o teste agora monta a chave em tempo de execução)
+e672fd611d88887cf5860c6071fe52109e481021:tests/test_ai_providers.py:generic-api-key:428

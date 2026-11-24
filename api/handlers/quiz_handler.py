@@ -1,6 +1,7 @@
 """
 Handler HTTP Principal — Suporte a multipart/form-data para upload de arquivos
 """
+import contextlib
 import hashlib
 import io
 import json
@@ -27,7 +28,7 @@ from api.controllers.auth_controller import AuthController
 from api.exceptions.quiz_exceptions import QuizAPIException, AuthOrGuestRequired
 from api.services.guest_service import guest_service, GUEST_COOKIE_MAX_AGE
 from api.services.entitlements_service import entitlements_service
-from api.services.ai_service import AIQuotaExceededError
+from api.services.ai_service import AIQuotaExceededError, ai_diagnostics, probe_ai_providers
 from api.services.import_service import QuizImportService
 from api.services import google_auth_service as google_auth
 from api.services.auth_service import EmailCodeWait
@@ -130,6 +131,21 @@ class RateLimiter:
 
         return False, 0
 
+    def release(self, key: str) -> None:
+        """Devolve a vaga do último pedido da chave (ele não chegou a usar o recurso).
+
+        Mesmo jeito da cota do convidado: um registro de custo -1 anula o uso na soma da janela,
+        em memória e no PostgreSQL.
+        """
+        with self._lock:
+            reqs = self._requests.get(key)
+            if reqs:
+                reqs.pop()
+        if self.repo is not None:
+            # Sem banco, a memória já foi ajustada
+            with contextlib.suppress(Exception):
+                self.repo.record(key, -1)
+
     def record(self, key: str, cost: int = 1) -> None:
         """Registra uma ocorrência/falha para a chave."""
         now = time.time()
@@ -170,6 +186,7 @@ _rl_ai_user_per_minute = RateLimiter(
     limit=max(1, AI_USER_REQUESTS_PER_MINUTE), window_seconds=60, repo=rate_limit_repo
 )
 _rl_read = RateLimiter(limit=120, window_seconds=60, repo=rate_limit_repo)         # leitura geral: 120/min
+_rl_ai_probe = RateLimiter(limit=6, window_seconds=10 * 60, repo=rate_limit_repo)  # teste da IA (admin): 6/10min
 # novas sessões de convidado: 60/15min por IP. Folgado para uma sala de aula atrás do mesmo IP;
 # quem renova o cookie para ganhar cota esbarra no teto por IP do GuestService (GUEST_AI_IP_LIMIT).
 _rl_guest_start = RateLimiter(limit=60, window_seconds=15 * 60, repo=rate_limit_repo)
@@ -259,6 +276,33 @@ def _ensure_migrations():
         except Exception as e:
             if DEBUG:
                 print(f"[db] Erro ao garantir migrations no handler: {e}")
+
+
+class AIUseReservation:
+    """Uso de IA reservado: a cota (plano ou convidado) e a vaga no limite por minuto.
+
+    `refund()` devolve as duas. Quando a IA falha ou o resultado vem pronto (cache, tema de
+    exemplo), a pessoa não perde o uso do mês nem a vaga do minuto.
+    """
+
+    def __init__(self, quota, rpm_key: str | None):
+        self._quota = quota
+        self._rpm_key = rpm_key
+
+    @property
+    def acquired(self) -> bool:
+        return bool(getattr(self._quota, "acquired", True))
+
+    def acquire(self) -> None:
+        if self._quota is not None:
+            self._quota.acquire()
+
+    def refund(self) -> None:
+        if self._quota is not None:
+            self._quota.refund()
+        if self._rpm_key:
+            _rl_ai_user_per_minute.release(self._rpm_key)
+            self._rpm_key = None
 
 
 class QuizHandler(BaseHTTPRequestHandler):
@@ -508,6 +552,17 @@ class QuizHandler(BaseHTTPRequestHandler):
                     return
                 user = self._require_authenticated_user()
                 status, data = ResponseFormatter.success(entitlements_service.status(user))
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
+            # 0.19 API: Diagnóstico da IA (só admin): ordem, chaves existentes, modelos, uso e avisos
+            if request.path == "/api/admin/ia":
+                allowed, retry_after = _rl_read.check_handler(self, "GET:/api/admin/ia")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
+                self._require_admin_user()
+                status, data = ResponseFormatter.success(ai_diagnostics())
                 HTTPMiddleware.send_json_response(self, status, data)
                 return
 
@@ -765,6 +820,20 @@ class QuizHandler(BaseHTTPRequestHandler):
             return
 
         try:
+            # ── Diagnóstico da IA (só admin): um pedido mínimo a cada provedor com chave ──
+            if request.path == "/api/admin/ia/teste":
+                user = self._require_admin_user()
+                allowed, retry_after = _rl_ai_probe.is_allowed(f"ai_probe:{user['id']}")
+                if not allowed:
+                    _rate_limited_response(self, retry_after)
+                    return
+                status, data = ResponseFormatter.success({
+                    "results": probe_ai_providers(),
+                    "diagnostics": ai_diagnostics(),
+                })
+                HTTPMiddleware.send_json_response(self, status, data)
+                return
+
             # ── 0. Rotas de Autenticação ───────────────────────────────────────
             if request.path == "/api/auth/login":
                 payload = self._read_json_body()
@@ -1294,15 +1363,19 @@ class QuizHandler(BaseHTTPRequestHandler):
                 reservation = guest_service.reservation(guest_id, client_ip)
             else:
                 reservation = None
+            rpm_keys: list[str] = []
+
             def acquire_upload_ai():
                 if reservation:
                     reservation.acquire()
                 try:
-                    self._enforce_ai_user_rpm(user, guest_id, client_ip)
+                    rpm_key = self._enforce_ai_user_rpm(user, guest_id, client_ip)
                 except Exception:
                     if reservation:
                         reservation.refund()
                     raise
+                if rpm_key:
+                    rpm_keys.append(rpm_key)
 
             try:
                 response = self.upload_controller.upload_file(
@@ -1321,6 +1394,8 @@ class QuizHandler(BaseHTTPRequestHandler):
             except Exception:
                 if reservation:
                     reservation.refund()
+                for rpm_key in rpm_keys:
+                    _rl_ai_user_per_minute.release(rpm_key)
                 raise
             self._attach_quota(response["data"], user, guest_id, client_ip)
             return ResponseFormatter.created(response["data"], response["data"].get("message"))
@@ -1337,7 +1412,7 @@ class QuizHandler(BaseHTTPRequestHandler):
         HTTPMiddleware.send_json_response(self, status, data)
 
     def _run_ai_job(self, raw_id, kind: str, user, guest_id, params: dict, run):
-        """Executa um pedido de IA uma vez só por request_id (docs/PLANO_ACELY.md, Fase 1).
+        """Executa um pedido de IA uma vez só por request_id (pedidos persistentes, ver docs/ARQUITETURA.md).
 
         `run()` faz o trabalho (reserva de cota incluída) e devolve (status, corpo). Com o
         mesmo id de novo: pronto devolve o resultado guardado sem chamar a IA nem cobrar
@@ -1494,10 +1569,10 @@ class QuizHandler(BaseHTTPRequestHandler):
         return None, guest_id
 
     @staticmethod
-    def _enforce_ai_user_rpm(user, guest_id: str | None, client_ip: str) -> None:
-        """Limita o número de chamadas de IA por minuto por usuário (ou convidado)."""
+    def _enforce_ai_user_rpm(user, guest_id: str | None, client_ip: str) -> str | None:
+        """Limita os pedidos de IA por minuto por usuário (ou convidado). Devolve a chave usada."""
         if AI_USER_REQUESTS_PER_MINUTE <= 0:
-            return
+            return None
         _rl_ai_user_per_minute.limit = AI_USER_REQUESTS_PER_MINUTE
         if user:
             key = f"ai_rpm:user:{user['id']}"
@@ -1512,6 +1587,7 @@ class QuizHandler(BaseHTTPRequestHandler):
                 f"Aguarde {retry_after} segundo(s) e tente novamente.",
                 retry_after=retry_after,
             )
+        return key
 
     @staticmethod
     def _reserve_ai(user, guest_id: str | None, client_ip: str, metric: str):
@@ -1524,11 +1600,11 @@ class QuizHandler(BaseHTTPRequestHandler):
             return None
         reservation.acquire()
         try:
-            QuizHandler._enforce_ai_user_rpm(user, guest_id, client_ip)
+            rpm_key = QuizHandler._enforce_ai_user_rpm(user, guest_id, client_ip)
         except Exception:
             reservation.refund()
             raise
-        return reservation
+        return AIUseReservation(reservation, rpm_key)
 
     @staticmethod
     def _attach_quota(data, user, guest_id: str | None, client_ip: str) -> None:
@@ -1539,6 +1615,13 @@ class QuizHandler(BaseHTTPRequestHandler):
             data["guest_ai"] = guest_service.status(guest_id, client_ip)
         elif user:
             data["plan"] = entitlements_service.status(user)
+
+    def _require_admin_user(self):
+        """Usuário logado com papel de admin da plataforma; os demais recebem 401/403."""
+        user = self._require_authenticated_user()
+        if user.get("role") != "admin":
+            raise QuizAPIException("Acesso negado: privilégios insuficientes", 403, "FORBIDDEN")
+        return user
 
     def _require_authenticated_user(self):
         token = HTTPMiddleware.get_auth_token(self)

@@ -1,5 +1,5 @@
 """
-Testes da Fase 5 (docs/PLANO_ACELY.md): temas de exemplo prontos e menos chamadas à IA.
+Temas de exemplo prontos (docs/ARQUITETURA.md, seção da IA): temas de exemplo prontos e menos chamadas à IA.
 
 Valida:
 1. Todos os 4 temas de exemplo (.topic-chip) têm simulados prontos com 5 questões válidas
@@ -31,7 +31,7 @@ class TestSamplePresetQuizzes(unittest.TestCase):
                 self.assertTrue(ok, f"Preset '{preset['title']}' Q{q['id']} inválida: {reason}")
                 self.assertTrue(q.get("verified"))
 
-    def test_example_topics_return_instant_preset_without_calling_ai(self):
+    def test_example_topics_return_instant_preset_without_calling_ai_or_needing_key(self):
         topics = [
             "Juros simples e compostos",
             "Juros compostos",
@@ -42,7 +42,7 @@ class TestSamplePresetQuizzes(unittest.TestCase):
             "Direito constitucional: direitos e garantias fundamentais",
             "Direitos fundamentais",
         ]
-        with patch.object(ai_service, "ai_configured", return_value=True), \
+        with patch.object(ai_service, "ai_configured", return_value=False), \
              patch.object(ai_service, "_call_ai", side_effect=AssertionError("IA não deveria ser chamada")):
             for topic in topics:
                 with self.subTest(topic=topic):

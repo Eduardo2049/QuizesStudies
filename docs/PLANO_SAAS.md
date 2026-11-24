@@ -27,7 +27,7 @@ concluídas e integradas). Cada fase vira **uma branch `feature/*` e um PR para 
 | Item | Situação | O que fazer |
 |---|---|---|
 | **Hospedagem** | Vercel Hobby, que é só para uso pessoal e não comercial (Fair Use Guidelines). | Migrar o time da Vercel para o **Pro** antes do primeiro pagamento (US$ 20/mês por membro do time). |
-| **IA gratuita** | Groq, Gemini, Cerebras e OpenRouter nos planos grátis. O grátis do Gemini usa o conteúdo para melhorar os produtos do Google; o do Groq é voltado a protótipo, com limite baixo por minuto. | Plano **Grátis** do Acely pode seguir nos provedores grátis (com aviso na privacidade). Planos **pagos** usam a API paga (Groq Developer ou Gemini com faturamento), sem uso dos dados para treino. |
+| **IA gratuita** | OpenAI (API paga, "por tempo limitado") primeiro para todos e, de reserva, Groq, Gemini, Cerebras e OpenRouter nos planos grátis. O grátis do Gemini usa o conteúdo para melhorar os produtos do Google; o do Groq é voltado a protótipo, com limite baixo por minuto. | Plano **Grátis** do Acely pode seguir nos provedores grátis (com aviso na privacidade). Planos **pagos** usam a API paga (Groq Developer ou Gemini com faturamento), sem uso dos dados para treino. |
 | **Licença MIT** | Quem já copiou o código mantém o direito de usar a versão MIT. Não dá para revogar. | A nova licença vale para o código daqui para frente; o diferencial passa a ser o serviço (dados, IA, equipes), não o código. |
 | **E-mail** | Remetente pelo Gmail. | Provedor transacional no domínio (SPF, DKIM, DMARC) para convites de equipe e recibos. |
 | **Termos** | Escritos para um serviço gratuito. | Termos com planos, renovação, cancelamento, reembolso (CDC: 7 dias de arrependimento na compra on-line), e um contrato de tratamento de dados (DPA) para empresas e escolas. |
@@ -36,8 +36,8 @@ concluídas e integradas). Cada fase vira **uma branch `feature/*` e um PR para 
 
 Simulado de 10 questões ≈ 1,5 mil tokens de entrada e 3,5 mil de saída. No Groq pago, o
 `gpt-oss-120b` custa US$ 0,15 por milhão de tokens de entrada e US$ 0,60 por milhão de saída:
-**≈ US$ 0,0023 por simulado** (≈ US$ 0,005 com a conferência por um segundo modelo da Fase 4 do
-`PLANO_ACELY.md`). 300 simulados por mês de um assinante custam ≈ US$ 1,50 de IA.
+**≈ US$ 0,0023 por simulado** (≈ US$ 0,005 com a conferência do gabarito por um segundo modelo,
+`AI_CROSS_CHECK`). 300 simulados por mês de um assinante custam ≈ US$ 1,50 de IA.
 Conferir os preços no painel do provedor antes de fechar os valores.
 
 ---
@@ -112,7 +112,7 @@ audit_log        (id, workspace_id, actor_user_id, action, target, created_at)
   `handle_webhook`, `portal_url`, `cancel`) e um adaptador por provedor. Webhooks com assinatura
   verificada e idempotência por id do evento.
 - A ordem de provedores de IA passa a depender do plano: `AI_PROVIDERS_FREE` e
-  `AI_PROVIDERS_PAID` (mesma lógica de `_call_ai` da Fase 2 do `PLANO_ACELY.md`).
+  `AI_PROVIDERS_PAID` (mesma lógica de `_call_ai`, ver `docs/ARQUITETURA.md`).
 
 ---
 
@@ -206,7 +206,8 @@ Branch sugerida: `feature/saas-cobranca`
 ### Fase S5: IA paga por plano
 Usa a conferência de gabarito por segundo modelo (`AI_CROSS_CHECK`) já implementada.
 1. `AI_PROVIDERS_FREE` e `AI_PROVIDERS_PAID`; chaves pagas só em produção.
-2. Conferência por segundo modelo ligada para planos pagos (`AI_CROSS_CHECK=paid`).
+2. Conferência por segundo modelo ligada para planos pagos (`AI_CROSS_CHECK=paid`; hoje o código aceita
+   só `account`, `all` e `off`, então o modo `paid` precisa ser criado).
 3. Selo "gabarito conferido" nas questões; métricas de custo por workspace no admin.
 
 ### Fase S6: Promoção da página de produto para a raiz

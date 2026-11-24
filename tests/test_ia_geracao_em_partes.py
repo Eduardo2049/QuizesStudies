@@ -1,5 +1,5 @@
 """
-Testes da Fase 3 (docs/PLANO_ACELY.md): geração em partes com progresso.
+Geração em partes (docs/ARQUITETURA.md, seção da IA): geração em partes com progresso.
 
 Valida:
 1. Divisão em partes de até 5 questões para pedidos > 5 (e chamada única para <= 5).

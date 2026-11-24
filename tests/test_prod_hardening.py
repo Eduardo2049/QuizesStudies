@@ -58,9 +58,10 @@ class TestAIErrorsDoNotLeakConfig(unittest.TestCase):
     def test_missing_key_message_is_generic(self):
         from api.services import ai_service
 
-        with patch.object(ai_service, "OPENROUTER_API_KEY", ""):
+        # "Juros compostos" é um tema de exemplo pronto (responde sem chave): usa outro tema
+        with patch.object(ai_service, "_configured_providers", return_value=[]):
             with self.assertRaises(ai_service.AIServiceError) as ctx:
-                ai_service.generate_quiz_by_topic("Juros compostos", num_questions=1)
+                ai_service.generate_quiz_by_topic("Termodinâmica básica", num_questions=1)
         message = str(ctx.exception)
         self.assertNotIn("GEMINI_API_KEY", message)
         self.assertNotIn(".env", message)
