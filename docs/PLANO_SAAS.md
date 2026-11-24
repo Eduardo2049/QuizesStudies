@@ -201,7 +201,7 @@ A página inicial (`inicio.html`) fica em `/` para todos e os simulados em `/app
 
 ## 6. Pendências fora das fases
 
-Juntadas aqui em 24/11/2026, quando o plano de IA (`PLANO_ACELY.md`) foi encerrado.
+Juntadas aqui em 24/11/2026, quando o antigo `PLANO_ACELY.md` (plano de IA, concluído) foi removido.
 
 **Na Vercel, depois do PR #115 (OpenAI)**
 - `AI_PROVIDERS` sem a variável ou com `openai`; `CODEX_MODELS`/`OPENAI_MODELS` antigos apagados ou
