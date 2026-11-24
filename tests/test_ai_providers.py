@@ -424,9 +424,10 @@ class TestAIDiagnostics(_ProvidersTestCase):
         self.assertTrue(results["openrouter"]["ok"])
 
     def test_error_summary_redacts_keys(self):
-        summary = ai_service._provider_error_summary(
-            '{"error": {"message": "Incorrect API key provided: sk-proj-123456789", "code": "invalid_api_key"}}'
-        )
+        # Chave falsa montada em tempo de execução para o gitleaks não confundir com uma real
+        fake_key = "sk-" + "proj-" + "0" * 9
+        raw = json.dumps({"error": {"message": f"Incorrect API key provided: {fake_key}", "code": "invalid_api_key"}})
+        summary = ai_service._provider_error_summary(raw)
         self.assertEqual(summary, "invalid_api_key: Incorrect API key provided: [chave]")
         self.assertEqual(ai_service._provider_error_summary("<html><b>Bad gateway</b></html>"), "Bad gateway")
 
