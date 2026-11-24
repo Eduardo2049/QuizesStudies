@@ -156,7 +156,7 @@ if __name__ == "__main__":
 
 @unittest.skipUnless(_local_db_enabled(), "QUIZ_DB_INTEGRATION=1 com banco local não configurado")
 class TestAIJobsIntegration(unittest.TestCase):
-    """ai_jobs e ai_cache no PostgreSQL de verdade (docs/PLANO_ACELY.md, Fase 1)."""
+    """ai_jobs e ai_cache no PostgreSQL de verdade (docs/ARQUITETURA.md, pedidos com request_id)."""
 
     @classmethod
     def setUpClass(cls):
