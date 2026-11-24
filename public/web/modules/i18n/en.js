@@ -894,4 +894,27 @@ export default {
     'Fast AI models (OpenAI/Codex API for a limited time + free backup)',
   'O texto é enviado ao provedor de IA ativo no momento (atualmente priorizando a OpenAI/Codex API por tempo limitado, com reserva em provedores gratuitos) só para gerar o simulado. Você pode exportar ou apagar seus dados em Minha conta. Os detalhes estão na':
     'The text is sent to the active AI provider (currently prioritizing the OpenAI/Codex API for a limited time, with free providers as backup) only to generate the quiz. You can export or delete your data in My account. The details are in the',
+
+  // ── Diagnóstico da IA (admin, Minha conta) e limite por minuto ─────────────
+  'Diagnóstico da IA': 'AI diagnostics',
+  'Carregando a situação dos provedores…': 'Loading provider status…',
+  'Testar provedores agora': 'Test providers now',
+  'Testando…': 'Testing…',
+  'Faz um pedido mínimo a cada provedor com chave e mostra a resposta.':
+    'Sends a minimal request to each provider with a key and shows the answer.',
+  'Aguarde alguns minutos para testar de novo.': 'Wait a few minutes to test again.',
+  'Não foi possível testar agora.': 'Could not run the test now.',
+  'Não foi possível carregar o diagnóstico.': 'Could not load the diagnostics.',
+  'Nenhum provedor de IA com chave.': 'No AI provider with a key.',
+  'Ordem: {0}.': 'Order: {0}.',
+  'Chamadas hoje: {0} de {1}.': 'Calls today: {0} of {1}.',
+  'Chamadas hoje: {0}.': 'Calls today: {0}.',
+  'sem chave': 'no key',
+  'fora de AI_PROVIDERS': 'not in AI_PROVIDERS',
+  'pausado por mais {0} min': 'paused for {0} more min',
+  'ativo': 'active',
+  '{0}: respondeu com {1} em {2} s': '{0}: answered with {1} in {2} s',
+  '{0}: falhou em {1} s': '{0}: failed in {1} s',
+  'Limite de {0} usos de IA por minuto atingido. Aguarde {1} segundo(s) e tente novamente.':
+    'Limit of {0} AI uses per minute reached. Wait {1} second(s) and try again.',
 };
