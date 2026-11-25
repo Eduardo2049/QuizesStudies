@@ -264,6 +264,59 @@ class TestTopicGenerationFlow(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(len(calls[0]), 2)
 
+    def test_topic_prompt_puts_static_rules_before_dynamic_topic_for_prefix_caching(self):
+        prompt = ai_service._build_topic_prompt("Termodinâmica", 3, "Difícil", "Foco em ciclos", "pt-BR")
+        self.assertLess(prompt.index("Regras obrigatórias:"), prompt.index("Termodinâmica"))
+        self.assertLess(prompt.index("IMPORTANTE: Retorne SOMENTE"), prompt.index("Termodinâmica"))
+
+    def test_remix_and_document_structuring_send_reasoning_none(self):
+        captured = []
+
+        def fake_call(messages, temperature, max_tokens, timeout=75, prefer_different_from=None, **kwargs):
+            captured.append(kwargs.get("reasoning"))
+            return _quiz_json(1), "gpt-6-luna", {}, "OpenAI"
+
+        with patch.object(ai_service, "_call_ai", side_effect=fake_call):
+            ai_service.remix_questions_by_ai([
+                {"id": 1, "section": "Física", "question": "O que é inércia?", "options": ["A", "B", "C", "D"], "answer": 0}
+            ])
+            ai_service.parse_and_structure_questions_with_ai("Texto de estudo sobre leis de Newton e inércia.")
+        self.assertEqual(captured, ["none", "none"])
+
+    def test_probe_sends_reasoning_none(self):
+        captured = []
+
+        def fake_compatible(provider, messages, temperature, max_tokens, deadline, reasoning="low"):
+            captured.append(reasoning)
+            return '{"ok": true}', "gpt-6-luna", {}
+
+        with (
+            patch.object(ai_service, "AI_PROVIDERS", ["codex"]),
+            patch.object(ai_service, "CODEX_API_KEY", "sk-test"),
+            patch.object(ai_service, "_call_compatible", side_effect=fake_compatible),
+        ):
+            results = ai_service.probe_ai_providers()
+        self.assertTrue(results[0]["ok"])
+        self.assertEqual(captured, ["none"])
+
+    def test_generate_answer_key_batches_large_uploads(self):
+        batch_sizes = []
+
+        def fake_call(messages, temperature, max_tokens, timeout=60, **kwargs):
+            ids = [int(x) for x in __import__("re").findall(r"Pergunta (\d+)\?", messages[0]["content"])]
+            batch_sizes.append(len(ids))
+            payload = [{"question_id": i, "answer": 0, "explanation": "Correta."} for i in ids]
+            return json.dumps(payload), "gpt-6-luna", {}, "OpenAI"
+
+        questions = [
+            {"id": i, "question": f"Pergunta {i}?", "options": ["A", "B", "C", "D"]}
+            for i in range(1, 55)
+        ]
+        with patch.object(ai_service, "_call_ai", side_effect=fake_call):
+            answers = ai_service.generate_answer_key(questions)
+        self.assertEqual(batch_sizes, [40, 14])
+        self.assertEqual(len(answers), 54)
+
 
 class TestGenerationStats(unittest.TestCase):
     def test_summary_numbers(self):
