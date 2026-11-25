@@ -139,7 +139,9 @@ class TestCrossCheckVerification(unittest.TestCase):
                 cross_check=True,
             )
 
-        self.assertEqual(len(calls), 2)
+        # geração, conferência e o pedido extra da questão descartada (que aqui volta inválido)
+        self.assertEqual(len(calls), 3)
+        self.assertIn("Não repita", calls[2]["prompt"])
         self.assertEqual(calls[1]["temperature"], 0.0)
         self.assertEqual(calls[1]["prefer_different_from"], "Groq")
         # O prompt de conferência não pode vazar o gabarito nem a explicação

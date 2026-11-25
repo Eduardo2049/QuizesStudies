@@ -96,11 +96,16 @@ class TestHttpCacheAndEtag(unittest.TestCase):
              patch("api.services.ai_service.check_ai_token_quota"), \
              patch("api.services.ai_service.OPENROUTER_API_KEY", "fake_key"):
 
-            # Primeira chamada: simula retorno da API
+            # Primeira chamada: simula retorno da API com as 5 questões pedidas
+            full_questions = [
+                {**fake_quiz["questions"][0], "id": n, "question_number": n,
+                 "question": f"Questão {n}: em que ano ocorreu o evento número {n} da Revolução?"}
+                for n in range(1, 6)
+            ]
             mock_call.return_value = (
                 json.dumps({
                     "title": "Quiz de História",
-                    "questions": fake_quiz["questions"]
+                    "questions": full_questions
                 }),
                 "gemini-test",
                 {"total_tokens": 150}
@@ -114,6 +119,29 @@ class TestHttpCacheAndEtag(unittest.TestCase):
             res2 = generate_quiz_by_topic("Revolucao Francesa", num_questions=5, difficulty="Médio")
             self.assertEqual(res2["title"], "Quiz de História")
             self.assertEqual(mock_call.call_count, 1, "A API não deveria ter sido chamada uma segunda vez")
+
+    def test_incomplete_ai_generation_is_not_cached(self):
+        """Simulado que veio com menos questões que o pedido não vai para o cache."""
+        one_question = {
+            "id": 1, "question_number": 1, "section": "História", "context": "",
+            "question": "Em que ano ocorreu a queda da Bastilha?",
+            "options": ["1789", "1799", "1804", "1776"], "answer": 0,
+            "explanation": "1789 marca o início da Revolução Francesa.",
+        }
+        with patch("api.services.ai_service._call_ai") as mock_call, \
+             patch("api.services.ai_service.check_ai_token_quota"), \
+             patch("api.services.ai_service.OPENROUTER_API_KEY", "fake_key"):
+            mock_call.return_value = (
+                json.dumps({"title": "Quiz de História", "questions": [one_question]}),
+                "gemini-test",
+                {"total_tokens": 150},
+            )
+            res1 = generate_quiz_by_topic("Queda da Bastilha", num_questions=5, difficulty="Fácil")
+            self.assertEqual(len(res1["questions"]), 1)
+            self.assertEqual(res1["requested"], 5)
+            calls_first = mock_call.call_count
+            generate_quiz_by_topic("Queda da Bastilha", num_questions=5, difficulty="Fácil")
+            self.assertGreater(mock_call.call_count, calls_first, "Simulado incompleto não deveria vir do cache")
 
 
 if __name__ == "__main__":
