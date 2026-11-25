@@ -920,4 +920,15 @@ export default {
     'Generation time (24 h): average {0} s, p90 {1} s, {2}% within {3} s ({4} quizzes).',
   'Limite de {0} usos de IA por minuto atingido. Aguarde {1} segundo(s) e tente novamente.':
     'Limit of {0} AI uses per minute reached. Wait {1} second(s) and try again.',
+  'Últimas gerações por tema': 'Latest topic generations',
+
+  // ── Simulado por tema pronto (mensagem do servidor) ───────────────────────
+  "✓ Simulado '{0}' gerado com {1} questões. Ele fica salvo só neste navegador.":
+    "✓ Quiz '{0}' generated with {1} questions. It is saved only in this browser.",
+  "✓ Simulado '{0}' gerado com {1} de {2} questões pedidas. Ele fica salvo só neste navegador.":
+    "✓ Quiz '{0}' generated with {1} of the {2} questions requested. It is saved only in this browser.",
+  "✓ Simulado '{0}' criado e salvo na sua conta com {1} questões.":
+    "✓ Quiz '{0}' created and saved to your account with {1} questions.",
+  "✓ Simulado '{0}' criado e salvo na sua conta com {1} de {2} questões pedidas.":
+    "✓ Quiz '{0}' created and saved to your account with {1} of the {2} questions requested.",
 };

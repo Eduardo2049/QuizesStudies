@@ -15,7 +15,7 @@ import os
 import re
 import time
 import unicodedata
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
 from typing import Any
 import requests
 from dataclasses import dataclass
@@ -26,6 +26,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from api.repositories.rate_limit_repository import rate_limit_repo, RateLimitRepository
 from api.utils.config import (
+    AI_HEDGE_AFTER_SECONDS,
     OPENROUTER_API_KEY,
     OPENROUTER_BASE_URL,
     OPENROUTER_FREE_MODELS,
@@ -1673,6 +1674,15 @@ TOPIC_CHUNK_MAX_WORKERS = 3
 # O tempo do simulado fica perto do tempo de uma parte pequena, qualquer que seja o tamanho.
 FAST_TOPIC_CHUNK_SIZE = 3
 FAST_TOPIC_MAX_WORKERS = 10
+# Só pede as questões que faltaram se ainda sobra tempo (a função da Vercel vai até 300 s)
+_TOPUP_TIME_BUDGET_SECONDS = 40
+
+
+def _short_error(exc: Exception) -> str:
+    """Motivo curto da falha de uma parte, seguro para mostrar (sem detalhes internos)."""
+    if isinstance(exc, (AIServiceError, AIQuotaExceededError)):
+        return str(exc)[:120]
+    return type(exc).__name__
 
 
 def _topic_speed_profile() -> tuple[int, int]:
@@ -1740,6 +1750,44 @@ def _merge_usage(usages: list[dict | None]) -> dict:
     return merged
 
 
+# Provas, bancas e certificações: trocar uma pela outra (ENEM no lugar de ENADE) é erro
+_EXAM_TOKENS = frozenset({
+    "enem", "enade", "encceja", "oab", "fuvest", "unicamp", "vunesp", "unesp", "cespe", "cebraspe", "fgv",
+    "fcc", "ibfc", "cesgranrio", "quadrix", "idecan", "consulplan", "aocp", "inep", "sisu", "uerj", "ufrgs",
+    "ita", "ime", "afa", "espcex", "efomm", "revalida", "enare", "cfc", "cpa", "pmp", "toefl", "ielts",
+    "sat", "gre", "gmat", "poscomp",
+})
+_YEAR_PATTERN = re.compile(r"(19|20)\d\d")
+
+
+def _topic_exam_and_years(clean_topic: str) -> tuple[list[str], list[str]]:
+    """Provas/bancas e anos citados no tema, na ordem em que aparecem (provas em maiúsculas)."""
+    exams: list[str] = []
+    years: list[str] = []
+    for token in _normalize_question_key(clean_topic).split():
+        if token in _EXAM_TOKENS and token.upper() not in exams:
+            exams.append(token.upper())
+        elif _YEAR_PATTERN.fullmatch(token) and token not in years:
+            years.append(token)
+    return exams, years
+
+
+# Cada parte de um simulado recebe um foco diferente: sem isso, partes com o mesmo prompt tendem a
+# repetir as mesmas questões (e as repetidas são removidas, deixando o simulado menor que o pedido).
+_PART_FOCUSES = (
+    "conceitos, definições e princípios centrais do tema",
+    "aplicação em situações práticas, casos e exemplos",
+    "comparação entre conceitos parecidos e erros comuns",
+    "análise de cenários, dados, código, cálculos ou procedimentos, conforme o tema",
+    "detalhes, exceções e pontos que costumam cair em prova",
+    "interpretação de enunciados mais longos e situações-problema",
+    "relações entre subtemas diferentes do tema",
+    "fundamentos e pré-requisitos do tema",
+    "tópicos avançados ou menos óbvios do tema",
+    "revisão geral cobrindo subtemas ainda não abordados",
+)
+
+
 def _build_topic_prompt(
     clean_topic: str,
     qty: int,
@@ -1748,17 +1796,34 @@ def _build_topic_prompt(
     lang: str,
     part_index: int | None = None,
     total_parts: int | None = None,
+    avoid_questions: list[str] | None = None,
 ) -> str:
     prompt_lines = [
         "Você é um professor e elaborador sênior de provas e simulados acadêmicos e de concursos.",
         f"Crie um simulado de múltipla escolha com exatamente {qty} questões sobre o seguinte tema: '{clean_topic}'.",
         f"Nível de dificuldade exigido: {diff}.",
     ]
-    if part_index is not None and total_parts is not None and total_parts > 1:
+    exams, years = _topic_exam_and_years(clean_topic)
+    if exams or years:
+        cited = " ".join(exams + years)
         prompt_lines.append(
-            f"Esta é a parte {part_index} de {total_parts} de um simulado completo. "
-            f"Foque em subtemas, ângulos e exemplos distintos das demais partes para não repetir enunciados."
+            f"O tema cita {cited}: as questões devem seguir exatamente essa prova e esse ano, com o estilo, "
+            f"o curso e o conteúdo que ela cobra. Não troque por outra prova nem por outro ano."
         )
+    else:
+        prompt_lines.append(
+            "Se o tema citar uma prova, banca, curso, órgão ou ano, siga exatamente essa prova, esse curso e "
+            "esse ano. Não troque por outra prova."
+        )
+    if part_index is not None and total_parts is not None and total_parts > 1:
+        focus = _PART_FOCUSES[(part_index - 1) % len(_PART_FOCUSES)]
+        prompt_lines.append(
+            f"Esta é a parte {part_index} de {total_parts} de um simulado maior: as outras partes são geradas "
+            f"ao mesmo tempo. Nesta parte, priorize {focus}, sempre dentro do tema, para não repetir as outras."
+        )
+    if avoid_questions:
+        prompt_lines.append("Não repita nem reescreva estas questões, que já estão no simulado:")
+        prompt_lines.extend(f"- {q[:140]}" for q in avoid_questions[:30])
     if context_str:
         prompt_lines.append(f"Diretrizes e foco específico adicional: {context_str}")
 
@@ -1774,7 +1839,8 @@ def _build_topic_prompt(
         "4. Apenas UMA alternativa deve ser a correta.",
         "5. O campo 'answer' deve ser o índice numérico (base 0) da alternativa correta (0 = primeira opção, 1 = segunda opção, 2 = terceira opção...).",
         "6. O campo 'explanation' deve justificar a resposta em 1 a 2 frases objetivas, citando o conceito que a torna correta.",
-        "7. Forneça um título curto e descritivo no campo 'title' e um subtema curto em 'section'.",
+        "7. No campo 'title', um título curto que repita os nomes, siglas e anos do tema exatamente como foram "
+        "escritos, sem mencionar partes; em 'section', um subtema curto.",
         "",
         "IMPORTANTE: Retorne SOMENTE um objeto JSON válido, em uma linha só, sem texto, quebras de linha ou espaços extras fora dos textos, no formato:",
         '{"title":"Título do simulado","questions":[{"id":1,"section":"Subtema","question":"Enunciado completo da pergunta?",'
@@ -1981,6 +2047,7 @@ def _parse_topic_questions(
     content: str,
     clean_topic: str,
     language: str = DEFAULT_AI_LANGUAGE,
+    discarded: dict | None = None,
 ) -> tuple[str, list[dict]]:
     try:
         parsed = parse_json_response(content)
@@ -2039,7 +2106,9 @@ def _parse_topic_questions(
         }
         is_valid, reason = validate_question(candidate, language=language, require_explanation=False)
         if not is_valid:
-            _log_ai(f"[IA] questão {idx} descartada na validação ({reason})")
+            _log_ops(f"questão {idx} descartada na validação ({reason})")
+            if discarded is not None:
+                discarded[reason] = discarded.get(reason, 0) + 1
             continue
         valid_questions.append(candidate)
 
@@ -2047,6 +2116,97 @@ def _parse_topic_questions(
         raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
 
     return str(title).strip(), valid_questions
+
+
+_TITLE_PART_PATTERN = re.compile(
+    r"\s*[-–—:|,]?\s*[(\[]?\s*\b(parte|part)\s+\d+(\s*(de|of|/)\s*\d+)?\s*[)\]]?\s*", re.IGNORECASE
+)
+_TITLE_SMALL_WORDS = frozenset({"de", "da", "do", "das", "dos", "e", "em", "na", "no", "nas", "nos", "a", "o",
+                                "as", "os", "of", "the", "and", "in", "on", "for", "to"})
+
+
+def _topic_title(clean_topic: str, lang: str) -> str:
+    """Título feito do próprio tema, quando o da IA não serve."""
+    words = []
+    for i, word in enumerate(clean_topic.split()):
+        if _normalize_question_key(word) in _EXAM_TOKENS:
+            words.append(word.upper())
+        elif word.isupper() or any(ch.isdigit() for ch in word) or (i > 0 and word.lower() in _TITLE_SMALL_WORDS):
+            words.append(word)
+        else:
+            words.append(word[:1].upper() + word[1:])
+    prefix = "Quiz" if normalize_language(lang) == "en" else "Simulado"
+    return f"{prefix}: {' '.join(words)}"
+
+
+def _clean_quiz_title(title: str, clean_topic: str, lang: str = DEFAULT_AI_LANGUAGE) -> str:
+    """Tira "Parte N" do título e confere se a IA manteve a prova e o ano do tema.
+
+    Se o título cita uma prova ou banca que o tema não cita (ex.: ENEM quando o tema era ENADE),
+    esquece a do tema ou esquece o ano, o título passa a ser feito do próprio tema. Paráfrases
+    comuns ("Lógica Proposicional" para "raciocínio lógico") continuam valendo.
+    """
+    cleaned = _TITLE_PART_PATTERN.sub(" ", str(title or "")).strip(" -–—:|,")
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+    title_tokens = set(_normalize_question_key(cleaned).split())
+    exams, years = _topic_exam_and_years(clean_topic)
+    exams_in_topic = {e.lower() for e in exams}
+    if (
+        not cleaned
+        or (title_tokens & _EXAM_TOKENS) - exams_in_topic
+        or exams_in_topic - title_tokens
+        or set(years) - title_tokens
+    ):
+        return _topic_title(clean_topic, lang)
+    return cleaned[:120]
+
+
+def _call_ai_hedged(
+    messages: list[dict],
+    temperature: float,
+    max_tokens: int,
+    timeout: int,
+    reasoning: str,
+    hedge_after: float,
+) -> tuple[tuple, bool]:
+    """Chama a IA e, se não responder em `hedge_after` s, faz um segundo pedido igual.
+
+    O segundo pedido vai de preferência para outro provedor. Vale a primeira resposta boa; a
+    outra é ignorada (corta a cauda lenta: uma parte presa não segura o simulado inteiro).
+    Retorna (resultado de _call_ai, se o segundo pedido foi feito).
+    """
+    if hedge_after <= 0:
+        return _call_ai(
+            messages=messages, temperature=temperature, max_tokens=max_tokens, timeout=timeout, reasoning=reasoning,
+        ), False
+    pool = ThreadPoolExecutor(max_workers=2)
+    try:
+        primary = pool.submit(
+            _call_ai, messages=messages, temperature=temperature, max_tokens=max_tokens, timeout=timeout,
+            reasoning=reasoning,
+        )
+        done, _pending = wait([primary], timeout=hedge_after)
+        if done:
+            return primary.result(), False
+        now = time.time()
+        ready = [p for p in _configured_providers() if _provider_pause.get(p.name, (0, ""))[0] <= now]
+        _log_ops(f"parte sem resposta em {hedge_after:g} s; fazendo um segundo pedido em paralelo")
+        backup = pool.submit(
+            _call_ai, messages=messages, temperature=temperature, max_tokens=max_tokens, timeout=timeout,
+            reasoning=reasoning, prefer_different_from=ready[0].label if ready else None,
+        )
+        pending = {primary, backup}
+        first_error: Exception | None = None
+        while pending:
+            done, pending = wait(pending, return_when=FIRST_COMPLETED)
+            for future in done:
+                try:
+                    return future.result(), True
+                except Exception as e:  # a outra ainda pode responder
+                    first_error = first_error or e
+        raise first_error or AIServiceError(AI_BUSY_MESSAGE)
+    finally:
+        pool.shutdown(wait=False)
 
 
 def _generate_topic_part(
@@ -2059,24 +2219,28 @@ def _generate_topic_part(
     part_index: int | None = None,
     total_parts: int | None = None,
     cross_check: bool = False,
+    avoid_questions: list[str] | None = None,
 ) -> dict:
+    started = time.monotonic()
     prompt = _build_topic_prompt(
         clean_topic, qty, diff, context_str, lang,
-        part_index=part_index, total_parts=total_parts,
+        part_index=part_index, total_parts=total_parts, avoid_questions=avoid_questions,
     )
     check_ai_token_quota(prompt, ip=client_ip)
     max_tokens = min(4096, max(800, qty * 320))
-    call_res = _call_ai(
+    call_res, hedged = _call_ai_hedged(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.5,
         max_tokens=max_tokens,
         timeout=75,  # tempo total, somando provedores e modelos
         reasoning="none",  # escrever questões não precisa de raciocínio longo; a conferência usa "low"
+        hedge_after=float(AI_HEDGE_AFTER_SECONDS),
     )
     content, used_model, usage, provider_name = _unpack_call_result(call_res)
     if DEBUG:
         print(f"🤖 IA Quiz Gerado [{used_model}]:\n{content[:300]}")
-    title, valid_questions = _parse_topic_questions(content, clean_topic, language=lang)
+    discarded: dict[str, int] = {}
+    title, valid_questions = _parse_topic_questions(content, clean_topic, language=lang, discarded=discarded)
     part = {
         "title": title,
         "questions": valid_questions,
@@ -2084,16 +2248,23 @@ def _generate_topic_part(
         "model": used_model,
         "provider": provider_name,
         "verified_count": 0,
+        "requested": qty,
+        "discarded": discarded,
+        "hedged": hedged,
     }
     if cross_check and valid_questions:
         # Confere esta parte assim que ela fica pronta, enquanto as outras ainda são geradas
+        before = len(valid_questions)
         checked, verified_count, check_usage = cross_check_questions(
             valid_questions, language=lang, source_provider=provider_name, client_ip=client_ip,
         )
         part["questions"] = checked
         part["verified_count"] = verified_count
+        if len(checked) < before:
+            discarded["cross_check"] = discarded.get("cross_check", 0) + before - len(checked)
         if check_usage:
             part["usage"] = _merge_usage([usage, check_usage])
+    part["seconds"] = round(time.monotonic() - started, 1)
     return part
 
 
@@ -2175,100 +2346,133 @@ def generate_quiz_by_topic(
     part_size, parallel_parts = _topic_speed_profile()
     chunks = _plan_question_chunks(qty, chunk_size=part_size)
     total_parts = len(chunks)
+    max_workers = min(parallel_parts, total_parts)
 
-    if total_parts == 1:
-        part = _generate_topic_part(
-            clean_topic, qty, diff, context_str, lang, client_ip=client_ip, cross_check=cross_check,
-        )
-        valid_questions = _deduplicate_questions(part["questions"], limit=qty)
-        if not valid_questions:
-            raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
-        result = {
-            "title": part["title"],
-            "topic": clean_topic,
-            "questions": valid_questions,
-            "usage": part["usage"],
-            "model": part["model"],
-            "provider": part["provider"],
-        }
-        if cross_check:
-            result["verified_count"] = sum(1 for q in valid_questions if q.get("verified"))
-    else:
+    if total_parts > 1:
         _report_progress(0, total_parts)
-        parts_by_index: dict[int, dict] = {}
-        errors: list[Exception] = []
-        done_count = 0
-        max_workers = min(parallel_parts, total_parts)
-
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_map = {
-                executor.submit(
-                    _generate_topic_part,
-                    clean_topic,
-                    chunk_qty,
-                    diff,
-                    context_str,
-                    lang,
-                    client_ip,
-                    idx,
-                    total_parts,
-                    cross_check,
-                ): idx
-                for idx, chunk_qty in enumerate(chunks, start=1)
-            }
-            for future in as_completed(future_map):
-                part_idx = future_map[future]
-                try:
-                    parts_by_index[part_idx] = future.result()
-                except Exception as exc:  # noqa: BLE001
-                    errors.append(exc)
-                    _log_ops(f"quiz por tema parte {part_idx}/{total_parts} falhou: {exc}")
-                done_count += 1
+    parts_by_index: dict[int, dict] = {}
+    errors: list[Exception] = []
+    done_count = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_map = {
+            executor.submit(
+                _generate_topic_part,
+                clean_topic,
+                chunk_qty,
+                diff,
+                context_str,
+                lang,
+                client_ip,
+                idx if total_parts > 1 else None,
+                total_parts if total_parts > 1 else None,
+                cross_check,
+            ): idx
+            for idx, chunk_qty in enumerate(chunks, start=1)
+        }
+        for future in as_completed(future_map):
+            part_idx = future_map[future]
+            try:
+                parts_by_index[part_idx] = future.result()
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+                _log_ops(f"quiz por tema parte {part_idx}/{total_parts} falhou: {exc}")
+            done_count += 1
+            if total_parts > 1:
                 _report_progress(done_count, total_parts)
 
-        if not parts_by_index:
-            for exc in errors:
-                if isinstance(exc, AIQuotaExceededError):
-                    raise exc
-            for exc in errors:
-                if isinstance(exc, AIServiceError):
-                    raise exc
-            raise AIServiceError("Não foi possível gerar questões válidas para o tema solicitado.")
+    if not parts_by_index:
+        if total_parts == 1 and errors:
+            raise errors[0]
+        for exc in errors:
+            if isinstance(exc, AIQuotaExceededError):
+                raise exc
+        for exc in errors:
+            if isinstance(exc, AIServiceError):
+                raise exc
+        raise AIServiceError("Não foi possível gerar questões válidas para o tema solicitado.")
 
-        ordered_parts = [parts_by_index[i] for i in sorted(parts_by_index)]
-        merged_questions: list[dict] = []
-        for part in ordered_parts:
-            merged_questions.extend(part["questions"])
+    ordered_parts = [parts_by_index[i] for i in sorted(parts_by_index)]
+    merged_questions = [q for part in ordered_parts for q in part["questions"]]
+    unique_questions = _deduplicate_questions(merged_questions)
+    duplicates_removed = len(merged_questions) - len(unique_questions)
+    valid_questions = unique_questions[:qty]
 
-        valid_questions = _deduplicate_questions(merged_questions, limit=qty)
-        if not valid_questions:
-            raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
+    # Faltou questão (parte que falhou, questões reprovadas ou repetidas): um pedido extra só com
+    # o que falta, mostrando as que já existem para não repetir. Custa uns segundos só nesses casos.
+    topup_used = False
+    missing = qty - len(valid_questions)
+    if missing > 0 and time.monotonic() - started < _TOPUP_TIME_BUDGET_SECONDS:
+        topup_used = True
+        _log_ops(f"simulado por tema: faltaram {missing} de {qty} questões; pedindo só as que faltam")
+        try:
+            extra = _generate_topic_part(
+                clean_topic, missing, diff, context_str, lang, client_ip, None, None, cross_check,
+                avoid_questions=[str(q.get("question") or "") for q in valid_questions],
+            )
+            ordered_parts.append(extra)
+            merged_questions.extend(extra["questions"])
+            unique_questions = _deduplicate_questions(merged_questions)
+            duplicates_removed = len(merged_questions) - len(unique_questions)
+            valid_questions = unique_questions[:qty]
+        except Exception as exc:  # noqa: BLE001 - devolve o que já tem
+            errors.append(exc)
+            _log_ops(f"pedido das questões que faltaram falhou: {exc}")
 
-        first_part = ordered_parts[0]
-        result = {
-            "title": first_part["title"],
-            "topic": clean_topic,
-            "questions": valid_questions,
-            "usage": _merge_usage([p.get("usage") for p in ordered_parts]),
-            "model": first_part["model"],
-            "provider": first_part["provider"],
-            "parts": {"done": len(ordered_parts), "total": total_parts},
-        }
-        if cross_check:
-            # Cada parte já foi conferida no próprio trabalho (ver _generate_topic_part)
-            result["verified_count"] = sum(1 for q in valid_questions if q.get("verified"))
+    if not valid_questions:
+        raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
+
+    first_part = ordered_parts[0]
+    elapsed = time.monotonic() - started
+    discarded: dict[str, int] = {}
+    for part in ordered_parts:
+        for reason, count in (part.get("discarded") or {}).items():
+            discarded[reason] = discarded.get(reason, 0) + count
+    generation = {
+        "requested": qty,
+        "delivered": len(valid_questions),
+        "parts": total_parts,
+        "part_size": part_size,
+        "parallel": max_workers,
+        "failed_parts": len(errors),
+        "errors": [_short_error(e) for e in errors][:5],
+        "discarded": discarded,
+        "duplicates_removed": duplicates_removed,
+        "hedged_parts": sum(1 for p in ordered_parts if p.get("hedged")),
+        "topup": topup_used,
+        "cross_check": bool(cross_check),
+        "seconds": round(elapsed, 1),
+        "part_seconds": [p.get("seconds") for p in ordered_parts],
+        "models": sorted({f"{p.get('provider')} {p.get('model')}" for p in ordered_parts}),
+    }
+    result = {
+        "title": _clean_quiz_title(first_part["title"], clean_topic, lang),
+        "topic": clean_topic,
+        "questions": valid_questions,
+        "usage": _merge_usage([p.get("usage") for p in ordered_parts]),
+        "model": first_part["model"],
+        "provider": first_part["provider"],
+        "requested": qty,
+        "generation": generation,
+    }
+    if total_parts > 1:
+        result["parts"] = {"done": len(parts_by_index), "total": total_parts}
+    if cross_check:
+        # Cada parte já foi conferida no próprio trabalho (ver _generate_topic_part)
+        result["verified_count"] = sum(1 for q in valid_questions if q.get("verified"))
 
     _log_ops(
-        f"simulado por tema: {len(result['questions'])} de {qty} questões em {total_parts} "
-        f"parte(s) de até {part_size}, {min(parallel_parts, total_parts)} ao mesmo tempo"
-        f"{', com conferência' if cross_check else ''}, via {result.get('provider')} {result.get('model')} "
-        f"({time.monotonic() - started:.1f} s)"
+        f"simulado por tema: {len(valid_questions)} de {qty} questões em {total_parts} "
+        f"parte(s) de até {part_size}, {max_workers} ao mesmo tempo"
+        f"{', com conferência' if cross_check else ''}, via {', '.join(generation['models'])}; "
+        f"falhas {len(errors)}, repetidas {duplicates_removed}, reprovadas {sum(discarded.values())}"
+        f"{', pedido extra' if topup_used else ''} ({elapsed:.1f} s)"
     )
 
-    # Armazena nos dois níveis de cache
-    with _quiz_cache_lock:
-        _quiz_generation_cache[cache_key] = (time.time(), copy.deepcopy(result))
-    ai_job_repo.cache_set(cache_key, result)
+    # Só guarda no cache o simulado completo: um incompleto seria repetido para quem pedir de novo
+    if len(valid_questions) >= qty:
+        with _quiz_cache_lock:
+            _quiz_generation_cache[cache_key] = (time.time(), copy.deepcopy(result))
+        ai_job_repo.cache_set(cache_key, result)
 
     return result
 

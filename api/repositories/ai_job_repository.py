@@ -91,6 +91,30 @@ def summarize_generation_times(rows: list[tuple[float, int, str]], hours: int = 
     return summary
 
 
+RECENT_GENERATIONS = 8
+
+
+def summarize_recent_generation(seconds: float, data: dict) -> dict:
+    """Resumo de uma geração recente para o diagnóstico: quanto demorou e o que deu errado."""
+    gen = data.get("generation") if isinstance(data.get("generation"), dict) else {}
+    delivered = _as_int(data.get("question_count"))
+    discarded = gen.get("discarded") if isinstance(gen.get("discarded"), dict) else {}
+    return {
+        "seconds": round(float(seconds), 1),
+        "requested": _as_int(gen.get("requested") or data.get("requested_count")) or delivered,
+        "delivered": delivered,
+        "provider": str(data.get("provider") or ""),
+        "model": str(data.get("model") or ""),
+        "parts": _as_int(gen.get("parts")),
+        "failed_parts": _as_int(gen.get("failed_parts")),
+        "duplicates_removed": _as_int(gen.get("duplicates_removed")),
+        "discarded": sum(_as_int(v) for v in discarded.values()),
+        "hedged_parts": _as_int(gen.get("hedged_parts")),
+        "topup": bool(gen.get("topup")),
+        "errors": [str(e)[:120] for e in (gen.get("errors") or [])][:3],
+    }
+
+
 class JobConflict(Exception):
     """O mesmo request_id já foi usado por outra pessoa ou com outros parâmetros."""
 
@@ -112,13 +136,17 @@ class AIJobRepository:
         depois de uma falha (mais de 5 min), que distorceriam a média.
         """
         rows: list[tuple[float, int, str]] = []
+        recent: list[dict] = []
         try:
             with get_cursor() as cur:
                 cur.execute(
                     """
                     SELECT EXTRACT(EPOCH FROM (updated_at - created_at)) AS seconds,
                            result->'data'->>'question_count' AS questions,
-                           result->'data'->>'provider' AS provider
+                           result->'data'->>'provider' AS provider,
+                           result->'data'->>'requested_count' AS requested_count,
+                           result->'data'->>'model' AS model,
+                           result->'data'->'generation' AS generation
                     FROM ai_jobs
                     WHERE kind = 'generate' AND status = 'done'
                       AND created_at > NOW() - make_interval(hours => %s)
@@ -128,13 +156,23 @@ class AIJobRepository:
                     """,
                     (int(hours),),
                 )
+                fetched = cur.fetchall()
                 rows = [
                     (float(r["seconds"] or 0), _as_int(r["questions"]), str(r["provider"] or ""))
-                    for r in cur.fetchall()
+                    for r in fetched
                 ]
+                for r in fetched[:RECENT_GENERATIONS]:
+                    recent.append(summarize_recent_generation(float(r["seconds"] or 0), {
+                        "question_count": r["questions"],
+                        "provider": r["provider"],
+                        "model": r["model"],
+                        "requested_count": r["requested_count"],
+                        "generation": self._load_json(r["generation"]),
+                    }))
         except Exception as e:  # banco fora: usa o que está na memória
             self._debug(f"generation_stats no banco falhou ({e}), usando memória")
             cutoff = time.time() - int(hours) * 3600
+            done_jobs: list[tuple[float, float, dict]] = []
             with self._lock:
                 for job in self._jobs.values():
                     data = (job.get("result") or {}).get("data") or {}
@@ -142,12 +180,14 @@ class AIJobRepository:
                         job.get("kind") == "generate" and job.get("status") == "done"
                         and job.get("created_ts", 0) > cutoff and not data.get("cached")
                     ):
-                        rows.append((
-                            float(job.get("updated_ts", 0) - job.get("created_ts", 0)),
-                            _as_int(data.get("question_count")),
-                            str(data.get("provider") or ""),
-                        ))
-        return summarize_generation_times(rows, hours)
+                        seconds = float(job.get("updated_ts", 0) - job.get("created_ts", 0))
+                        done_jobs.append((job.get("created_ts", 0), seconds, data))
+                        rows.append((seconds, _as_int(data.get("question_count")), str(data.get("provider") or "")))
+            done_jobs.sort(key=lambda item: item[0], reverse=True)
+            recent = [summarize_recent_generation(sec, data) for _ts, sec, data in done_jobs[:RECENT_GENERATIONS]]
+        summary = summarize_generation_times(rows, hours)
+        summary["recent"] = recent
+        return summary
 
     # ─── Jobs ────────────────────────────────────────────────────────────────
 
