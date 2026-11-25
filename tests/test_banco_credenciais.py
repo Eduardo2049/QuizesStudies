@@ -77,6 +77,23 @@ class BuildDatabaseUrlTests(unittest.TestCase):
         raw = "postgresql://postgres:x@localhost:5433/quiz_study"
         self.assertEqual(connection.build_database_url(raw), raw)
 
+    def test_connect_dsn_adds_hostaddr_on_windows_localhost(self):
+        raw = "postgresql://postgres:x@localhost:5433/quiz_study"
+        fake_sock = type("Sock", (), {"__enter__": lambda s: s, "__exit__": lambda *a: False})()
+        with (
+            patch.object(connection.sys, "platform", "win32"),
+            patch.dict(connection._localhost_ipv4_cache, {}, clear=True),
+            patch.object(connection.socket, "create_connection", return_value=fake_sock),
+        ):
+            dsn = connection._connect_dsn(raw)
+        self.assertIn("hostaddr=127.0.0.1", dsn)
+        self.assertEqual(connection.build_database_url(raw), raw)
+
+    def test_connect_dsn_skips_remote_hosts(self):
+        raw = "postgresql://u:p@ep-x-pooler.aws.neon.tech/neondb?sslmode=verify-full"
+        with patch.object(connection.sys, "platform", "win32"):
+            self.assertEqual(connection._connect_dsn(raw), raw)
+
     def test_empty_url(self):
         self.assertEqual(connection.build_database_url(None), "")
 
