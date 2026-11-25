@@ -204,8 +204,8 @@ class _TokenQuota:
                 window_seconds=self.window,
                 cost=estimated_tokens,
             )
-            used = self.repo.get_usage(quota_key, self.window)
             if not allowed:
+                used = self.repo.get_usage(quota_key, self.window)
                 return False, used, retry_after
 
         with self._lock:
@@ -1235,6 +1235,13 @@ def _within_budget(provider: Provider, model: str) -> bool:
     """O modelo ainda cabe no orçamento diário (contado no banco, vale entre instâncias)."""
     req_key, tok_key = _budget_keys(provider, model)
     try:
+        if provider.daily_requests and provider.daily_tokens and hasattr(rate_limit_repo, "get_usages"):
+            usages = rate_limit_repo.get_usages([req_key, tok_key], _DAY_SECONDS)
+            if usages.get(req_key, 0) >= provider.daily_requests:
+                return False
+            if usages.get(tok_key, 0) >= provider.daily_tokens:
+                return False
+            return True
         if provider.daily_requests and rate_limit_repo.is_blocked(req_key, provider.daily_requests, _DAY_SECONDS)[0]:
             return False
         if provider.daily_tokens and rate_limit_repo.is_blocked(tok_key, provider.daily_tokens, _DAY_SECONDS)[0]:
@@ -1347,8 +1354,8 @@ def _call_compatible(
         # Em partes, um modelo parado é abandonado em AI_ATTEMPT_TIMEOUT s; sem partes a resposta
         # chega inteira no fim, então a espera vai até o tempo total
         attempt_timeout = min(float(AI_ATTEMPT_TIMEOUT), remaining) if use_stream else remaining
-        started = time.monotonic()
         _record_budget(provider, model, request=True)
+        started = time.monotonic()
         try:
             resp = session.post(url, json=payload, headers=headers, timeout=(5, attempt_timeout), stream=use_stream)
         except requests.exceptions.RequestException as e:
@@ -1376,9 +1383,9 @@ def _call_compatible(
                 suffix = " (cortado por max_tokens)" if not use_responses and locals().get("finish_reason") == "length" else ""
                 _log_latency(model, f"respondeu fora do formato JSON ({type(e).__name__}){suffix}", started, log_name)
                 continue
+            _log_latency(model, "ok" if use_stream else "ok (sem streaming)", started, log_name)
             tokens = int(usage.get("total_tokens") or 0) or (prompt_chars + len(content)) // 4
             _record_budget(provider, model, tokens=tokens)
-            _log_latency(model, "ok" if use_stream else "ok (sem streaming)", started, log_name)
             return content, model, usage
 
         raw = resp.text or ""

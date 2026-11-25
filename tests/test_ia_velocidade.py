@@ -244,6 +244,26 @@ class TestTopicGenerationFlow(unittest.TestCase):
         self.assertEqual(prov, "OpenAI")
         self.assertEqual(called_providers, ["codex"])
 
+    def test_within_budget_uses_single_batched_get_usages_call(self):
+        calls = []
+
+        class BatchRepo:
+            def get_usages(self, keys, window_seconds):
+                calls.append(list(keys))
+                return {keys[0]: 10, keys[1]: 500}
+
+            def is_blocked(self, *args, **kwargs):
+                raise AssertionError("não deveria chamar is_blocked quando get_usages existe")
+
+        provider = ai_service.Provider(
+            "codex", "OpenAI", "https://api.openai.com/v1", "sk-test", ("gpt-6-luna",),
+            daily_requests=500, daily_tokens=500_000,
+        )
+        with patch.object(ai_service, "rate_limit_repo", BatchRepo()):
+            self.assertTrue(ai_service._within_budget(provider, "gpt-6-luna"))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(calls[0]), 2)
+
 
 class TestGenerationStats(unittest.TestCase):
     def test_summary_numbers(self):
