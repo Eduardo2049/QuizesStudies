@@ -302,7 +302,7 @@ class TestCacheBustingVersionSyncContract(unittest.TestCase):
                 self.assertIn("/web/modules/i18n.js?v=14", html)
 
         index_html = _read(WEB / "index.html")
-        self.assertEqual(index_html.count("/web/app.js?v=32"), 2)
+        self.assertEqual(index_html.count("/web/app.js?v=33"), 2)
         self.assertIn("/web/modules/theme.js?v=10", index_html)
         self.assertIn("/web/modules/stats.js?v=8", index_html)
         self.assertIn("/web/modules/i18n/en.js?v=14", index_html)

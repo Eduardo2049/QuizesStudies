@@ -320,5 +320,92 @@ class TestRecentGenerations(unittest.TestCase):
         self.assertEqual(stats["recent"][0]["requested"], 5)
 
 
+class TestDifficultCompleteAndFastGuest(_GenerationCase):
+    def test_difficult_questions_receive_higher_max_tokens_headroom(self):
+        self.assertGreaterEqual(ai_service._topic_part_max_tokens(3, "Difícil"), 1950)
+        self.assertGreaterEqual(ai_service._topic_part_max_tokens(2, "Difícil"), 1600)
+        self.assertGreater(
+            ai_service._topic_part_max_tokens(5, "Difícil"),
+            ai_service._topic_part_max_tokens(5, "Médio"),
+        )
+
+    def test_topup_splits_missing_5_of_8_into_parallel_chunks_and_delivers_8(self):
+        call_index = 0
+        lock = threading.Lock()
+        topup_qtys: list[int] = []
+
+        def fake_part(clean_topic, qty, diff, context_str, lang, client_ip=None,
+                      part_index=None, total_parts=None, cross_check=False, avoid_questions=None):
+            nonlocal call_index
+            with lock:
+                call_index += 1
+                idx = call_index
+                if avoid_questions:
+                    topup_qtys.append(qty)
+            # Nas 3 partes iniciais ([3, 3, 2]), 2 falham (deixando só 3 de 8)
+            if not avoid_questions and idx in (2, 3):
+                raise ai_service.AIServiceError("resposta cortada")
+            start = idx * 10
+            qs = json.loads(_quiz_json(range(start, start + qty)))["questions"]
+            return {
+                "title": "Simulado ENADE Computação 2022",
+                "questions": qs,
+                "usage": {"total_tokens": 300},
+                "model": "gpt-6-luna",
+                "provider": "OpenAI",
+                "verified_count": 0,
+                "requested": qty,
+                "discarded": {},
+                "hedged": False,
+                "seconds": 1.0,
+            }
+
+        with patch.object(ai_service, "_generate_topic_part", side_effect=fake_part):
+            res = ai_service.generate_quiz_by_topic(
+                topic="enade computação 2022",
+                num_questions=8,
+                difficulty="Difícil",
+            )
+
+        self.assertEqual(len(res["questions"]), 8)
+        self.assertEqual(res["generation"]["delivered"], 8)
+        self.assertTrue(res["generation"]["topup"])
+        # As 5 questões que faltaram foram divididas em [3, 2] em vez de 1 chamada grande de 5
+        self.assertEqual(sorted(topup_qtys), [2, 3])
+
+    def test_guest_status_uses_single_batch_query_and_skips_new_guest_key(self):
+        from api.services.guest_service import GuestService
+
+        class _CountingRepo:
+            def __init__(self):
+                self.batch_calls = []
+                self.single_calls = []
+
+            def get_usages(self, keys, window_seconds):
+                self.batch_calls.append(list(keys))
+                return {k: 1 if ":id:" in k else 2 for k in keys}
+
+            def get_usage(self, key, window_seconds):
+                self.single_calls.append(key)
+                return 0
+
+        repo = _CountingRepo()
+        svc = GuestService(repo=repo, limit=3, ip_limit=10, window_seconds=86400)
+
+        # Convidado existente: 1 única consulta em lote (ip + guest_id)
+        st = svc.status("guest-abc", "1.2.3.4")
+        self.assertEqual(len(repo.batch_calls), 1)
+        self.assertEqual(len(repo.single_calls), 0)
+        self.assertEqual(st["used"], 1)
+        self.assertEqual(st["remaining"], 2)
+
+        # Convidado recém-criado: pula guest_key e consulta só o IP
+        st_new = svc.status("guest-novo", "1.2.3.4", is_new=True)
+        self.assertEqual(len(repo.batch_calls), 1)
+        self.assertEqual(repo.single_calls, ["guest_ai:ip:1.2.3.4"])
+        self.assertEqual(st_new["used"], 0)
+        self.assertEqual(st_new["remaining"], 3)
+
+
 if __name__ == "__main__":
     unittest.main()
