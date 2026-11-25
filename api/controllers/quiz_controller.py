@@ -200,6 +200,14 @@ class QuizController:
         model = generated.get("model") or ""
         provider = generated.get("provider") or ""
         verified_count = int(generated.get("verified_count") or 0)
+        requested = int(generated.get("requested") or len(questions))
+        generation = generated.get("generation") if isinstance(generated.get("generation"), dict) else None
+        # Veio menos questões do que o pedido: a mensagem diz quantas, em vez de esconder a diferença
+        count_text = (
+            f"{len(questions)} de {requested} questões pedidas"
+            if len(questions) < requested
+            else f"{len(questions)} questões"
+        )
 
         if not persist or not user_id:
             return {
@@ -209,6 +217,7 @@ class QuizController:
                     "name": name,
                     "label": title,
                     "question_count": len(questions),
+                    "requested_count": requested,
                     "verified_count": verified_count,
                     "ai_generated": True,
                     "local_only": True,
@@ -217,7 +226,8 @@ class QuizController:
                     "model": model,
                     "provider": provider,
                     "cached": bool(generated.get("cached")),
-                    "message": f"Simulado '{title}' gerado com {len(questions)} questões. Ele fica salvo só neste navegador.",
+                    "generation": generation,
+                    "message": f"Simulado '{title}' gerado com {count_text}. Ele fica salvo só neste navegador.",
                 }
             }
 
@@ -247,6 +257,7 @@ class QuizController:
                 "name": quiz["name"],
                 "label": quiz["label"],
                 "question_count": len(questions),
+                "requested_count": requested,
                 "verified_count": verified_count,
                 "ai_generated": True,
                 "local_only": False,
@@ -264,7 +275,8 @@ class QuizController:
                 "model": model,
                 "provider": provider,
                 "cached": bool(generated.get("cached")),
-                "message": f"Simulado '{title}' criado e salvo na sua conta com {len(questions)} questões.",
+                "generation": generation,
+                "message": f"Simulado '{title}' criado e salvo na sua conta com {count_text}.",
             }
         }
 
