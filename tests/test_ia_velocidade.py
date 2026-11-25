@@ -222,6 +222,28 @@ class TestTopicGenerationFlow(unittest.TestCase):
         self.assertEqual(result["parts"], {"done": 10, "total": 10})
         self.assertGreaterEqual(peak, 8)
 
+    def test_prefer_different_never_puts_openrouter_ahead_of_openai(self):
+        called_providers = []
+
+        def fake_compatible(provider, messages, temperature, max_tokens, deadline, reasoning="low"):
+            called_providers.append(provider.name)
+            return _quiz_json(1), "gpt-6-luna", {"total_tokens": 100}
+
+        with (
+            patch.object(ai_service, "AI_PROVIDERS", ["codex", "openrouter"]),
+            patch.object(ai_service, "CODEX_API_KEY", "sk-test"),
+            patch.object(ai_service, "OPENROUTER_API_KEY", "sk-or-test"),
+            patch.object(ai_service, "_provider_pause", {}),
+            patch.object(ai_service, "_check_daily_ai_budget"),
+            patch.object(ai_service, "_call_compatible", side_effect=fake_compatible),
+            patch.object(ai_service, "_call_openrouter", side_effect=AssertionError("não deveria chamar openrouter")),
+        ):
+            _c, _m, _u, prov = ai_service._call_ai(
+                [{"role": "user", "content": "ok"}], 0.0, 200, timeout=15, prefer_different_from="OpenAI"
+            )
+        self.assertEqual(prov, "OpenAI")
+        self.assertEqual(called_providers, ["codex"])
+
 
 class TestGenerationStats(unittest.TestCase):
     def test_summary_numbers(self):

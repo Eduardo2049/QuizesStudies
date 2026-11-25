@@ -107,7 +107,7 @@ def _get_http_session() -> requests.Session:
             status_forcelist=[502, 503, 504],
             raise_on_status=False,
         )
-        adapter = HTTPAdapter(max_retries=retries, pool_connections=5, pool_maxsize=10)
+        adapter = HTTPAdapter(max_retries=retries, pool_connections=16, pool_maxsize=32)
         _session.mount("https://", adapter)
         _session.mount("http://", adapter)
     return _session
@@ -1516,9 +1516,15 @@ def _call_ai(
 
     if prefer_different_from and len(ready) > 1:
         excluded = prefer_different_from.strip().lower()
-        others = [p for p in ready if p.name.lower() != excluded and p.label.lower() != excluded]
-        same = [p for p in ready if p not in others]
-        ready = others + same
+        # Só coloca na frente outro provedor rápido; nunca prioriza o OpenRouter gratuito na frente
+        # de provedores rápidos (ex.: OpenAI) durante hedge ou conferência de gabarito.
+        fast_others = [
+            p for p in ready
+            if p.name != "openrouter" and p.name.lower() != excluded and p.label.lower() != excluded
+        ]
+        same = [p for p in ready if p.name.lower() == excluded or p.label.lower() == excluded]
+        slow_others = [p for p in ready if p not in fast_others and p not in same]
+        ready = fast_others + same + slow_others
 
     _check_daily_ai_budget()
     deadline = time.monotonic() + timeout
@@ -2004,7 +2010,7 @@ def cross_check_questions(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
             max_tokens=max_tokens,
-            timeout=45,
+            timeout=15,
             prefer_different_from=source_provider,
         )
         content, _model, usage, _provider = _unpack_call_result(call_res)
