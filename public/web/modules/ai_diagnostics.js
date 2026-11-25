@@ -1,8 +1,9 @@
 /**
  * Diagnóstico da IA (só admin), dentro de "Minha conta".
  *
- * Mostra a ordem dos provedores, quais têm chave, avisos de configuração e as chamadas do dia
- * (GET /api/admin/ia) e testa cada provedor com um pedido mínimo (POST /api/admin/ia/teste).
+ * Mostra a ordem dos provedores, quais têm chave, avisos de configuração, as chamadas do dia e
+ * as últimas gerações por tema, com tempo, questões entregues e o que deu errado
+ * (GET /api/admin/ia), e testa cada provedor com um pedido mínimo (POST /api/admin/ia/teste).
  * Os avisos, os ids de modelo e as linhas de log vêm do servidor e ficam sem tradução
  * (translate="no"). Tudo entra com textContent: nada do servidor vira HTML.
  */
@@ -40,6 +41,19 @@ function modelsText(models) {
   }).join(', ');
 }
 
+/** Uma linha por geração recente: tempo, entregues/pedidas e, se houve, o que atrapalhou. */
+function recentGenerationText(g) {
+  const head = `${g.seconds} s · ${g.delivered} de ${g.requested} questões · ${g.parts || 1} parte(s)`;
+  const notes = [];
+  if (g.failed_parts) notes.push(`${g.failed_parts} falha(s)`);
+  if (g.duplicates_removed) notes.push(`${g.duplicates_removed} repetida(s)`);
+  if (g.discarded) notes.push(`${g.discarded} reprovada(s)`);
+  if (g.hedged_parts) notes.push(`${g.hedged_parts} pedido(s) em dobro`);
+  if (g.topup) notes.push('pedido extra');
+  const via = [g.provider, g.model].filter(Boolean).join(' ');
+  return [head, ...notes, via].filter(Boolean).join(' · ');
+}
+
 function renderDiagnostics(diag) {
   const summary = $('#accountAiSummary');
   const daily = $('#accountAiDaily');
@@ -72,6 +86,18 @@ function renderDiagnostics(diag) {
       detail.hidden = parts.length === 0;
     }
   }
+  fillList($('#accountAiRecent'), (diag.generation_time?.recent || []).map((g) => {
+    const li = node('li', recentGenerationText(g), {
+      cls: g.delivered < g.requested ? 'ai-diag-item ai-diag-fail' : 'ai-diag-item',
+      noTranslate: true,
+    });
+    if (g.errors?.length) {
+      const sub = node('ul', '', { cls: 'ai-diag-list ai-diag-list--log' });
+      sub.append(...g.errors.map((e) => node('li', e, { cls: 'ai-diag-log', noTranslate: true })));
+      li.append(sub);
+    }
+    return li;
+  }));
   fillList($('#accountAiWarnings'), (diag.warnings || []).map((w) => node('li', w, { cls: 'ai-diag-warning', noTranslate: true })));
   fillList($('#accountAiProviders'), (diag.providers || []).map((p) => {
     const li = node('li', '', { cls: 'ai-diag-item' });

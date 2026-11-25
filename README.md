@@ -108,6 +108,7 @@ O `.env.example` explica cada variável. As principais:
 | `<PROVEDOR>_DAILY_REQUESTS` / `<PROVEDOR>_DAILY_TOKENS` | Não | Orçamento diário por modelo (`OPENAI_`, `GROQ_`, `GEMINI_`, `CEREBRAS_`); o modelo é pulado antes de levar 429 |
 | `AI_DAILY_CALL_LIMIT` | Não | Teto global de chamadas ao provedor a cada 24 h, somando todos (padrão `3000`; `0` desliga). Com a OpenAI na frente, um simulado usa em média ~8 chamadas (até 20 num de 30 questões com conferência). Só com o OpenRouter sem créditos, deixe abaixo de 50 |
 | `AI_PART_SIZE` / `AI_PARALLEL_PARTS` | Não | Questões por parte e partes ao mesmo tempo na geração por tema (`0` = automático: 3 e 10 com a OpenAI na frente, 5 e 3 só com gratuitos) |
+| `AI_HEDGE_AFTER_SECONDS` | Não | Parte da geração por tema que não respondeu nesse tempo ganha um segundo pedido, de preferência a outro provedor, e vale o primeiro que chegar (padrão `9`; `0` desliga) |
 | `OPENAI_SERVICE_TIER` | Não | `fast` liga o Fast mode da OpenAI (até ~2,5x mais rápido, preço por token maior); vazio = padrão da conta |
 | `AI_USER_REQUESTS_PER_MINUTE` | Não | Pedidos de IA por minuto por pessoa (padrão `10`; `0` desliga). A vaga volta quando a IA falha ou o resultado vem pronto |
 | `AI_CROSS_CHECK` | Não | Conferência do gabarito por um segundo modelo: `account` (padrão, só contas), `all` ou `off` |
