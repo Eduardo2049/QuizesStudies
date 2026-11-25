@@ -181,6 +181,30 @@ class RateLimitRepository:
             if DEBUG:
                 print(f"[rate-limit] Falha ao gravar registro no banco ({e})")
 
+    def get_usages(self, keys: list[str], window_seconds: int) -> dict[str, int]:
+        """Retorna o consumo na janela atual para várias chaves numa única ida ao banco."""
+        unique_keys = [k for k in dict.fromkeys(keys) if k]
+        if not unique_keys:
+            return {}
+        cutoff = time.time() - window_seconds
+        with self._lock:
+            local_map = {
+                k: sum(t for ts, t in self._memory_storage.get(k, deque()) if ts > cutoff)
+                for k in unique_keys
+            }
+        try:
+            with get_cursor() as cur:
+                cur.execute(
+                    "SELECT key, COALESCE(SUM(tokens), 0) AS used FROM rate_limits "
+                    "WHERE key = ANY(%s) AND timestamp > %s GROUP BY key",
+                    (unique_keys, cutoff),
+                )
+                rows = cur.fetchall() or []
+            db_map = {str(r["key"]): int(r["used"] or 0) for r in rows}
+            return {k: max(local_map[k], db_map.get(k, 0)) for k in unique_keys}
+        except Exception:
+            return local_map
+
     def get_usage(self, key: str, window_seconds: int) -> int:
         """Retorna o total consumido na janela atual para a chave."""
         cutoff = time.time() - window_seconds

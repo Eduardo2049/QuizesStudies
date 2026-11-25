@@ -1362,7 +1362,9 @@ def _call_compatible(
                     content, usage = _read_responses_response(resp, attempt_timeout, deadline)
                 else:
                     data = _read_chat_response(resp, attempt_timeout, deadline)
-                    content = data["choices"][0]["message"].get("content") or ""
+                    choice0 = data["choices"][0]
+                    finish_reason = choice0.get("finish_reason")
+                    content = choice0["message"].get("content") or ""
                     usage = data.get("usage") or {}
                 parse_json_response(content)
             except (_AttemptTimeout, _StreamError, requests.exceptions.RequestException) as e:
@@ -1371,7 +1373,8 @@ def _call_compatible(
                 _pause_model(key, _COOLDOWN_RATE_LIMIT)
                 continue
             except (ValueError, KeyError, IndexError, TypeError) as e:
-                _log_latency(model, f"respondeu fora do formato JSON ({type(e).__name__})", started, log_name)
+                suffix = " (cortado por max_tokens)" if not use_responses and locals().get("finish_reason") == "length" else ""
+                _log_latency(model, f"respondeu fora do formato JSON ({type(e).__name__}){suffix}", started, log_name)
                 continue
             tokens = int(usage.get("total_tokens") or 0) or (prompt_chars + len(content)) // 4
             _record_budget(provider, model, tokens=tokens)
@@ -1675,7 +1678,17 @@ TOPIC_CHUNK_MAX_WORKERS = 3
 FAST_TOPIC_CHUNK_SIZE = 3
 FAST_TOPIC_MAX_WORKERS = 10
 # Só pede as questões que faltaram se ainda sobra tempo (a função da Vercel vai até 300 s)
-_TOPUP_TIME_BUDGET_SECONDS = 40
+_TOPUP_TIME_BUDGET_SECONDS = 90
+_TOPUP_MAX_ROUNDS = 2
+
+
+def _topic_part_max_tokens(qty: int, diff: str) -> int:
+    """Folga de tokens por parte: questões difíceis têm enunciado e explicação mais longos.
+
+    A API cobra apenas os tokens realmente gerados; dar folga evita cortar o JSON no meio.
+    """
+    per_question = 650 if diff == "Difícil" else 500
+    return min(8192, max(1600, qty * per_question))
 
 
 def _short_error(exc: Exception) -> str:
@@ -2227,7 +2240,7 @@ def _generate_topic_part(
         part_index=part_index, total_parts=total_parts, avoid_questions=avoid_questions,
     )
     check_ai_token_quota(prompt, ip=client_ip)
-    max_tokens = min(4096, max(800, qty * 320))
+    max_tokens = _topic_part_max_tokens(qty, diff)
     call_res, hedged = _call_ai_hedged(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.5,
@@ -2397,26 +2410,63 @@ def generate_quiz_by_topic(
     duplicates_removed = len(merged_questions) - len(unique_questions)
     valid_questions = unique_questions[:qty]
 
-    # Faltou questão (parte que falhou, questões reprovadas ou repetidas): um pedido extra só com
-    # o que falta, mostrando as que já existem para não repetir. Custa uns segundos só nesses casos.
+    # Faltou questão (parte que falhou, questões reprovadas ou repetidas): pede só o que falta,
+    # dividindo em partes paralelas quando missing > part_size e tentando até _TOPUP_MAX_ROUNDS.
     topup_used = False
-    missing = qty - len(valid_questions)
-    if missing > 0 and time.monotonic() - started < _TOPUP_TIME_BUDGET_SECONDS:
+    for _round in range(_TOPUP_MAX_ROUNDS):
+        missing = qty - len(valid_questions)
+        if missing <= 0 or time.monotonic() - started >= _TOPUP_TIME_BUDGET_SECONDS:
+            break
         topup_used = True
         _log_ops(f"simulado por tema: faltaram {missing} de {qty} questões; pedindo só as que faltam")
-        try:
-            extra = _generate_topic_part(
-                clean_topic, missing, diff, context_str, lang, client_ip, None, None, cross_check,
-                avoid_questions=[str(q.get("question") or "") for q in valid_questions],
-            )
-            ordered_parts.append(extra)
-            merged_questions.extend(extra["questions"])
-            unique_questions = _deduplicate_questions(merged_questions)
-            duplicates_removed = len(merged_questions) - len(unique_questions)
-            valid_questions = unique_questions[:qty]
-        except Exception as exc:  # noqa: BLE001 - devolve o que já tem
-            errors.append(exc)
-            _log_ops(f"pedido das questões que faltaram falhou: {exc}")
+        avoid = [str(q.get("question") or "") for q in valid_questions]
+        extra_chunks = _plan_question_chunks(missing, chunk_size=part_size)
+        added_this_round = 0
+        if len(extra_chunks) == 1:
+            try:
+                extra = _generate_topic_part(
+                    clean_topic, extra_chunks[0], diff, context_str, lang, client_ip, None, None, cross_check,
+                    avoid_questions=avoid,
+                )
+                ordered_parts.append(extra)
+                merged_questions.extend(extra["questions"])
+                added_this_round += len(extra["questions"])
+            except Exception as exc:  # noqa: BLE001 - devolve o que já tem
+                errors.append(exc)
+                _log_ops(f"pedido das questões que faltaram falhou: {exc}")
+        else:
+            extra_workers = min(parallel_parts, len(extra_chunks))
+            with ThreadPoolExecutor(max_workers=extra_workers) as executor:
+                extra_futures = [
+                    executor.submit(
+                        _generate_topic_part,
+                        clean_topic,
+                        chunk_qty,
+                        diff,
+                        context_str,
+                        lang,
+                        client_ip,
+                        idx,
+                        len(extra_chunks),
+                        cross_check,
+                        avoid,
+                    )
+                    for idx, chunk_qty in enumerate(extra_chunks, start=1)
+                ]
+                for future in as_completed(extra_futures):
+                    try:
+                        extra = future.result()
+                        ordered_parts.append(extra)
+                        merged_questions.extend(extra["questions"])
+                        added_this_round += len(extra["questions"])
+                    except Exception as exc:  # noqa: BLE001
+                        errors.append(exc)
+                        _log_ops(f"pedido parcial das questões que faltaram falhou: {exc}")
+        unique_questions = _deduplicate_questions(merged_questions)
+        duplicates_removed = len(merged_questions) - len(unique_questions)
+        valid_questions = unique_questions[:qty]
+        if added_this_round == 0:
+            break
 
     if not valid_questions:
         raise AIServiceError("Não foi possível extrair questões válidas da resposta da IA.")
