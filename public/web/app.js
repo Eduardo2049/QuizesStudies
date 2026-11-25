@@ -3168,8 +3168,10 @@ async function init() {
 
   try {
     await dataPromise;
-    // A sessão real difere do que a aba supunha (ex.: cookie de convidado expirou)
-    if (isGuestMode() !== assumedGuest || importedGuestQuizzes > 0) await loadQuizList();
+    // Só recarrega a lista se houve importação ou se a mudança de sessão altera os quizzes visíveis
+    if (importedGuestQuizzes > 0 || (isGuestMode() !== assumedGuest && getGuestQuizzes().length > 0)) {
+      await loadQuizList();
+    }
   } catch (error) {
     if (error.name !== 'AbortError') {
       quiz.innerHTML = '<p class="empty-state">Escolha um simulado em "Explorar simulados" ou crie o seu em "Criar simulado".</p>';

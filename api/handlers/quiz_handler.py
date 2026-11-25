@@ -1049,6 +1049,7 @@ class QuizHandler(BaseHTTPRequestHandler):
 
                 client_ip = HTTPMiddleware.get_client_ip(self)
                 guest_id = HTTPMiddleware.get_guest_id(self)
+                is_new_guest = False
                 if not guest_id:
                     # Só novas sessões gastam o limite: reabrir a mesma sessão é livre
                     allowed, retry_after = _rl_guest_start.check_handler(self, "POST:/api/guest/start")
@@ -1056,9 +1057,10 @@ class QuizHandler(BaseHTTPRequestHandler):
                         _rate_limited_response(self, retry_after)
                         return
                     guest_id = guest_service.new_guest_id()
+                    is_new_guest = True
 
                 status, data = ResponseFormatter.success(
-                    {"active": True, "ai": guest_service.status(guest_id, client_ip)},
+                    {"active": True, "ai": guest_service.status(guest_id, client_ip, is_new=is_new_guest)},
                     "Modo convidado ativado",
                 )
                 cookie = HTTPMiddleware.guest_cookie(guest_id, COOKIE_SECURE, GUEST_COOKIE_MAX_AGE)

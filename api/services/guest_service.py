@@ -96,14 +96,20 @@ class GuestService:
         return f"guest_ai:ip:{client_ip or 'unknown'}"
 
     # ── Status ────────────────────────────────────────────────────────────────
-    def status(self, guest_id: str | None, client_ip: str) -> dict:
-        """Quantos usos de IA restam. Sem `guest_id`, considera só o teto do IP."""
-        ip_used = max(0, self.repo.get_usage(self._ip_key(client_ip), self.window))
-        ip_remaining = max(0, self.ip_limit - ip_used)
+    def status(self, guest_id: str | None, client_ip: str, is_new: bool = False) -> dict:
+        """Quantos usos de IA restam. Sem `guest_id` (ou recém-criado), consulta só o teto do IP."""
+        ip_key = self._ip_key(client_ip)
+        guest_key = self._guest_key(guest_id) if (guest_id and not is_new) else None
 
-        used = 0
-        if guest_id:
-            used = max(0, self.repo.get_usage(self._guest_key(guest_id), self.window))
+        if guest_key and hasattr(self.repo, "get_usages"):
+            usages = self.repo.get_usages([ip_key, guest_key], self.window)
+            ip_used = max(0, usages.get(ip_key, 0))
+            used = max(0, usages.get(guest_key, 0))
+        else:
+            ip_used = max(0, self.repo.get_usage(ip_key, self.window))
+            used = max(0, self.repo.get_usage(guest_key, self.window)) if guest_key else 0
+
+        ip_remaining = max(0, self.ip_limit - ip_used)
         remaining = max(0, min(self.limit - used, ip_remaining))
 
         return {

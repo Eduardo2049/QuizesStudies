@@ -63,6 +63,9 @@ class TestParallelChunkedGeneration(unittest.TestCase):
         with ai_service._quiz_cache_lock:
             ai_service._quiz_generation_cache.clear()
         ai_service.ai_job_repo.reset()
+        p = patch.object(ai_service, "_topic_speed_profile", return_value=(5, 3))
+        p.start()
+        self.addCleanup(p.stop)
 
     def test_20_questions_splits_into_4_parts_with_max_3_workers_and_progress(self):
         active = 0
