@@ -4,6 +4,7 @@ Usa ThreadedConnectionPool com fallback seguro para conexões diretas.
 """
 import os
 import re
+import socket
 import sys
 import tempfile
 import threading
@@ -162,13 +163,42 @@ def _get_direct_database_url() -> str:
     return build_database_url(DATABASE_URL_DIRECT or DATABASE_URL)
 
 
+_localhost_ipv4_cache: dict[int, bool] = {}
+
+
+def _connect_dsn(url: str) -> str:
+    """Ajusta o DSN apenas na hora de conectar (sem alterar o retorno de build_database_url).
+
+    No Windows, 'localhost' tenta IPv6 (::1) primeiro e bloqueia ~2 s esperando SYN timeout
+    quando o PostgreSQL local escuta só em IPv4 (127.0.0.1). Se 127.0.0.1 responder na porta,
+    anexa hostaddr=127.0.0.1 para conectar em ~30 ms sem perder o hostname original.
+    """
+    if not url or sys.platform != "win32":
+        return url
+    parts = urlsplit(url)
+    if (parts.hostname or "").lower() != "localhost":
+        return url
+    if "hostaddr" in _url_params(url):
+        return url
+    port = parts.port or 5432
+    ipv4_ok = _localhost_ipv4_cache.get(port)
+    if ipv4_ok is None:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                ipv4_ok = True
+        except OSError:
+            ipv4_ok = False
+        _localhost_ipv4_cache[port] = ipv4_ok
+    return _append_param(url, "hostaddr", "127.0.0.1") if ipv4_ok else url
+
+
 def _connect_db(direct: bool = False):
     clean_url = _get_direct_database_url() if direct else _get_database_url()
     if not clean_url:
         raise ConnectionError("DATABASE_URL não configurada no ambiente.")
     _warn_if_weak_tls(clean_url)
     try:
-        conn = psycopg2.connect(clean_url, connect_timeout=5)
+        conn = psycopg2.connect(_connect_dsn(clean_url), connect_timeout=5)
         try:
             conn.set_client_encoding('UTF8')
         except Exception:
@@ -190,10 +220,10 @@ def _get_pool():
                     return None
                 _warn_if_weak_tls(clean_url)
                 try:
-                    # Pool com min 1 e max 10 conexões ativas
-                    _pool = ThreadedConnectionPool(minconn=1, maxconn=10, dsn=clean_url)
+                    # Pool com min 1 e max 20 conexões ativas (suporta partes paralelas de IA + polling)
+                    _pool = ThreadedConnectionPool(minconn=1, maxconn=20, dsn=_connect_dsn(clean_url))
                     if DEBUG:
-                        print("⚡ PostgreSQL connection pool inicializado (1-10 conexões)")
+                        print("⚡ PostgreSQL connection pool inicializado (1-20 conexões)")
                 except Exception as e:
                     if DEBUG:
                         print(f"⚠️ Aviso: Falha ao iniciar connection pool ({e}), usando conexões diretas")

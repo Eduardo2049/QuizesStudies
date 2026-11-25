@@ -251,7 +251,7 @@ AI_PARALLEL_PARTS = _env_int("AI_PARALLEL_PARTS", 0, 0, 12)
 
 # Parte da geração por tema que não respondeu em AI_HEDGE_AFTER_SECONDS ganha um segundo pedido
 # igual (de preferência em outro provedor); vale o que chegar primeiro. 0 desliga.
-AI_HEDGE_AFTER_SECONDS = _env_int("AI_HEDGE_AFTER_SECONDS", 9, 0, 60)
+AI_HEDGE_AFTER_SECONDS = _env_int("AI_HEDGE_AFTER_SECONDS", 12, 0, 60)
 
 # OpenAI "Fast mode" (service_tier=fast): respostas até ~2,5x mais rápidas nos modelos aceitos, com
 # preço por token maior. Vazio = padrão da conta. Modelo que recusar o parâmetro é pedido sem ele.
