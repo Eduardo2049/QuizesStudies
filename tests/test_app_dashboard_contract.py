@@ -283,7 +283,7 @@ class TestCacheBustingVersionSyncContract(unittest.TestCase):
         for html_path in ALL_HTMLS:
             html = _read(html_path)
             with self.subTest(file=html_path.name):
-                self.assertIn("/web/styles.css?v=35", html)
+                self.assertIn("/web/styles.css?v=36", html)
                 self.assertNotIn("styles.css?v=30", html)
 
         for html_path in THEME_BOOT_HTMLS:
