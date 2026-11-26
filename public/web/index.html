@@ -33,18 +33,18 @@
     ]
   }
   </script>
-  <link rel="stylesheet" href="/web/styles.css?v=34">
+  <link rel="stylesheet" href="/web/styles.css?v=36">
   <!-- Desempenho: a fonte do texto e os módulos do app.js começam a baixar junto com o CSS,
        em vez de em cascata depois do app.js (manter os ?v= iguais aos dos imports) -->
   <link rel="preload" href="/web/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="modulepreload" href="/web/app.js?v=33">
+  <link rel="modulepreload" href="/web/app.js?v=34">
   <link rel="modulepreload" href="/web/modules/icons.js?v=6">
   <link rel="modulepreload" href="/web/modules/theme.js?v=10">
   <link rel="modulepreload" href="/web/modules/shortcuts.js?v=5">
   <link rel="modulepreload" href="/web/modules/stats.js?v=8">
   <link rel="modulepreload" href="/web/modules/timer-drag.js?v=1">
-  <link rel="modulepreload" href="/web/modules/i18n.js?v=14">
-  <link rel="modulepreload" href="/web/modules/i18n/en.js?v=14">
+  <link rel="modulepreload" href="/web/modules/i18n.js?v=15">
+  <link rel="modulepreload" href="/web/modules/i18n/en.js?v=15">
   <!-- Script de prevenção de FOUC de tema (execução imediata, bloqueante) -->
   <script src="/web/modules/theme-boot.js?v=2"></script>
   <script src="/web/modules/i18n-boot.js?v=1"></script>
@@ -506,22 +506,18 @@
   </div>
 
   <!-- ── Modal de Confirmação: Finalizar Simulado ────────────────────── -->
-  <div id="confirmSubmitModal" class="modal-overlay" hidden aria-modal="true" role="alertdialog" aria-labelledby="confirmSubmitTitle">
+  <div id="confirmSubmitModal" class="modal-overlay" hidden aria-modal="true" role="alertdialog" aria-labelledby="confirmSubmitTitle" aria-describedby="confirmSubmitMsg">
     <div class="modal modal--confirm-submit">
-      <div class="confirm-submit-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg></div>
       <h2 id="confirmSubmitTitle" class="confirm-submit-title">Finalizar simulado?</h2>
       <p class="confirm-submit-msg" id="confirmSubmitMsg">
         Você respondeu <strong id="confirmSubmitAnswered">0</strong> de <strong id="confirmSubmitTotal">0</strong> questões.
       </p>
       <p class="confirm-submit-warning" id="confirmSubmitWarning" hidden>
-        <span class="warn-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg></span>
-        <span class="warn-text">As <strong id="confirmSubmitMissing">0</strong> questões não respondidas serão consideradas <strong>erradas</strong>.</span>
+        As <strong id="confirmSubmitMissing">0</strong> questões não respondidas serão consideradas <strong>erradas</strong>.
       </p>
       <div class="confirm-submit-actions">
-        <button id="confirmSubmitCancel" class="secondary" type="button">Voltar e revisar</button>
-        <button id="confirmSubmitConfirm" class="primary btn-confirm-finish" type="button">
-          Confirmar e ver gabarito →
-        </button>
+        <button id="confirmSubmitCancel" class="secondary" type="button">Revisar</button>
+        <button id="confirmSubmitConfirm" class="primary btn-confirm-finish" type="button">Ver gabarito</button>
       </div>
     </div>
   </div>
@@ -687,7 +683,6 @@
     <div class="modal modal--timer">
       <button class="modal-close" id="closeCustomTimerModal" aria-label="Fechar"><svg class="ui-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
       <div class="timer-modal-header">
-        <span class="timer-modal-icon"><svg class="ui-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg></span>
         <h2 id="customTimerTitle" class="timer-modal-title">Definir tempo do simulado</h2>
         <p class="timer-modal-subtitle">Escolha um tempo pré-definido ou digite a duração em minutos.</p>
       </div>
@@ -723,6 +718,6 @@
   </div>
 
   <script type="module" src="/web/modules/backdrop.js?v=9"></script>
-  <script type="module" src="/web/app.js?v=33"></script>
+  <script type="module" src="/web/app.js?v=34"></script>
 </body>
 </html>

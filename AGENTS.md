@@ -74,7 +74,7 @@ O agente tem total liberdade para:
    - **NUNCA** liberar endpoints de IA para quem não tem conta nem sessão de convidado, nem mover a contagem da cota do convidado (`GuestService`) ou do plano (`EntitlementsService`) para o navegador. O cliente só exibe a cota; quem decide é o servidor.
 6. **Protocolo JSON e arquivos de deploy:**
    - Todo endpoint sob `/api/` responde `{"status": "success", "data": ...}` ou `{"status": "error", "error": ...}`.
-   - `Dockerfile`, `docker-compose.yml`, `Procfile` e `vercel.json` só mudam em tarefas de DevOps/deploy.
+   - `Dockerfile`, `docker-compose.yml` e `vercel.json` só mudam em tarefas de DevOps/deploy.
 7. **Varreduras Globais Inúteis:**
    - Não execute comandos como `list_dir` recursivo na raiz inteira ou buscas genéricas que consumam contexto quando o problema apontar para um arquivo específico.
 

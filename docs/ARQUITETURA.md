@@ -94,7 +94,7 @@ graph TD
 - **`api/repositories/ai_job_repository.py`**: Pedidos de IA por `request_id` (tabela `ai_jobs`, guardados 24 h; `running` parado há mais de 6 min vira `failed`) e cache de simulados por tema (tabela `ai_cache`). Com o banco fora, usa a memória do processo.
 
 ### 5. Configuração e Ponto de Entrada
-- **`quiz_api.py`**: Ponto de entrada local (Docker, Procfile) que inicializa migrações e sobe o `ThreadingHTTPServer`.
+- **`quiz_api.py`**: Ponto de entrada local (e Docker) que inicializa migrações e sobe o `ThreadingHTTPServer`.
 - **`api/index.py`**: Ponto de entrada da Vercel; recebe todas as rotas `/api/*` pelo `rewrite` de `vercel.json`.
 - **`api/utils/config.py`**: Leitura de variáveis de ambiente (`PORT`, `HOST`, `DATABASE_URL`, `OPENROUTER_API_KEY`, `OPENROUTER_FREE_MODELS`, `AI_DAILY_CALL_LIMIT`, `GUEST_AI_LIMIT`, `GOOGLE_CLIENT_ID`, `APP_URL`, etc.).
 
