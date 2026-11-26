@@ -98,6 +98,16 @@
   --radius-xl: 24px;
   --radius-pill: 999px;
 
+  /* Escala tipográfica e espaçamento responsivo de todos os modais (desktop padrão) */
+  --modal-title-size: 24px;
+  --modal-subtitle-size: 15px;
+  --modal-body-size: 16px;
+  --modal-label-size: 14px;
+  --modal-meta-size: 13px;
+  --modal-btn-size: 15px;
+  --modal-pad-x: 32px;
+  --modal-pad-y: 32px;
+
   /* Movimento */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
@@ -5914,17 +5924,338 @@ a.access-cta.primary:hover { color: var(--btn-primary-text); }
   transform: none;
 }
 
+/* ─── Escala responsiva global de tipografia e padding para todos os modais ─── */
+@media (min-width: 1440px) {
+  :root {
+    --modal-title-size: 24px;
+    --modal-subtitle-size: 16px;
+    --modal-body-size: 16px;
+    --modal-label-size: 14px;
+    --modal-meta-size: 14px;
+    --modal-btn-size: 16px;
+    --modal-pad-x: 36px;
+    --modal-pad-y: 36px;
+  }
+}
+
+@media (max-width: 1023px) {
+  :root {
+    --modal-title-size: 22px;
+    --modal-subtitle-size: 15px;
+    --modal-body-size: 15px;
+    --modal-label-size: 14px;
+    --modal-meta-size: 13px;
+    --modal-btn-size: 15px;
+    --modal-pad-x: 26px;
+    --modal-pad-y: 26px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --modal-title-size: 20px;
+    --modal-subtitle-size: 14px;
+    --modal-body-size: 14px;
+    --modal-label-size: 13px;
+    --modal-meta-size: 12px;
+    --modal-btn-size: 14px;
+    --modal-pad-x: 20px;
+    --modal-pad-y: 22px;
+  }
+}
+
+@media (max-height: 760px) {
+  :root {
+    --modal-pad-y: 22px;
+  }
+}
+
+/* Aplicação unificada de fonte, espaçamento e ritmo visual nos 9 modais */
+.modal {
+  padding: var(--modal-pad-y) var(--modal-pad-x);
+  max-height: min(92dvh, 900px);
+}
+
+.modal--confirm-submit,
+.modal--notice {
+  width: min(460px, 92vw);
+  max-width: 460px;
+  padding: var(--modal-pad-y) var(--modal-pad-x);
+}
+
+@media (min-width: 1440px) {
+  .modal--confirm-submit,
+  .modal--notice {
+    width: min(500px, 36vw);
+    max-width: 500px;
+  }
+}
+
+.confirm-submit-title,
+.notice-title,
+.timer-modal-title,
+.modal-create-head .modal-title,
+.catalog-title,
+.access-title,
+.modal--results .results-title {
+  font-size: var(--modal-title-size);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.about-title {
+  font-size: clamp(22px, 2.2vw, 28px);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.confirm-submit-msg,
+.confirm-submit-warning,
+.notice-msg,
+.result-card-question,
+.catalog-card-title {
+  font-size: var(--modal-body-size);
+  line-height: 1.55;
+}
+
+.timer-modal-subtitle,
+.catalog-subtitle,
+.access-text,
+.about-tagline,
+.modal--results .results-summary-text,
+.result-card-answers,
+.result-card-explanation,
+.access-perks,
+.account-hint,
+.pillar-card p {
+  font-size: var(--modal-subtitle-size);
+  line-height: 1.55;
+}
+
+.modal label,
+.modal-form-group label,
+.modal-form-row .form-group label,
+.timer-presets-label,
+.modal--create .modal-tab-btn,
+.catalog-tab-btn,
+.modal-optional summary,
+.comparison-table,
+.comparison-table th,
+.comparison-table td,
+.usage-meter-head {
+  font-size: var(--modal-label-size);
+  line-height: 1.4;
+}
+
+.modal input[type="text"],
+.modal input[type="number"],
+.modal input[type="email"],
+.modal input[type="password"],
+.modal select,
+.catalog-search-input,
+.drop-zone--compact .drop-zone-label,
+.timer-chip {
+  font-size: var(--modal-body-size);
+}
+
+.modal input[type="text"],
+.modal input[type="number"],
+.modal input[type="email"],
+.modal input[type="password"],
+.modal select,
+.catalog-search-input {
+  min-height: 46px;
+  border-radius: var(--radius-md);
+}
+
+.catalog-badge,
+.about-badge,
+.access-badge,
+.access-option-tag,
+.modal--results .results-badge,
+.result-card-tag,
+.result-card-qnumber,
+.catalog-card-meta,
+.catalog-card-badge,
+.drop-zone--compact .drop-zone-hint,
+.drop-zone--compact .drop-zone-types,
+.modal--create .topic-chip,
+.modal--create .upload-ai-hint,
+.upload-status-hint,
+.ai-diag-item,
+.ai-diag-log,
+.ai-diag-warning {
+  font-size: var(--modal-meta-size);
+  line-height: 1.45;
+}
+
+.access-option-title,
+.pillar-card h3,
+.comparison-title {
+  font-size: clamp(16px, 1.3vw, 18px);
+  line-height: 1.35;
+}
+
+.confirm-submit-actions button,
+.modal-actions button,
+.modal-actions a.primary,
+.modal-actions a.secondary,
+.results-footer button,
+.access-cta,
+.btn-notice-close,
+.btn-close-about {
+  font-size: var(--modal-btn-size);
+  min-height: 46px;
+  border-radius: var(--radius-md);
+}
+
+.modal--create .modal-tabs {
+  border-radius: var(--radius-md);
+  padding: 4px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border-color: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.modal--create .modal-tab-btn {
+  padding: 8px 16px;
+  border-radius: calc(var(--radius-md) - 3px);
+}
+
+.modal--create .topic-chip {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border-color: transparent;
+}
+
+.modal--create .topic-chip:hover {
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  border-color: transparent;
+}
+
+.catalog-tab-btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border-color: transparent;
+}
+
+.catalog-tab-btn:hover {
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  border-color: transparent;
+}
+
+.catalog-card {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  border-color: color-mix(in srgb, var(--ink) 9%, transparent);
+  border-radius: var(--radius-lg);
+  padding: clamp(16px, 1.8vw, 20px);
+}
+
+.catalog-card:hover {
+  border-color: color-mix(in srgb, var(--ink) 16%, transparent);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.modal--results {
+  padding: var(--modal-pad-y) var(--modal-pad-x) 0;
+}
+
+.modal--results .results-score {
+  font-size: clamp(34px, 3.6vw, 48px);
+}
+
+.modal--results .results-percent {
+  font-size: var(--modal-body-size);
+}
+
+.result-stat-label {
+  font-size: var(--modal-meta-size);
+}
+
+.result-stat-value {
+  font-size: clamp(20px, 1.8vw, 24px);
+}
+
+.stats-overview-card,
+.sections-breakdown-card {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink) 9%, transparent);
+  border-radius: var(--radius-lg);
+  padding: clamp(16px, 2vw, 22px);
+}
+
+.stats-tier-tag,
+.sections-breakdown-title {
+  font-size: var(--modal-body-size);
+  line-height: 1.4;
+}
+
+.stats-encouragement {
+  font-size: var(--modal-subtitle-size);
+  line-height: 1.55;
+}
+
+.stats-rhythm-badge {
+  font-size: var(--modal-meta-size);
+  border-radius: var(--radius-pill);
+  border: 0;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  padding: 4px 12px;
+}
+
+.stats-pill {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 12px 10px;
+}
+
+.stats-pill .pill-number {
+  font-size: clamp(20px, 1.8vw, 24px);
+}
+
+.stats-pill .pill-label {
+  font-size: var(--modal-meta-size);
+}
+
 /* Modais de acesso, conta e sobre (#accessModal, #accountModal, #aboutModal) */
 .access-option,
 .account-section,
-.pillar-card {
+.pillar-card,
+.about-comparison {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
   border-radius: var(--radius-lg);
   border-color: color-mix(in srgb, var(--ink) 9%, transparent);
 }
 
 .access-cta {
   border-radius: var(--radius-md);
-  min-height: 44px;
+  min-height: 46px;
+}
+
+@media (max-width: 768px) {
+  .modal--confirm-submit,
+  .modal--notice {
+    width: min(400px, 100%);
+    max-width: 400px;
+    padding: var(--modal-pad-y) var(--modal-pad-x);
+  }
+
+  .modal--results {
+    padding: var(--modal-pad-y) var(--modal-pad-x) 0;
+  }
+
+  .confirm-submit-actions button,
+  .modal-actions button,
+  .results-footer button,
+  .access-cta,
+  .btn-notice-close,
+  .btn-close-about {
+    min-height: 44px;
+  }
 }
 
 @media (max-width: 640px) {
