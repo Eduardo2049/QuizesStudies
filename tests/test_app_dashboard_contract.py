@@ -283,7 +283,7 @@ class TestCacheBustingVersionSyncContract(unittest.TestCase):
         for html_path in ALL_HTMLS:
             html = _read(html_path)
             with self.subTest(file=html_path.name):
-                self.assertIn("/web/styles.css?v=34", html)
+                self.assertIn("/web/styles.css?v=36", html)
                 self.assertNotIn("styles.css?v=30", html)
 
         for html_path in THEME_BOOT_HTMLS:
@@ -299,30 +299,30 @@ class TestCacheBustingVersionSyncContract(unittest.TestCase):
         for html_path in I18N_HTMLS:
             html = _read(html_path)
             with self.subTest(file=html_path.name):
-                self.assertIn("/web/modules/i18n.js?v=14", html)
+                self.assertIn("/web/modules/i18n.js?v=15", html)
 
         index_html = _read(WEB / "index.html")
-        self.assertEqual(index_html.count("/web/app.js?v=33"), 2)
+        self.assertEqual(index_html.count("/web/app.js?v=34"), 2)
         self.assertIn("/web/modules/theme.js?v=10", index_html)
         self.assertIn("/web/modules/stats.js?v=8", index_html)
-        self.assertIn("/web/modules/i18n/en.js?v=14", index_html)
+        self.assertIn("/web/modules/i18n/en.js?v=15", index_html)
 
         app_js = _read(WEB / "app.js")
         self.assertIn("./modules/theme.js?v=10", app_js)
         self.assertIn("./modules/stats.js?v=8", app_js)
-        self.assertIn("./modules/i18n.js?v=14", app_js)
+        self.assertIn("./modules/i18n.js?v=15", app_js)
         self.assertIn("./modules/backdrop.js?v=9", app_js)
         self.assertIn("./modules/ai_diagnostics.js?v=3", app_js)
 
-        self.assertIn("./i18n.js?v=14", _read(MODULES / "auth_page.js"))
-        self.assertIn("./i18n.js?v=14", _read(MODULES / "inicio.js"))
+        self.assertIn("./i18n.js?v=15", _read(MODULES / "auth_page.js"))
+        self.assertIn("./i18n.js?v=15", _read(MODULES / "inicio.js"))
         produto_js = _read(MODULES / "produto.js")
-        self.assertIn("./i18n.js?v=14", produto_js)
+        self.assertIn("./i18n.js?v=15", produto_js)
         self.assertIn("./theme.js?v=10", produto_js)
-        self.assertIn("./i18n/en.js?v=14", _read(MODULES / "i18n.js"))
+        self.assertIn("./i18n/en.js?v=15", _read(MODULES / "i18n.js"))
         # Quem importa o i18n.js também sobe de versão, senão o navegador fica com o import antigo
-        for html_name, script in (("login.html", "auth_page.js?v=15"), ("register.html", "auth_page.js?v=15"),
-                                  ("inicio.html", "inicio.js?v=6"), ("produto.html", "produto.js?v=5")):
+        for html_name, script in (("login.html", "auth_page.js?v=16"), ("register.html", "auth_page.js?v=16"),
+                                  ("inicio.html", "inicio.js?v=7"), ("produto.html", "produto.js?v=6")):
             with self.subTest(file=html_name):
                 self.assertIn(f"/web/modules/{script}", _read(WEB / html_name))
 
