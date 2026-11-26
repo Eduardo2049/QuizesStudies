@@ -371,7 +371,7 @@ QuizesStudies/
 ├── docs/                   # arquitetura, banco, CI/CD e deploy, design, plano SaaS
 ├── scripts/                # reset_admin, reset_sessions, reset_database, teste de carga
 ├── tests/                  # suíte unittest (+ tests/visual)
-├── 404.html, vercel.json, Dockerfile, docker-compose.yml, Procfile
+├── 404.html, vercel.json, Dockerfile, docker-compose.yml
 ├── quiz_api.py             # servidor local
 └── requirements.txt, pyproject.toml, .env.example
 ```
@@ -407,7 +407,7 @@ Manutenção: `python scripts/reset_database.py --scope content --dry-run` (ou o
 | [`docs/CICD_E_DEPLOY.md`](docs/CICD_E_DEPLOY.md) | Fluxo `feature/*` → `develop` → `homolog` → `main`, variáveis da Vercel e domínio |
 | [`docs/DESIGN_SKILLS.md`](docs/DESIGN_SKILLS.md) | Regras de design da interface |
 | [`docs/PLANO_SAAS.md`](docs/PLANO_SAAS.md) | O que falta para o produto: equipes, atribuições, cobrança e IA paga por plano |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Como contribuir |
+| [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md) | Como contribuir |
 
 ---
 
