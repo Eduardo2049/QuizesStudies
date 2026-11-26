@@ -107,7 +107,7 @@ def _get_http_session() -> requests.Session:
             status_forcelist=[502, 503, 504],
             raise_on_status=False,
         )
-        adapter = HTTPAdapter(max_retries=retries, pool_connections=5, pool_maxsize=10)
+        adapter = HTTPAdapter(max_retries=retries, pool_connections=16, pool_maxsize=32)
         _session.mount("https://", adapter)
         _session.mount("http://", adapter)
     return _session
@@ -204,8 +204,8 @@ class _TokenQuota:
                 window_seconds=self.window,
                 cost=estimated_tokens,
             )
-            used = self.repo.get_usage(quota_key, self.window)
             if not allowed:
+                used = self.repo.get_usage(quota_key, self.window)
                 return False, used, retry_after
 
         with self._lock:
@@ -1193,7 +1193,8 @@ def probe_ai_providers(timeout_per_provider: int = 25) -> list[dict]:
                 ))[:3]
             else:
                 _content, model, _usage = _call_compatible(
-                    provider, _PROBE_MESSAGES, 0.0, 300, time.monotonic() + timeout_per_provider
+                    provider, _PROBE_MESSAGES, 0.0, 300, time.monotonic() + timeout_per_provider,
+                    reasoning="none",
                 )
             entry.update(ok=True, model=model)
         except _ProviderSkip as e:
@@ -1235,6 +1236,13 @@ def _within_budget(provider: Provider, model: str) -> bool:
     """O modelo ainda cabe no orçamento diário (contado no banco, vale entre instâncias)."""
     req_key, tok_key = _budget_keys(provider, model)
     try:
+        if provider.daily_requests and provider.daily_tokens and hasattr(rate_limit_repo, "get_usages"):
+            usages = rate_limit_repo.get_usages([req_key, tok_key], _DAY_SECONDS)
+            if usages.get(req_key, 0) >= provider.daily_requests:
+                return False
+            if usages.get(tok_key, 0) >= provider.daily_tokens:
+                return False
+            return True
         if provider.daily_requests and rate_limit_repo.is_blocked(req_key, provider.daily_requests, _DAY_SECONDS)[0]:
             return False
         if provider.daily_tokens and rate_limit_repo.is_blocked(tok_key, provider.daily_tokens, _DAY_SECONDS)[0]:
@@ -1347,8 +1355,8 @@ def _call_compatible(
         # Em partes, um modelo parado é abandonado em AI_ATTEMPT_TIMEOUT s; sem partes a resposta
         # chega inteira no fim, então a espera vai até o tempo total
         attempt_timeout = min(float(AI_ATTEMPT_TIMEOUT), remaining) if use_stream else remaining
-        started = time.monotonic()
         _record_budget(provider, model, request=True)
+        started = time.monotonic()
         try:
             resp = session.post(url, json=payload, headers=headers, timeout=(5, attempt_timeout), stream=use_stream)
         except requests.exceptions.RequestException as e:
@@ -1376,9 +1384,9 @@ def _call_compatible(
                 suffix = " (cortado por max_tokens)" if not use_responses and locals().get("finish_reason") == "length" else ""
                 _log_latency(model, f"respondeu fora do formato JSON ({type(e).__name__}){suffix}", started, log_name)
                 continue
+            _log_latency(model, "ok" if use_stream else "ok (sem streaming)", started, log_name)
             tokens = int(usage.get("total_tokens") or 0) or (prompt_chars + len(content)) // 4
             _record_budget(provider, model, tokens=tokens)
-            _log_latency(model, "ok" if use_stream else "ok (sem streaming)", started, log_name)
             return content, model, usage
 
         raw = resp.text or ""
@@ -1516,9 +1524,15 @@ def _call_ai(
 
     if prefer_different_from and len(ready) > 1:
         excluded = prefer_different_from.strip().lower()
-        others = [p for p in ready if p.name.lower() != excluded and p.label.lower() != excluded]
-        same = [p for p in ready if p not in others]
-        ready = others + same
+        # Só coloca na frente outro provedor rápido; nunca prioriza o OpenRouter gratuito na frente
+        # de provedores rápidos (ex.: OpenAI) durante hedge ou conferência de gabarito.
+        fast_others = [
+            p for p in ready
+            if p.name != "openrouter" and p.name.lower() != excluded and p.label.lower() != excluded
+        ]
+        same = [p for p in ready if p.name.lower() == excluded or p.label.lower() == excluded]
+        slow_others = [p for p in ready if p not in fast_others and p not in same]
+        ready = fast_others + same + slow_others
 
     _check_daily_ai_budget()
     deadline = time.monotonic() + timeout
@@ -1560,6 +1574,9 @@ def _unpack_call_result(res) -> tuple[str, str, dict, str]:
     return str(res), "mock", {}, "OpenRouter"
 
 
+_ANSWER_KEY_BATCH_SIZE = 40
+
+
 def generate_answer_key(questions: list[dict], client_ip: str | None = None) -> list[dict]:
     """
     Gera gabarito para uma lista de questões via OpenRouter API.
@@ -1575,6 +1592,13 @@ def generate_answer_key(questions: list[dict], client_ip: str | None = None) -> 
         AIServiceError: Se a API não responder ou retornar JSON inválido
         AIQuotaExceededError: Se o IP exceder a cota de tokens por hora
     """
+    if len(questions) > _ANSWER_KEY_BATCH_SIZE:
+        combined: list[dict] = []
+        for start in range(0, len(questions), _ANSWER_KEY_BATCH_SIZE):
+            batch = questions[start:start + _ANSWER_KEY_BATCH_SIZE]
+            combined.extend(generate_answer_key(batch, client_ip=client_ip))
+        return combined
+
     prompt = _build_prompt(questions)
     check_ai_token_quota(prompt, ip=client_ip)
     max_tokens = min(3500, max(500, len(questions) * 120))
@@ -1811,8 +1835,28 @@ def _build_topic_prompt(
     total_parts: int | None = None,
     avoid_questions: list[str] | None = None,
 ) -> str:
+    # Prefixo estático primeiro (regras fixas e formato JSON) e dados variáveis no final:
+    # mantém o prompt enxuto e compatível com Prompt Caching automático por prefixo.
+    # Resposta enxuta = geração mais rápida: o tempo da IA cresce com cada token escrito. Explicação
+    # de 1 a 2 frases e JSON em uma linha cortam cerca de metade dos tokens do formato anterior
+    # (explicação de 2 a 4 frases, campo "context" e JSON indentado).
     prompt_lines = [
         "Você é um professor e elaborador sênior de provas e simulados acadêmicos e de concursos.",
+        "",
+        "Regras obrigatórias:",
+        f"1. {_language_rule(lang, 'todas as questões, alternativas, explicações e do título')}",
+        "2. Todas as questões devem ser inéditas, com enunciados claros, sem ambiguidades.",
+        "3. Cada questão deve possuir exatamente 4 ou 5 alternativas em formato de texto limpo (não coloque 'a)', 'b)' dentro do texto da alternativa).",
+        "4. Apenas UMA alternativa deve ser a correta.",
+        "5. O campo 'answer' deve ser o índice numérico (base 0) da alternativa correta (0 = primeira opção, 1 = segunda opção, 2 = terceira opção...).",
+        "6. O campo 'explanation' deve justificar a resposta em 1 a 2 frases objetivas, citando o conceito que a torna correta.",
+        "7. No campo 'title', um título curto que repita os nomes, siglas e anos do tema exatamente como foram "
+        "escritos, sem mencionar partes; em 'section', um subtema curto.",
+        "",
+        "IMPORTANTE: Retorne SOMENTE um objeto JSON válido, em uma linha só, sem texto, quebras de linha ou espaços extras fora dos textos, no formato:",
+        '{"title":"Título do simulado","questions":[{"id":1,"section":"Subtema","question":"Enunciado completo da pergunta?",'
+        '"options":["Opção A","Opção B","Opção C","Opção D"],"answer":0,"explanation":"Por que a opção A é a correta."}]}',
+        "",
         f"Crie um simulado de múltipla escolha com exatamente {qty} questões sobre o seguinte tema: '{clean_topic}'.",
         f"Nível de dificuldade exigido: {diff}.",
     ]
@@ -1840,25 +1884,6 @@ def _build_topic_prompt(
     if context_str:
         prompt_lines.append(f"Diretrizes e foco específico adicional: {context_str}")
 
-    # Resposta enxuta = geração mais rápida: o tempo da IA cresce com cada token escrito. Explicação
-    # de 1 a 2 frases e JSON em uma linha cortam cerca de metade dos tokens do formato anterior
-    # (explicação de 2 a 4 frases, campo "context" e JSON indentado).
-    prompt_lines.extend([
-        "",
-        "Regras obrigatórias:",
-        f"1. {_language_rule(lang, 'todas as questões, alternativas, explicações e do título')}",
-        "2. Todas as questões devem ser inéditas, com enunciados claros, sem ambiguidades.",
-        "3. Cada questão deve possuir exatamente 4 ou 5 alternativas em formato de texto limpo (não coloque 'a)', 'b)' dentro do texto da alternativa).",
-        "4. Apenas UMA alternativa deve ser a correta.",
-        "5. O campo 'answer' deve ser o índice numérico (base 0) da alternativa correta (0 = primeira opção, 1 = segunda opção, 2 = terceira opção...).",
-        "6. O campo 'explanation' deve justificar a resposta em 1 a 2 frases objetivas, citando o conceito que a torna correta.",
-        "7. No campo 'title', um título curto que repita os nomes, siglas e anos do tema exatamente como foram "
-        "escritos, sem mencionar partes; em 'section', um subtema curto.",
-        "",
-        "IMPORTANTE: Retorne SOMENTE um objeto JSON válido, em uma linha só, sem texto, quebras de linha ou espaços extras fora dos textos, no formato:",
-        '{"title":"Título do simulado","questions":[{"id":1,"section":"Subtema","question":"Enunciado completo da pergunta?",'
-        '"options":["Opção A","Opção B","Opção C","Opção D"],"answer":0,"explanation":"Por que a opção A é a correta."}]}',
-    ])
     return "\n".join(prompt_lines)
 
 
@@ -2004,7 +2029,7 @@ def cross_check_questions(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
             max_tokens=max_tokens,
-            timeout=45,
+            timeout=15,
             prefer_different_from=source_provider,
         )
         content, _model, usage, _provider = _unpack_call_result(call_res)
@@ -2576,6 +2601,7 @@ def remix_questions_by_ai(
         temperature=0.6,
         max_tokens=max_tokens,
         timeout=60,  # tempo total, somando provedores e modelos
+        reasoning="none",  # gerar variações não precisa de tokens ocultos de raciocínio
     )
     content, used_model, usage, provider_name = _unpack_call_result(call_res)
 
@@ -2663,20 +2689,14 @@ def parse_and_structure_questions_with_ai(
     else:
         qty_instruction = "Identifique e extraia todas as questões contidas no texto. Se o texto for dissertativo/resumo, elabore entre 5 e 10 questões relevantes."
 
+    # Prefixo estático primeiro (papel, regras e esquema JSON) e dados variáveis/documento no final
+    # para maximizar reuso de prefixo (Prompt Caching automático) sem inflar o prompt.
     prompt_lines = [
         "Você é um professor e elaborador sênior de provas e simulados acadêmicos e de concursos.",
         "Sua tarefa é analisar o documento em anexo (extraído de um TXT, PDF ou DOCX).",
         "O documento pode ser:",
         "  A) Um arquivo com questões de prova/simulado já existentes (com ou sem numeração, com ou sem gabarito); OU",
         "  B) Um texto teórico, resumo, apostila ou anotações de estudo que você DEVE ADAPTAR E TRANSFORMAR em um simulado com questões inéditas de múltipla escolha.",
-        "",
-        f"Instrução de quantidade: {qty_instruction}",
-    ]
-    context_clean = context.strip() if context else ""
-    if context_clean:
-        prompt_lines.append(f"Diretrizes e foco específico adicional: {context_clean}")
-
-    prompt_lines.extend([
         "",
         "Instruções obrigatórias:",
         f"1. {_language_rule(language, 'todas as questões e explicações')}",
@@ -2690,6 +2710,14 @@ def parse_and_structure_questions_with_ai(
         "",
         "IMPORTANTE: Retorne SOMENTE um objeto JSON válido, sem texto adicional, no formato estrito:",
         '{"questions": [{"id": 1, "section": "Geral", "context": "", "question": "Enunciado da pergunta?", "options": ["Opção A", "Opção B", "Opção C", "Opção D"], "answer": 0, "explanation": "Explicação detalhada."}]}',
+        "",
+        f"Instrução de quantidade: {qty_instruction}",
+    ]
+    context_clean = context.strip() if context else ""
+    if context_clean:
+        prompt_lines.append(f"Diretrizes e foco específico adicional: {context_clean}")
+
+    prompt_lines.extend([
         "",
         "--- INÍCIO DO DOCUMENTO ---",
         truncated_text,
@@ -2706,6 +2734,7 @@ def parse_and_structure_questions_with_ai(
         temperature=0.25,
         max_tokens=max_tokens,
         timeout=75,
+        reasoning="none",  # extração e estruturação não precisam de tokens ocultos de raciocínio
     )
     content, used_model, usage, provider_name = _unpack_call_result(call_res)
 
