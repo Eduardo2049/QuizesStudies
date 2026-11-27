@@ -805,6 +805,13 @@ export default {
   // ── Página inicial protótipo (/inicio) ─────────────────────────────────────
   'Acely · Seu material vira simulado': 'Acely · Your material becomes a quiz',
   'Mural': 'Mural',
+  'Vídeo': 'Video',
+  'O Acely em 50 segundos': 'Acely in 50 seconds',
+  'Do material ao caderno de erros, com as telas reais do app.': 'From your material to the mistake notebook, with the real app screens.',
+  'Vídeo de apresentação do Acely': 'Acely presentation video',
+  'Baixar o vídeo de apresentação': 'Download the presentation video',
+  'Assistir ao vídeo': 'Watch the video',
+  'Vídeo em português, sem narração e com trilha instrumental.': 'Video in Portuguese, with no voice-over and an instrumental soundtrack.',
   'Comece por aqui': 'Start here',
   'Simulados com IA · grátis para começar': 'AI quizzes · free to start',
   'Seu material': 'Your material',
