@@ -283,7 +283,7 @@ class TestCacheBustingVersionSyncContract(unittest.TestCase):
         for html_path in ALL_HTMLS:
             html = _read(html_path)
             with self.subTest(file=html_path.name):
-                self.assertIn("/web/styles.css?v=36", html)
+                self.assertIn("/web/styles.css?v=37", html)
                 self.assertNotIn("styles.css?v=30", html)
 
         for html_path in THEME_BOOT_HTMLS:
@@ -322,7 +322,7 @@ class TestCacheBustingVersionSyncContract(unittest.TestCase):
         self.assertIn("./i18n/en.js?v=15", _read(MODULES / "i18n.js"))
         # Quem importa o i18n.js também sobe de versão, senão o navegador fica com o import antigo
         for html_name, script in (("login.html", "auth_page.js?v=16"), ("register.html", "auth_page.js?v=16"),
-                                  ("inicio.html", "inicio.js?v=7"), ("produto.html", "produto.js?v=6")):
+                                  ("inicio.html", "inicio.js?v=8"), ("produto.html", "produto.js?v=6")):
             with self.subTest(file=html_name):
                 self.assertIn(f"/web/modules/{script}", _read(WEB / html_name))
 

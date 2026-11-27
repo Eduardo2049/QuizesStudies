@@ -34,10 +34,23 @@
     ]
   }
   </script>
-  <link rel="stylesheet" href="/web/styles.css?v=36">
-  <link rel="stylesheet" href="/web/inicio.css?v=2">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "name": "O Acely em 50 segundos",
+    "description": "Do material ao caderno de erros: gerar um simulado por tema, resolver no cronômetro, ver o gabarito comentado e treinar com variações das questões erradas.",
+    "thumbnailUrl": "https://acely.com.br/web/media/acely-apresentacao.jpg",
+    "contentUrl": "https://acely.com.br/web/media/acely-apresentacao.mp4",
+    "uploadDate": "2026-11-27",
+    "duration": "PT50S",
+    "inLanguage": "pt-BR"
+  }
+  </script>
+  <link rel="stylesheet" href="/web/styles.css?v=37">
+  <link rel="stylesheet" href="/web/inicio.css?v=3">
   <link rel="preload" href="/web/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="modulepreload" href="/web/modules/inicio.js?v=7">
+  <link rel="modulepreload" href="/web/modules/inicio.js?v=8">
   <script src="/web/modules/theme-boot.js?v=2"></script>
   <script src="/web/modules/i18n-boot.js?v=1"></script>
   <script src="/web/modules/analytics-boot.js"></script>
@@ -56,6 +69,7 @@
       </a>
       <ul class="in-nav-links">
         <li><a href="#mural" data-nav-link>Mural</a></li>
+        <li><a href="#video" data-nav-link>Vídeo</a></li>
         <li><a href="#como-funciona" data-nav-link>Como funciona</a></li>
         <li><a href="#comece" data-nav-link>Comece por aqui</a></li>
         <li><a href="#perguntas" data-nav-link>Perguntas</a></li>
@@ -79,6 +93,7 @@
     <div class="in-menu" id="inMenu" hidden>
       <ul>
         <li><a href="#mural" data-menu-link>Mural</a></li>
+        <li><a href="#video" data-menu-link>Vídeo</a></li>
         <li><a href="#como-funciona" data-menu-link>Como funciona</a></li>
         <li><a href="#comece" data-menu-link>Comece por aqui</a></li>
         <li><a href="#perguntas" data-menu-link>Perguntas</a></li>
@@ -196,6 +211,34 @@
             <span class="in-tile-label">Variações das questões erradas</span>
           </a></li>
         </ul>
+      </div>
+    </section>
+
+    <!-- ── Vídeo: o Acely em 50 segundos (arquivo no próprio site, CSP 'self') ── -->
+    <section class="in-section in-video" id="video" aria-labelledby="inVideoTitle">
+      <div class="in-container">
+        <div class="in-section-head">
+          <div>
+            <p class="in-eyebrow">Vídeo</p>
+            <h2 id="inVideoTitle" class="in-h2">O Acely em 50 segundos</h2>
+          </div>
+          <p class="in-video-note">Do material ao caderno de erros, com as telas reais do app.</p>
+        </div>
+        <figure class="in-video-frame in-reveal" data-video>
+          <video class="in-video-player" controls playsinline preload="none" width="1920" height="1080"
+                 poster="/web/media/acely-apresentacao.jpg?v=1" aria-label="Vídeo de apresentação do Acely">
+            <source src="/web/media/acely-apresentacao.mp4?v=1" type="video/mp4">
+            <a href="/web/media/acely-apresentacao.mp4?v=1">Baixar o vídeo de apresentação</a>
+          </video>
+          <button type="button" class="in-video-play" data-video-play>
+            <span class="in-video-play-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+            </span>
+            <span>Assistir ao vídeo</span>
+            <span class="in-mono in-video-time" translate="no">0:50</span>
+          </button>
+          <figcaption class="in-video-caption">Vídeo em português, sem narração e com trilha instrumental.</figcaption>
+        </figure>
       </div>
     </section>
 
@@ -400,6 +443,6 @@
     </div>
   </footer>
 
-  <script type="module" src="/web/modules/inicio.js?v=7"></script>
+  <script type="module" src="/web/modules/inicio.js?v=8"></script>
 </body>
 </html>

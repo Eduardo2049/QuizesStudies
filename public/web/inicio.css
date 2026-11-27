@@ -682,6 +682,54 @@
 }
 .in-footer-note { margin: var(--space-4) 0 0; color: var(--in-muted); font-size: var(--text-xs); line-height: 16px; }
 
+/* ─── Vídeo de apresentação ──────────────────────────────────────────────── */
+.in-video-note { max-width: 360px; margin: 0; color: var(--in-muted); text-wrap: pretty; }
+.in-video-frame { position: relative; margin: 0; }
+.in-video-player {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--in-line);
+  border-radius: var(--radius-xl);
+  background: var(--in-surface);
+  overflow: hidden;
+}
+/* Botão grande sobre a capa: só com JS; sem JS ficam os controles nativos */
+.in-video-play { display: none; }
+.in-js .in-video-frame.has-overlay:not(.is-playing) .in-video-play {
+  position: absolute;
+  left: var(--space-5);
+  bottom: calc(var(--space-5) + 20px + var(--space-4));   /* acima da legenda */
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 52px;
+  padding: var(--space-2) var(--space-5) var(--space-2) var(--space-2);
+  border: 1px solid var(--in-line-strong);
+  border-radius: 999px;
+  background: var(--in-surface);   /* neutro: o CTA principal da tela continua sendo "Começar grátis" */
+  color: var(--in-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  transition: background 200ms var(--ease-out), transform 200ms var(--ease-out);
+}
+.in-js .in-video-frame.has-overlay:not(.is-playing) .in-video-play:hover { background: var(--in-surface-2); transform: translateY(-2px); }
+.in-video-play-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--in-accent);
+  color: var(--in-accent-ink);
+}
+.in-video-time { opacity: 0.7; font-size: var(--text-sm); }
+.in-video-caption { margin: var(--space-4) 0 0; color: var(--in-muted); font-size: var(--text-sm); line-height: 20px; }
+
 /* ─── Revelação ao rolar (B7: 32px, 700ms, uma vez só) ────────────────────── */
 .in-js .in-reveal { opacity: 0; transform: translateY(32px); }
 .in-js .in-reveal.is-visible {
@@ -712,6 +760,7 @@
 
 @media (max-width: 640px) {
   .in-container { padding: 0 var(--space-4); }
+  .in-js .in-video-frame.has-overlay:not(.is-playing) .in-video-play { left: var(--space-3); bottom: calc(var(--space-3) + 40px + var(--space-4)); min-height: 44px; }
   .in-hide-mobile { display: none; }
   .in-menu-toggle { display: inline-flex; }
   .in-nav { width: 100%; justify-content: space-between; box-sizing: border-box; }
@@ -753,6 +802,7 @@
   .in-tiles.is-entering > li,
   .in-menu [data-menu-link] { transform: none; }
   .in-tile:hover, .in-tile:hover .in-tile-icon, .in-launch-card:hover .in-launch-arrow { transform: none; }
+  .in-js .in-video-frame.has-overlay:not(.is-playing) .in-video-play:hover { transform: none; }
   .in-steps { height: auto; padding: var(--space-11) 0; }
   .in-steps-sticky { position: static; height: auto; overflow: visible; }
   .in-steps-track { flex-wrap: wrap; width: auto; transform: none !important; }
