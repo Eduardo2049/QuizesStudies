@@ -63,6 +63,35 @@ function initMenu() {
   });
 }
 
+// ── Vídeo de apresentação: botão sobre a capa e pausa ao sair da tela ────────
+function initVideo() {
+  const frame = document.querySelector('[data-video]');
+  const video = frame?.querySelector('video');
+  const play = frame?.querySelector('[data-video-play]');
+  if (!video || !play) return;
+  // Antes do play só o botão grande; os controles nativos voltam ao tocar (sem JS, ficam sempre)
+  frame.classList.add('has-overlay');
+  video.controls = false;
+  play.addEventListener('click', () => {
+    video.play().catch(() => { video.controls = true; });
+  });
+  video.addEventListener('play', () => {
+    frame.classList.add('is-playing');
+    video.controls = true;
+    video.focus({ preventScroll: true });
+  });
+  video.addEventListener('ended', () => {
+    frame.classList.remove('is-playing');
+    video.controls = false;
+    play.focus({ preventScroll: true });
+  });
+  if (!('IntersectionObserver' in window)) return;
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => { if (!entry.isIntersecting && !video.paused) video.pause(); });
+  }, { threshold: 0.2 });
+  observer.observe(video);
+}
+
 // ── Link ativo na navegação conforme a seção visível ─────────────────────────
 function initActiveNav() {
   const links = Array.from(document.querySelectorAll('[data-nav-link]'));
@@ -336,6 +365,7 @@ initAccountLinks();
 initActiveNav();
 initHero();
 initMuralSwitch();
+initVideo();
 initReveal();
 initWordReveal();
 initSteps();
